@@ -107,13 +107,22 @@ class Test_Wormiss_Events extends Wormiss_Test_Case {
 						]
 					),
 					self::event( 'CLOSED', [ 'Status' => 'C' ] ),
+					self::event(
+						'ONGOING',
+						[
+							'StartDateTime' => wp_date( 'Y-m-d\TH:i:s', time() - 2 * DAY_IN_SECONDS ),
+							'EndDateTime'   => wp_date( 'Y-m-d\TH:i:s', time() + 2 * DAY_IN_SECONDS ),
+						]
+					),
 					self::event( 'DRAFT', [ 'PublishingInformation' => [ 'PublishingState' => 'Working' ] ] ),
 				]
 			)
 		);
 		$html = Wormiss_Events::render( [] );
 
-		$this->assertStringContainsString( '/api/Event?StartDateTime=ge%3A', $this->imis->requests[1]['url'] );
+		// Asked from 90 days back, so events already under way are read too.
+		$from = wp_date( 'Y-m-d', time() - 90 * DAY_IN_SECONDS );
+		$this->assertStringContainsString( '/api/Event?StartDateTime=ge%3A' . $from . '&', $this->imis->requests[1]['url'] );
 		$this->assertStringContainsString( '&limit=100&offset=0', $this->imis->requests[1]['url'] );
 		$this->assertStringContainsString( 'Skin &lt;b&gt;Basics&lt;/b&gt;', $html );
 		$this->assertLessThan( strpos( $html, 'Event LATER' ), strpos( $html, 'Skin &lt;b&gt;' ) );
@@ -122,8 +131,13 @@ class Test_Wormiss_Events extends Wormiss_Test_Case {
 		}
 		$this->assertStringContainsString( '05/03/2027, 9:00 am – 5:00 pm', $html );
 		$this->assertStringContainsString( '01/06/2027 – 02/06/2027', $html );
+		$this->assertSame(
+			'05/03/2027 11:00 pm – 06/03/2027 1:00 am',
+			Wormiss_Events::when( '2027-03-05T23:00:00', '2027-03-06T01:00:00' )
+		);
 		$this->assertStringContainsString( 'Brisbane Convention Centre', $html );
 		$this->assertStringContainsString( 'About SOON.', $html );
+		$this->assertStringContainsString( 'Event ONGOING', $html );
 		$this->assertStringContainsString(
 			'href="https://imis.example.org/iCore/Events/Event_display.aspx?EventKey=SOON"',
 			$html
@@ -309,6 +323,8 @@ class Test_Wormiss_Events extends Wormiss_Test_Case {
 		$this->assertStringContainsString( 'Event EV1', $html );
 		$this->assertStringNotContainsString( 'ev1.jpg', $html );
 		$this->assertStringContainsString( '>Book now</a>', $html );
+		$this->assertTrue( wp_style_is( 'wormiss-events-style', 'registered' ) );
+		$this->assertTrue( wp_style_is( 'wormiss-events-style', 'enqueued' ) );
 
 		$image = 'src="https://imis.example.org/images/ev1.jpg"';
 		$this->assertStringContainsString( $image, do_shortcode( '[wormiss_events]' ) );

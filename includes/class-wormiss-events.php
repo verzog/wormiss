@@ -32,6 +32,9 @@ class Wormiss_Events {
 	/** How long the last good copy is kept, to show while iMIS is unavailable. */
 	const STALE_SECONDS = WEEK_IN_SECONDS;
 
+	/** How far back iMIS is asked for events, so multi-day events already under way are still read. */
+	const LOOKBACK_DAYS = 90;
+
 	/** Most events shown by one block. */
 	const MAX_LIMIT = 50;
 
@@ -68,7 +71,7 @@ class Wormiss_Events {
 	 * @return string
 	 */
 	public static function shortcode( $atts ): string {
-		wp_enqueue_style( 'wormiss-iqa-style' );
+		// Block styles load only with a block on sites that load block assets on demand.
 		wp_enqueue_style( 'wormiss-events-style' );
 		$args = shortcode_atts( self::defaults(), is_array( $atts ) ? $atts : [], 'wormiss_events' );
 		foreach ( [ 'show_description', 'show_image' ] as $flag ) {
@@ -85,6 +88,8 @@ class Wormiss_Events {
 	 */
 	public static function render( array $args ): string {
 		$args = array_merge( self::defaults(), $args );
+		// The set-up and "not available" messages use the iMIS data block's styles.
+		wp_enqueue_style( 'wormiss-iqa-style' );
 		if ( ! Wormiss_Settings::is_configured() ) {
 			return Wormiss_Iqa_Display::editor_notice( __( 'The iMIS connection is not set up yet (Settings > iMIS Bridge).', 'wormiss' ) );
 		}
@@ -170,7 +175,9 @@ class Wormiss_Events {
 			return $cached;
 		}
 		try {
-			$raw = ( new Wormiss_Rest_Client() )->get_events( wp_date( 'Y-m-d' ) );
+			// Events that started up to LOOKBACK_DAYS ago are read too; upcoming() drops the finished ones.
+			$from = wp_date( 'Y-m-d', time() - self::LOOKBACK_DAYS * DAY_IN_SECONDS );
+			$raw  = ( new Wormiss_Rest_Client() )->get_events( (string) $from );
 		} catch ( Wormiss_Exception $e ) {
 			$stale = get_transient( $key . '_stale' );
 			if ( is_array( $stale ) ) {
@@ -341,6 +348,10 @@ class Wormiss_Events {
 		}
 		if ( wp_date( 'Y-m-d', $from ) === wp_date( 'Y-m-d', $to ) ) {
 			return $timed ? $text . ', ' . wp_date( $time_format, $from ) . ' – ' . wp_date( $time_format, $to ) : $text;
+		}
+		if ( $timed ) {
+			// A timed event that runs past midnight keeps both times.
+			return $text . ' ' . wp_date( $time_format, $from ) . ' – ' . wp_date( $date_format . ' ' . $time_format, $to );
 		}
 		return $text . ' – ' . wp_date( $date_format, $to );
 	}
