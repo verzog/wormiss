@@ -113,7 +113,8 @@ class Test_Wormiss_Members_Only extends Wormiss_Test_Case {
 	private function content( int $post_id ): string {
 		$GLOBALS['post'] = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Set up the loop.
 		setup_postdata( $GLOBALS['post'] );
-		$html = apply_filters( 'the_content', get_post_field( 'post_content', $post_id ) );
+		// As the_content() does: get_the_content() first (it swaps in the password form).
+		$html = apply_filters( 'the_content', get_the_content() );
 		wp_reset_postdata();
 		return $html;
 	}
