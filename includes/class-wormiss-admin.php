@@ -105,6 +105,12 @@ class Wormiss_Admin {
 		self::field( 'member_queries', __( 'Approved member queries', 'wormiss' ), 'wormiss_members' );
 		self::field( 'member_cache_minutes', __( 'Keep member results for (minutes)', 'wormiss' ), 'wormiss_members' );
 
+		add_settings_section( 'wormiss_access', __( 'Members-only content', 'wormiss' ), [ __CLASS__, 'access_intro' ], self::PAGE );
+		self::field( 'access_query', __( 'Membership query', 'wormiss' ), 'wormiss_access' );
+		self::field( 'access_type_column', __( 'Membership type column', 'wormiss' ), 'wormiss_access' );
+		self::field( 'access_status_column', __( 'Membership status column', 'wormiss' ), 'wormiss_access' );
+		self::field( 'access_statuses', __( 'Current statuses', 'wormiss' ), 'wormiss_access' );
+
 		add_settings_section( 'wormiss_log', __( 'Audit log', 'wormiss' ), '__return_false', self::PAGE );
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_capture', __( 'Keep full request and response bodies', 'wormiss' ), 'wormiss_log' );
@@ -189,6 +195,19 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * Intro text for the members-only section.
+	 *
+	 * @return void
+	 */
+	public static function access_intro(): void {
+		echo '<p>'
+			. esc_html__( 'Posts, pages and Members only blocks can be limited to members, by membership type and status.', 'wormiss' )
+			. ' ' . esc_html__( "The membership query reads a member's own record (their iMIS ID is its first prompt).", 'wormiss' )
+			. ' ' . esc_html__( 'Without one, any signed-in member with an iMIS ID counts as a member.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
 	 * Render one field.
 	 *
 	 * @param array $args Field arguments (key).
@@ -253,6 +272,32 @@ class Wormiss_Admin {
 					selected( $value, 'login', false ),
 					esc_html__( 'The WordPress username', 'wormiss' )
 				);
+				return;
+			case 'access_query':
+			case 'access_type_column':
+			case 'access_status_column':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				if ( 'access_query' === $key ) {
+					echo '<p class="description">'
+						. esc_html__( 'An IQA path, e.g. $/Members/MyMembership, returning one row for the member.', 'wormiss' )
+						. '</p>';
+				}
+				return;
+			case 'access_statuses':
+				printf(
+					'<input type="text" class="regular-text" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( implode( ', ', (array) $value ) )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'Comma-separated, e.g. "A, Active". Used when a post or block names no statuses; blank for any.', 'wormiss' )
+					. '</p>';
 				return;
 			case 'member_id_meta':
 				printf(

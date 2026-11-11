@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -43,7 +43,21 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
 * Privacy tools: *Tools > Export Personal Data* and *Erase Personal Data* include
   a member's audit-log entries.
 
-Planned next: members-only content, and recording WordPress activity in iMIS.
+**Members-only content**
+
+* Make any post or page **members only** from the *Members only* panel in the
+  editor sidebar, optionally for certain iMIS membership types (e.g. Fellow) or
+  statuses (e.g. Active). Others see the **title and excerpt**, then a
+  "Sign in to read it" message (or "your membership doesn't include it").
+* The **Members only** block hides any blocks inside it from non-members.
+* A member's type and status come from an approved membership query (their iMIS
+  ID as the first prompt), cached per member. Without one, any signed-in member
+  with an iMIS ID counts. Access fails closed: if iMIS cannot be read and there is
+  no earlier copy, the content stays hidden.
+* The full text never reaches non-members: the page, feeds, the REST API and
+  excerpts all get the teaser. Anyone who can edit the post always sees it.
+
+Planned next: recording WordPress activity in iMIS.
 
 iMIS is a trademark of Advanced Solutions International, Inc. This plugin is not
 made or endorsed by ASI.
@@ -105,7 +119,17 @@ Not through Wormiss: the iMIS ID is read from the signed-in member's own account
 on the server, member queries are on their own approved list, and members cannot
 edit their iMIS ID.
 
+= How do I make content members only? =
+
+For a whole post or page, open the *Members only* panel in the editor sidebar
+and switch it on; add membership types or statuses to narrow it. For part of a
+page, add a *Members only* block and put the private blocks inside it. To check
+types or statuses, set a membership query under *Members-only content*.
+
 == Changelog ==
+
+= 0.3.0 =
+* Members-only content: the Members only editor panel for posts and pages (teaser for non-members), the Members only block, membership type and status rules from an approved membership query, and site-wide current statuses.
 
 = 0.2.0 =
 * Members' own data: the My iMIS data block and `[wormiss_member]` shortcode, approved member queries, the member's iMIS ID from a user field or the username, an iMIS ID field on user profiles for administrators, a Details layout, and privacy export and erasure of audit-log entries.

@@ -1,0 +1,25 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/members-only",
+	"version": "0.3.0",
+	"title": "Members only",
+	"category": "design",
+	"icon": "lock",
+	"description": "Blocks inside are shown only to signed-in iMIS members, optionally of certain membership types or statuses. Others see a sign-in message, or nothing.",
+	"keywords": [ "imis", "members", "restricted", "private", "login" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"types": { "type": "string", "default": "" },
+		"statuses": { "type": "string", "default": "" },
+		"showNotice": { "type": "boolean", "default": true },
+		"notice": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "wormiss-iqa-style",
+	"render": "file:./render.php"
+}
