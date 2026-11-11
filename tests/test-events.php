@@ -265,7 +265,7 @@ class Test_Wormiss_Events extends Wormiss_Test_Case {
 	public function test_settings(): void {
 		$clean = Wormiss_Settings::sanitize(
 			[
-				'event_statuses' => ' A, p, a ',
+				'event_statuses' => ' A, p, A ',
 				'event_url'      => 'javascript:alert(1)',
 			]
 		);
