@@ -65,3 +65,18 @@
 	border-left: 4px solid currentColor;
 	background: rgba(0, 0, 0, 0.04);
 }
+
+.wormiss-iqa__details {
+	display: grid;
+	grid-template-columns: minmax(8rem, max-content) 1fr;
+	gap: 0.4em 1.25em;
+	margin: 0 0 1em;
+}
+
+.wormiss-iqa__details dt {
+	font-weight: 700;
+}
+
+.wormiss-iqa__details dd {
+	margin: 0;
+}

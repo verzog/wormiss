@@ -1,19 +1,20 @@
 === Wormiss – iMIS bridge ===
 Contributors: verzog
-Tags: imis, membership, association, events, iqa
+Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Connects WordPress to the iMIS association management system. Show iMIS query results, such as upcoming events, on any page.
+Connects WordPress to the iMIS association management system. Show iMIS query results on pages, and show signed-in members their own iMIS data.
 
 == Description ==
 
-Wormiss talks to iMIS directly through its REST API (no middleware). This first
-version shows the results of iMIS IQA queries on pages:
+Wormiss talks to iMIS directly through its REST API (no middleware).
+
+**iMIS data on pages**
 
 * An **iMIS data** block (and a `[wormiss_iqa]` shortcode) shows a query's results
   as a table, cards or a list, with your choice of columns and headings, dates in
@@ -25,8 +26,24 @@ version shows the results of iMIS IQA queries on pages:
 * **Audit log.** Every call to iMIS is logged (Tools > iMIS Bridge log), with
   passwords and tokens always removed, and old entries deleted automatically.
 
-Planned next: members' own iMIS data when signed in with iMIS single sign-on,
-members-only content, and recording WordPress activity in iMIS.
+**Members' own data**
+
+* A **My iMIS data** block (and a `[wormiss_member]` shortcode) shows the
+  signed-in member their own iMIS data, such as membership status, CPD points or
+  course results, as details, a table, cards or a list.
+* **A page can never choose whose data is read.** The member's iMIS ID is added
+  on the server as the first prompt of an approved member query.
+* The iMIS ID comes from the member's WordPress account: a user field filled by
+  your iMIS single sign-on plugin (default `imis_id`), or the username.
+  Administrators can see and correct it on the user's profile; members cannot
+  change their own.
+* Results are cached per member for a few minutes, and pages showing them are
+  marked not to be cached by page-caching plugins. Visitors who are not signed in
+  see a sign-in link.
+* Privacy tools: *Tools > Export Personal Data* and *Erase Personal Data* include
+  a member's audit-log entries.
+
+Planned next: members-only content, and recording WordPress activity in iMIS.
 
 iMIS is a trademark of Advanced Solutions International, Inc. This plugin is not
 made or endorsed by ASI.
@@ -50,6 +67,11 @@ made or endorsed by ASI.
    for example `$/Events/UpcomingEvents`. Anyone can see a page, so approve only
    queries whose results are meant to be public.
 5. Click *Test connection*, then add the *iMIS data* block to a page.
+6. For members' own data: under *Members' own data*, choose where each member's
+   iMIS ID is kept, and list the approved member queries. In iMIS, build each
+   member query with a required filter on the contact ID as its **first**
+   prompt (for example `ID = @Prompt`). Then add the *My iMIS data* block to a
+   members' page.
 
 == Frequently Asked Questions ==
 
@@ -70,7 +92,23 @@ linked. Only http and https addresses are used.
 Yes: `[wormiss_iqa query="$/Events/UpcomingEvents" columns="Event=EventName, Date=StartDate" layout="table" limit="10"]`.
 Other options: `parameters` (prompt values separated by `|`), `link` and `empty_text`.
 
+= Which single sign-on plugin do I need? =
+
+Any that can save the member's iMIS ID onto their WordPress account (OpenID
+Connect and SAML plugins usually can, as a mapped user attribute). Set its user
+field name under *Members' own data*. Developers can supply the ID another way
+with the `wormiss_member_imis_id` filter.
+
+= Can a member see someone else's data? =
+
+Not through Wormiss: the iMIS ID is read from the signed-in member's own account
+on the server, member queries are on their own approved list, and members cannot
+edit their iMIS ID.
+
 == Changelog ==
+
+= 0.2.0 =
+* Members' own data: the My iMIS data block and `[wormiss_member]` shortcode, approved member queries, the member's iMIS ID from a user field or the username, an iMIS ID field on user profiles for administrators, a Details layout, and privacy export and erasure of audit-log entries.
 
 = 0.1.0 =
 * First release: iMIS connection, connection test, audit log, and the iMIS data block and shortcode.

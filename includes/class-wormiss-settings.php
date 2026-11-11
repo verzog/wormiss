@@ -49,14 +49,20 @@ class Wormiss_Settings {
 	 */
 	public static function defaults(): array {
 		return [
-			'base_url'           => '',
-			'username'           => '',
-			'timeout'            => 15,
-			'cache_minutes'      => 15,
-			'allowed_queries'    => [],
-			'log_enabled'        => true,
-			'log_capture'        => false,
-			'log_retention_days' => 30,
+			'base_url'             => '',
+			'username'             => '',
+			'timeout'              => 15,
+			'cache_minutes'        => 15,
+			'allowed_queries'      => [],
+			'log_enabled'          => true,
+			'log_capture'          => false,
+			'log_retention_days'   => 30,
+			// Members' own data: where each WordPress user's iMIS ID is kept, and the queries
+			// that may be run for the signed-in member.
+			'member_id_source'     => 'meta',
+			'member_id_meta'       => 'imis_id',
+			'member_queries'       => [],
+			'member_cache_minutes' => 5,
 		];
 	}
 
@@ -144,6 +150,26 @@ class Wormiss_Settings {
 	}
 
 	/**
+	 * The IQA queries approved for showing a signed-in member their own data.
+	 *
+	 * @return string[]
+	 */
+	public static function member_queries(): array {
+		$queries = self::get( 'member_queries' );
+		return is_array( $queries ) ? array_values( $queries ) : [];
+	}
+
+	/**
+	 * Whether a query is on the approved member-query list (exact match).
+	 *
+	 * @param string $query IQA path.
+	 * @return bool
+	 */
+	public static function is_member_query( string $query ): bool {
+		return '' !== $query && in_array( $query, self::member_queries(), true );
+	}
+
+	/**
 	 * Whether a query is on the approved list (exact match).
 	 *
 	 * @param string $query IQA path.
@@ -226,6 +252,27 @@ class Wormiss_Settings {
 			// so accept the already-cleaned list as well as the text box.
 			$queries                  = $input['allowed_queries'];
 			$clean['allowed_queries'] = self::parse_queries( is_array( $queries ) ? implode( "\n", $queries ) : (string) $queries );
+		}
+		if ( isset( $input['member_queries'] ) ) {
+			$queries                 = $input['member_queries'];
+			$clean['member_queries'] = self::parse_queries( is_array( $queries ) ? implode( "\n", $queries ) : (string) $queries );
+		}
+		if ( isset( $input['member_id_source'] ) ) {
+			$clean['member_id_source'] = 'login' === $input['member_id_source'] ? 'login' : 'meta';
+		}
+		if ( isset( $input['member_id_meta'] ) ) {
+			// Kept exactly as typed (case and punctuation matter: it must match the key the
+			// single sign-on plugin writes); anything that is not a plausible meta key is refused.
+			$key = trim( (string) $input['member_id_meta'] );
+			if ( preg_match( '/^[A-Za-z0-9_.:\-]{1,255}$/', $key ) ) {
+				$clean['member_id_meta'] = $key;
+			} elseif ( '' !== $key ) {
+				$message = __( 'The user field name can only use letters, digits and _ . : -', 'wormiss' );
+				add_settings_error( self::OPTION, 'member_id_meta', $message );
+			}
+		}
+		if ( isset( $input['member_cache_minutes'] ) ) {
+			$clean['member_cache_minutes'] = min( 60, max( 1, absint( $input['member_cache_minutes'] ) ) );
 		}
 		if ( isset( $input['log_retention_days'] ) ) {
 			$clean['log_retention_days'] = min( 365, max( 1, absint( $input['log_retention_days'] ) ) );

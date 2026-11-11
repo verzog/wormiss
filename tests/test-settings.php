@@ -106,6 +106,24 @@ class Test_Wormiss_Settings extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The SSO user-field name is kept exactly (case and punctuation), and junk is refused.
+	 *
+	 * @return void
+	 */
+	public function test_member_meta_key_kept_as_typed(): void {
+		$clean = Wormiss_Settings::sanitize( [ 'member_id_meta' => ' SSO.iMIS_Id ' ] );
+		$this->assertSame( 'SSO.iMIS_Id', $clean['member_id_meta'] );
+		update_option( Wormiss_Settings::OPTION, $clean );
+
+		$user_id = self::factory()->user->create();
+		update_user_meta( $user_id, 'SSO.iMIS_Id', '12345' );
+		$this->assertSame( '12345', Wormiss_Member::imis_id( $user_id ) );
+
+		$clean = Wormiss_Settings::sanitize( [ 'member_id_meta' => 'bad key; DROP' ] );
+		$this->assertSame( 'SSO.iMIS_Id', $clean['member_id_meta'] );
+	}
+
+	/**
 	 * A non-https address is rejected and the saved one kept.
 	 *
 	 * @return void

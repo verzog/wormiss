@@ -74,5 +74,12 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( 's3cret', $inline );
 		$this->assertStringNotContainsString( 'svc-wordpress', $inline );
 		$this->assertStringNotContainsString( 'imis.example.org', $inline );
+
+		wp_register_script( 'wormiss-member-editor-script', 'y.js', [], '1', false );
+		Wormiss_Plugin::editor_data();
+		$member = implode( '', (array) wp_scripts()->get_data( 'wormiss-member-editor-script', 'before' ) );
+		$this->assertStringContainsString( 'MyMembership', $member );
+		$this->assertStringNotContainsString( 's3cret', $member );
+		$this->assertStringNotContainsString( 'imis.example.org', $member );
 	}
 }

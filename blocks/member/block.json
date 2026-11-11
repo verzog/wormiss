@@ -1,0 +1,29 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/member",
+	"version": "0.2.0",
+	"title": "My iMIS data",
+	"category": "widgets",
+	"icon": "id",
+	"description": "Shows the signed-in member their own iMIS data, such as membership status, CPD points or course results, from an approved member query.",
+	"keywords": [ "imis", "member", "membership", "cpd", "results", "profile" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"query": { "type": "string", "default": "" },
+		"layout": { "type": "string", "enum": [ "details", "table", "cards", "list" ], "default": "details" },
+		"columns": { "type": "string", "default": "" },
+		"parameters": { "type": "string", "default": "" },
+		"limit": { "type": "number", "default": 20 },
+		"link": { "type": "string", "default": "" },
+		"emptyText": { "type": "string", "default": "" },
+		"signedOutText": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "wormiss-iqa-style",
+	"render": "file:./render.php"
+}

@@ -30,6 +30,9 @@ abstract class Wormiss_Test_Case extends WP_UnitTestCase {
 	/** Approved query used by the tests. */
 	const QUERY = '$/Events/UpcomingEvents';
 
+	/** Approved member query used by the tests. */
+	const MEMBER_QUERY = '$/Members/MyMembership';
+
 	/**
 	 * Value.
 	 *
@@ -52,6 +55,7 @@ abstract class Wormiss_Test_Case extends WP_UnitTestCase {
 					'base_url'        => 'https://imis.example.org',
 					'username'        => 'svc-wordpress',
 					'allowed_queries' => [ self::QUERY ],
+					'member_queries'  => [ self::MEMBER_QUERY ],
 				]
 			)
 		);
