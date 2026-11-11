@@ -261,8 +261,15 @@ class Wormiss_Settings {
 			$clean['member_id_source'] = 'login' === $input['member_id_source'] ? 'login' : 'meta';
 		}
 		if ( isset( $input['member_id_meta'] ) ) {
-			$key                     = sanitize_key( (string) $input['member_id_meta'] );
-			$clean['member_id_meta'] = '' !== $key ? $key : 'imis_id';
+			// Kept exactly as typed (case and punctuation matter: it must match the key the
+			// single sign-on plugin writes); anything that is not a plausible meta key is refused.
+			$key = trim( (string) $input['member_id_meta'] );
+			if ( preg_match( '/^[A-Za-z0-9_.:\-]{1,255}$/', $key ) ) {
+				$clean['member_id_meta'] = $key;
+			} elseif ( '' !== $key ) {
+				$message = __( 'The user field name can only use letters, digits and _ . : -', 'wormiss' );
+				add_settings_error( self::OPTION, 'member_id_meta', $message );
+			}
 		}
 		if ( isset( $input['member_cache_minutes'] ) ) {
 			$clean['member_cache_minutes'] = min( 60, max( 1, absint( $input['member_cache_minutes'] ) ) );
