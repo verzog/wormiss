@@ -111,6 +111,10 @@ class Wormiss_Admin {
 		self::field( 'access_status_column', __( 'Membership status column', 'wormiss' ), 'wormiss_access' );
 		self::field( 'access_statuses', __( 'Current statuses', 'wormiss' ), 'wormiss_access' );
 
+		add_settings_section( 'wormiss_events', __( 'iMIS events', 'wormiss' ), [ __CLASS__, 'events_intro' ], self::PAGE );
+		self::field( 'event_statuses', __( 'Event statuses to show', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
+
 		$title = __( 'Record activity in iMIS', 'wormiss' );
 		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
 		self::field( 'activity_enabled', __( 'Record activity', 'wormiss' ), 'wormiss_activity' );
@@ -213,6 +217,19 @@ class Wormiss_Admin {
 			. esc_html__( 'Posts, pages and Members only blocks can be limited to members, by membership type and status.', 'wormiss' )
 			. ' ' . esc_html__( "The membership query reads a member's own record (their iMIS ID is its first prompt).", 'wormiss' )
 			. ' ' . esc_html__( 'Without one, any signed-in member with an iMIS ID counts as a member.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the events section.
+	 *
+	 * @return void
+	 */
+	public static function events_intro(): void {
+		echo '<p>'
+			. esc_html__( 'The Upcoming iMIS events block lists events from the iMIS Events API, soonest first.', 'wormiss' )
+			. ' ' . esc_html__( 'The service account needs read access to events.', 'wormiss' )
+			. ' ' . esc_html__( 'Templates and unpublished events are left out.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -332,6 +349,29 @@ class Wormiss_Admin {
 				echo '<p class="description">'
 					. esc_html__( 'The user meta key your single sign-on plugin fills with the iMIS ID (default imis_id).', 'wormiss' )
 					. '</p>';
+				return;
+			case 'event_statuses':
+				printf(
+					'<input type="text" class="regular-text" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( implode( ', ', (array) $value ) )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'iMIS event status codes, comma-separated (default A, for active). Blank shows any status.', 'wormiss' )
+					. '</p>';
+				return;
+			case 'event_url':
+				printf(
+					'<input type="text" class="large-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'Where each event links to. {EventId} or {EventCode} is replaced; a path starting with / is', 'wormiss' )
+					. ' ' . esc_html__( 'on the iMIS site. Default:', 'wormiss' )
+					. ' <code>' . esc_html( Wormiss_Settings::DEFAULT_EVENT_URL ) . '</code></p>';
 				return;
 			case 'activity_type':
 				printf(

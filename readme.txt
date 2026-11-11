@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.4.0
+Stable tag: 0.5.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -135,6 +135,10 @@ Not through Wormiss: the iMIS ID is read from the signed-in member's own account
 on the server, member queries are on their own approved list, and members cannot
 edit their iMIS ID.
 
+= How do I show upcoming iMIS events? =
+
+Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wormiss_events limit="3" category="Workshop" button_text="Register"]). It reads events from the iMIS Events API, so the service account needs read access to events. Under Settings > iMIS Bridge > iMIS events, choose which event status codes count as open (default A) and where each event links (default /iCore/Events/Event_display.aspx?EventKey={EventId}, on the iMIS site). Event templates, unpublished events and events that have finished are never listed.
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -157,6 +161,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.5.0 =
+* Upcoming iMIS events block and [wormiss_events] shortcode: events read from the iMIS Events API, soonest first, as cards or a list, each linking to its iMIS page; templates, unpublished, closed and finished events left out; cached with a fallback copy.
 
 = 0.4.0 =
 * Recording activity in iMIS: reads of members-only content, tracked downloads, the Mark as done block (with CPD points) and form submissions, as activity records of one configured type; off and a dry run by default, sent in the background with retries.
