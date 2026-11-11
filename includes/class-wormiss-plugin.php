@@ -65,8 +65,10 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/member' );
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		register_block_type( WORMISS_DIR . '/blocks/complete' );
+		register_block_type( WORMISS_DIR . '/blocks/events' );
 		add_shortcode( 'wormiss_iqa', [ 'Wormiss_Iqa_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_member', [ 'Wormiss_Member_Display', 'shortcode' ] );
+		add_shortcode( 'wormiss_events', [ 'Wormiss_Events', 'shortcode' ] );
 	}
 
 	/**
@@ -88,6 +90,8 @@ class Wormiss_Plugin {
 			'configured' => Wormiss_Settings::is_configured(),
 		];
 		wp_add_inline_script( 'wormiss-member-editor-script', 'window.wormissMember = ' . wp_json_encode( $member ) . ';', 'before' );
+		$events = [ 'configured' => Wormiss_Settings::is_configured() ];
+		wp_add_inline_script( 'wormiss-events-editor-script', 'window.wormissEvents = ' . wp_json_encode( $events ) . ';', 'before' );
 	}
 
 	/**

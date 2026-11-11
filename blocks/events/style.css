@@ -1,0 +1,71 @@
+/*
+ * Upcoming iMIS events block: front-end and editor styles. Kept light so the theme's styles apply.
+ * Copyright 2026 Vernon Spain. GNU GPL v3 or later.
+ */
+
+.wormiss-events {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wormiss-events--cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+	gap: 1.5rem;
+}
+
+.wormiss-events--cards .wormiss-events__event {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 7px;
+}
+
+.wormiss-events__image {
+	display: block;
+	width: 100%;
+	height: 10rem;
+	object-fit: cover;
+}
+
+.wormiss-events--cards .wormiss-events__body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	padding: 1.25rem;
+}
+
+.wormiss-events--list .wormiss-events__event {
+	padding: 1rem 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.wormiss-events__title {
+	margin: 0 0 0.5em;
+}
+
+.wormiss-events__when,
+.wormiss-events__where,
+.wormiss-events__description {
+	margin: 0 0 0.5em;
+}
+
+.wormiss-events__when {
+	font-weight: 700;
+}
+
+.wormiss-events__where {
+	opacity: 0.8;
+}
+
+/* Buttons line up along the bottom of each card. */
+.wormiss-events--cards .wormiss-events__action {
+	margin: auto 0 0;
+	padding-top: 0.5em;
+}
+
+.wormiss-events--list .wormiss-events__action {
+	margin: 0;
+}

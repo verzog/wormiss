@@ -33,6 +33,9 @@ defined( 'ABSPATH' ) || exit;
  */
 class Wormiss_Settings {
 
+	/** The usual public page for an event in iMIS. */
+	const DEFAULT_EVENT_URL = '/iCore/Events/Event_display.aspx?EventKey={EventId}';
+
 	/** Option holding every setting except the password. */
 	const OPTION = 'wormiss_settings';
 
@@ -77,6 +80,10 @@ class Wormiss_Settings {
 			'record_reads'         => true,
 			'record_downloads'     => true,
 			'record_forms'         => false,
+			// iMIS events on pages: the statuses that count as open, and each event's public page
+			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
+			'event_statuses'       => [ 'A' ],
+			'event_url'            => self::DEFAULT_EVENT_URL,
 		];
 	}
 
@@ -212,6 +219,19 @@ class Wormiss_Settings {
 	}
 
 	/**
+	 * Whether an event page address is usable: an https:// address or an iMIS path, with no spaces.
+	 *
+	 * @param string $url Address, possibly with {EventId} or {EventCode}.
+	 * @return bool
+	 */
+	public static function is_event_url( string $url ): bool {
+		if ( preg_match( '/[\s"\'<>]/', $url ) ) {
+			return false;
+		}
+		return 1 === preg_match( '#^(https://[^/]+|/(?!/))#i', $url );
+	}
+
+	/**
 	 * Clean an iMIS base URL: https only, no trailing slash, no /api suffix.
 	 *
 	 * @param string $url Raw URL.
@@ -317,6 +337,18 @@ class Wormiss_Settings {
 		}
 		if ( isset( $input['access_statuses'] ) ) {
 			$clean['access_statuses'] = self::parse_list( $input['access_statuses'] );
+		}
+		if ( isset( $input['event_statuses'] ) ) {
+			$clean['event_statuses'] = self::parse_list( $input['event_statuses'] );
+		}
+		if ( isset( $input['event_url'] ) ) {
+			$url = trim( (string) $input['event_url'] );
+			if ( '' === $url || self::is_event_url( $url ) ) {
+				$clean['event_url'] = $url;
+			} else {
+				$message = __( 'The event page address must start with https:// or /, with no spaces.', 'wormiss' );
+				add_settings_error( self::OPTION, 'event_url', $message );
+			}
 		}
 		if ( isset( $input['member_cache_minutes'] ) ) {
 			$clean['member_cache_minutes'] = min( 60, max( 1, absint( $input['member_cache_minutes'] ) ) );

@@ -39,6 +39,12 @@ class Wormiss_Rest_Client {
 	/** Most rows read from one query, so a mistaken query cannot exhaust the server. */
 	const MAX_ROWS = 5000;
 
+	/** Events requested per Events API page. */
+	const EVENT_PAGE_SIZE = 100;
+
+	/** Most events read at once. */
+	const MAX_EVENTS = 1000;
+
 	/**
 	 * The iMIS site root.
 	 *
@@ -279,6 +285,82 @@ class Wormiss_Rest_Client {
 		} while ( $has_next && $page_count > 0 && $row_count < self::MAX_ROWS );
 
 		return array_slice( $rows, 0, self::MAX_ROWS );
+	}
+
+	/**
+	 * Read events from the iMIS Events API (GET /api/Event), all pages.
+	 *
+	 * Asks iMIS for events starting on or after $from; if that filter is refused (HTTP 400),
+	 * reads without it, since callers filter the dates again themselves.
+	 *
+	 * @param string $from Earliest start date, YYYY-MM-DD.
+	 * @return object[] EventData objects as iMIS sent them.
+	 * @throws Wormiss_Exception On any failed or unreadable page.
+	 */
+	public function get_events( string $from ): array {
+		try {
+			return $this->read_events( '/api/Event?StartDateTime=' . rawurlencode( 'ge:' . $from ) . '&' );
+		} catch ( Wormiss_Exception $e ) {
+			if ( 0 !== strpos( $e->getMessage(), 'HTTP 400' ) ) {
+				throw $e;
+			}
+			return $this->read_events( '/api/Event?' );
+		}
+	}
+
+	/**
+	 * Read one event by its iMIS event ID (GET /api/Event/{EventId}).
+	 *
+	 * @param string $event_id iMIS event ID (EventId), e.g. CONF2026.
+	 * @return object The EventData object.
+	 * @throws Wormiss_Exception If it cannot be read, or the ID is not a plausible event ID.
+	 */
+	public function get_event( string $event_id ): object {
+		if ( ! self::is_event_id( $event_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		$result = $this->request( 'GET', '/api/Event/' . rawurlencode( $event_id ) );
+		if ( ! is_object( $result->body ) ) {
+			throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
+		}
+		return $result->body;
+	}
+
+	/**
+	 * Whether text looks like an iMIS event ID (letters, digits, _ and -, up to 64).
+	 *
+	 * @param string $event_id Candidate ID.
+	 * @return bool
+	 */
+	public static function is_event_id( string $event_id ): bool {
+		return 1 === preg_match( '/^[A-Za-z0-9_-]{1,64}$/', $event_id );
+	}
+
+	/**
+	 * Read every page of an Events API list.
+	 *
+	 * @param string $base Path and query ending in '?' or '&'.
+	 * @return object[]
+	 * @throws Wormiss_Exception On any failed or unreadable page.
+	 */
+	private function read_events( string $base ): array {
+		$events = [];
+		$offset = 0;
+		do {
+			$path   = $base . 'limit=' . self::EVENT_PAGE_SIZE . '&offset=' . $offset;
+			$result = $this->request( 'GET', $path, null, null, false );
+			if ( ! self::is_paged_result( $result->body ) ) {
+				Wormiss_Logger::record_call( 'GET ' . $path, Wormiss_Logger::STATUS_ERROR, 'Unreadable response body' );
+				throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
+			}
+			$page = array_values( array_filter( self::items( $result->body ), 'is_object' ) );
+			array_push( $events, ...$page );
+			$page_count            = count( $page );
+			$event_count           = count( $events );
+			[ $has_next, $offset ] = self::next_page( $result->body, $offset, $page_count );
+		} while ( $has_next && $page_count > 0 && $event_count < self::MAX_EVENTS );
+
+		return array_slice( $events, 0, self::MAX_EVENTS );
 	}
 
 	/**

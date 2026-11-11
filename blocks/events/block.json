@@ -1,0 +1,28 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/events",
+	"version": "0.5.0",
+	"title": "Upcoming iMIS events",
+	"category": "widgets",
+	"icon": "calendar-alt",
+	"description": "Lists upcoming events from iMIS, soonest first, each linking to its iMIS page to register.",
+	"keywords": [ "imis", "events", "calendar", "register" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"limit": { "type": "number", "default": 6 },
+		"layout": { "type": "string", "enum": [ "cards", "list" ], "default": "cards" },
+		"category": { "type": "string", "default": "" },
+		"showDescription": { "type": "boolean", "default": true },
+		"showImage": { "type": "boolean", "default": true },
+		"buttonText": { "type": "string", "default": "" },
+		"emptyText": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": [ "wormiss-iqa-style", "file:./style.css" ],
+	"render": "file:./render.php"
+}
