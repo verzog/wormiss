@@ -46,6 +46,7 @@ class Wormiss_Plugin {
 		add_filter( 'wp_privacy_personal_data_exporters', [ __CLASS__, 'register_exporter' ] );
 		add_filter( 'wp_privacy_personal_data_erasers', [ __CLASS__, 'register_eraser' ] );
 		Wormiss_Member::init();
+		Wormiss_Members_Only::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
 		}
@@ -60,6 +61,7 @@ class Wormiss_Plugin {
 		// The iqa block registers the shared display stylesheet, so it comes first.
 		register_block_type( WORMISS_DIR . '/blocks/iqa' );
 		register_block_type( WORMISS_DIR . '/blocks/member' );
+		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		add_shortcode( 'wormiss_iqa', [ 'Wormiss_Iqa_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_member', [ 'Wormiss_Member_Display', 'shortcode' ] );
 	}

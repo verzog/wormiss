@@ -63,6 +63,13 @@ class Wormiss_Settings {
 			'member_id_meta'       => 'imis_id',
 			'member_queries'       => [],
 			'member_cache_minutes' => 5,
+			// Members-only content: the query that reads a member's own membership record
+			// (run with their iMIS ID as the first prompt), its type and status columns, and
+			// the statuses that count as current when a post or block names none.
+			'access_query'         => '',
+			'access_type_column'   => 'MemberType',
+			'access_status_column' => 'Status',
+			'access_statuses'      => [],
 		];
 	}
 
@@ -180,6 +187,24 @@ class Wormiss_Settings {
 	}
 
 	/**
+	 * A comma-separated list as clean, unique, non-empty items (e.g. membership types).
+	 *
+	 * @param string|array $value Comma-separated text, or an already-cleaned list.
+	 * @return string[]
+	 */
+	public static function parse_list( $value ): array {
+		$items = is_array( $value ) ? $value : explode( ',', (string) $value );
+		$out   = [];
+		foreach ( $items as $item ) {
+			$item = trim( sanitize_text_field( (string) $item ) );
+			if ( '' !== $item ) {
+				$out[ strtolower( $item ) ] = $item;
+			}
+		}
+		return array_values( $out );
+	}
+
+	/**
 	 * Clean an iMIS base URL: https only, no trailing slash, no /api suffix.
 	 *
 	 * @param string $url Raw URL.
@@ -270,6 +295,21 @@ class Wormiss_Settings {
 				$message = __( 'The user field name can only use letters, digits and _ . : -', 'wormiss' );
 				add_settings_error( self::OPTION, 'member_id_meta', $message );
 			}
+		}
+		if ( isset( $input['access_query'] ) ) {
+			$query                 = self::parse_queries( (string) $input['access_query'] );
+			$clean['access_query'] = $query ? $query[0] : '';
+		}
+		foreach ( [ 'access_type_column', 'access_status_column' ] as $column ) {
+			if ( isset( $input[ $column ] ) ) {
+				$name = trim( (string) $input[ $column ] );
+				if ( preg_match( '/^[A-Za-z0-9_]{1,128}$/', $name ) ) {
+					$clean[ $column ] = $name;
+				}
+			}
+		}
+		if ( isset( $input['access_statuses'] ) ) {
+			$clean['access_statuses'] = self::parse_list( $input['access_statuses'] );
 		}
 		if ( isset( $input['member_cache_minutes'] ) ) {
 			$clean['member_cache_minutes'] = min( 60, max( 1, absint( $input['member_cache_minutes'] ) ) );

@@ -80,3 +80,20 @@
 .wormiss-iqa__details dd {
 	margin: 0;
 }
+
+.wormiss-members-only {
+	padding: 0.75em 1em;
+	border-left: 4px solid currentColor;
+	background: rgba(0, 0, 0, 0.04);
+}
+
+.wormiss-members-only-editor {
+	padding: 0.5em 1em;
+	border: 1px dashed currentColor;
+}
+
+.wormiss-members-only-editor__label {
+	margin: 0 0 0.5em;
+	font-size: 0.85em;
+	opacity: 0.8;
+}
