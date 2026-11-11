@@ -89,6 +89,23 @@ class Test_Wormiss_Settings extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Saving twice (as WordPress does on a first save) keeps the approved queries.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_is_idempotent(): void {
+		$once  = Wormiss_Settings::sanitize( [ 'allowed_queries' => "\$/A\n\$/B" ] );
+		$twice = Wormiss_Settings::sanitize( $once );
+		$this->assertSame( [ '$/A', '$/B' ], $twice['allowed_queries'] );
+
+		// The real first save, through the Settings API.
+		delete_option( Wormiss_Settings::OPTION );
+		Wormiss_Admin::register_option();
+		update_option( Wormiss_Settings::OPTION, [ 'allowed_queries' => "\$/Events/A\n\$/Events/B" ] );
+		$this->assertSame( [ '$/Events/A', '$/Events/B' ], Wormiss_Settings::allowed_queries() );
+	}
+
+	/**
 	 * A non-https address is rejected and the saved one kept.
 	 *
 	 * @return void

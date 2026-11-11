@@ -170,9 +170,36 @@ class Test_Wormiss_Iqa_Display extends Wormiss_Test_Case {
 		$this->assertSame( 1, $this->imis->count( '/api/iqa' ) );
 
 		// The fresh copy expires and iMIS is down: the stale copy is used.
-		delete_transient( 'wormiss_iqa_' . md5( self::QUERY . "\0" . wp_json_encode( [] ) ) );
+		delete_transient( Wormiss_Iqa_Display::cache_key( self::QUERY ) );
 		$this->imis->token()->reply( '/api/iqa', 503, 'Service Unavailable' );
 		$this->assertSame( $first, Wormiss_Iqa_Display::render( [ 'query' => self::QUERY ] ) );
+	}
+
+	/**
+	 * Cached results belong to one iMIS connection: a new address or account reads afresh.
+	 *
+	 * @return void
+	 */
+	public function test_cache_is_per_connection(): void {
+		$this->serve();
+		Wormiss_Iqa_Display::render( [ 'query' => self::QUERY ] );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'base_url' => 'https://other.example.org' ] ) );
+		$this->imis->token()->reply( '/api/iqa', 503, 'Service Unavailable' );
+		$html = Wormiss_Iqa_Display::render( [ 'query' => self::QUERY ] );
+		$this->assertSame( 2, $this->imis->count( '/api/iqa' ) );
+		$this->assertStringNotContainsString( 'Dermoscopy Workshop', $html );
+	}
+
+	/**
+	 * The shortcode loads the display stylesheet even when no block is on the page.
+	 *
+	 * @return void
+	 */
+	public function test_shortcode_enqueues_style(): void {
+		$this->serve();
+		wp_dequeue_style( 'wormiss-iqa-style' );
+		do_shortcode( '[wormiss_iqa query="' . self::QUERY . '"]' );
+		$this->assertTrue( wp_style_is( 'wormiss-iqa-style', 'enqueued' ) );
 	}
 
 	/**

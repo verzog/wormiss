@@ -101,6 +101,21 @@ class Test_Wormiss_Rest_Client extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A genuinely empty result is fine, and a successful login is logged without secrets.
+	 *
+	 * @return void
+	 */
+	public function test_empty_result_and_login_logged(): void {
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( [] ) );
+		$this->assertSame( [], ( new Wormiss_Rest_Client() )->run_iqa( self::QUERY ) );
+		$endpoints = array_column( Wormiss_Logger::recent( 5 ), 'endpoint' );
+		$this->assertContains( 'POST /token', $endpoints );
+		foreach ( Wormiss_Logger::recent( 5 ) as $row ) {
+			$this->assertStringNotContainsString( 'tok-1', implode( ' ', array_map( 'strval', $row ) ) );
+		}
+	}
+
+	/**
 	 * An expired token (401) is refreshed once and the call retried.
 	 *
 	 * @return void
@@ -151,6 +166,12 @@ class Test_Wormiss_Rest_Client extends Wormiss_Test_Case {
 		$this->imis->token()
 			->reply( 'Offset=0', 200, Wormiss_Fake_Imis::page( [ [ 'Name' => 'A' ] ], true, 500 ) )
 			->reply( 'Offset=500', 200, 'not json' );
+		$this->assert_throws_containing( 'could not be read' );
+
+		// An error message sent with HTTP 200 is not an empty page.
+		$this->imis->token()
+			->reply( 'Offset=0', 200, Wormiss_Fake_Imis::page( [ [ 'Name' => 'A' ] ], true, 500 ) )
+			->reply( 'Offset=500', 200, [ 'Message' => 'Query failed' ] );
 		$this->assert_throws_containing( 'could not be read' );
 	}
 

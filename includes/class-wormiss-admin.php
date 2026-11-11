@@ -87,15 +87,7 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function register_settings(): void {
-		register_setting(
-			self::PAGE,
-			Wormiss_Settings::OPTION,
-			[
-				'type'              => 'array',
-				'sanitize_callback' => [ 'Wormiss_Settings', 'sanitize' ],
-				'default'           => Wormiss_Settings::defaults(),
-			]
-		);
+		self::register_option();
 
 		add_settings_section( 'wormiss_connection', __( 'iMIS connection', 'wormiss' ), [ __CLASS__, 'connection_intro' ], self::PAGE );
 		self::field( 'base_url', __( 'iMIS address', 'wormiss' ), 'wormiss_connection' );
@@ -111,6 +103,23 @@ class Wormiss_Admin {
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_capture', __( 'Keep full request and response bodies', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_retention_days', __( 'Keep log entries for (days)', 'wormiss' ), 'wormiss_log' );
+	}
+
+	/**
+	 * Register the option with its sanitiser and defaults.
+	 *
+	 * @return void
+	 */
+	public static function register_option(): void {
+		register_setting(
+			self::PAGE,
+			Wormiss_Settings::OPTION,
+			[
+				'type'              => 'array',
+				'sanitize_callback' => [ 'Wormiss_Settings', 'sanitize' ],
+				'default'           => Wormiss_Settings::defaults(),
+			]
+		);
 	}
 
 	/**

@@ -222,7 +222,10 @@ class Wormiss_Settings {
 			$clean['cache_minutes'] = min( 1440, max( 1, absint( $input['cache_minutes'] ) ) );
 		}
 		if ( isset( $input['allowed_queries'] ) ) {
-			$clean['allowed_queries'] = self::parse_queries( (string) $input['allowed_queries'] );
+			// WordPress runs this callback twice on a first save (update_option, then add_option),
+			// so accept the already-cleaned list as well as the text box.
+			$queries                  = $input['allowed_queries'];
+			$clean['allowed_queries'] = self::parse_queries( is_array( $queries ) ? implode( "\n", $queries ) : (string) $queries );
 		}
 		if ( isset( $input['log_retention_days'] ) ) {
 			$clean['log_retention_days'] = min( 365, max( 1, absint( $input['log_retention_days'] ) ) );

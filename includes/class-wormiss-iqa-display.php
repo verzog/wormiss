@@ -59,6 +59,8 @@ class Wormiss_Iqa_Display {
 	 * @return string
 	 */
 	public static function shortcode( $atts ): string {
+		// Block styles load only with a block on sites that load block assets on demand.
+		wp_enqueue_style( 'wormiss-iqa-style' );
 		return self::render( shortcode_atts( self::defaults(), is_array( $atts ) ? $atts : [], 'wormiss_iqa' ) );
 	}
 
@@ -115,7 +117,7 @@ class Wormiss_Iqa_Display {
 	 * @throws Wormiss_Exception If iMIS fails and no earlier copy exists.
 	 */
 	public static function get_rows( string $query, array $parameters = [] ): array {
-		$key    = 'wormiss_iqa_' . md5( $query . "\0" . wp_json_encode( $parameters ) );
+		$key    = self::cache_key( $query, $parameters );
 		$cached = get_transient( $key );
 		if ( is_array( $cached ) ) {
 			return $cached;
@@ -133,6 +135,19 @@ class Wormiss_Iqa_Display {
 		set_transient( $key, $rows, $minutes * MINUTE_IN_SECONDS );
 		set_transient( $key . '_stale', $rows, self::STALE_SECONDS );
 		return $rows;
+	}
+
+	/**
+	 * Cache key for a query on the current iMIS connection, so a different iMIS site or
+	 * service account never sees another's cached results.
+	 *
+	 * @param string   $query      IQA path.
+	 * @param string[] $parameters Prompt values.
+	 * @return string
+	 */
+	public static function cache_key( string $query, array $parameters = [] ): string {
+		$connection = Wormiss_Settings::base_url() . "\0" . Wormiss_Settings::username();
+		return 'wormiss_iqa_' . md5( $connection . "\0" . $query . "\0" . wp_json_encode( $parameters ) );
 	}
 
 	/**

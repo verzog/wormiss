@@ -141,6 +141,8 @@ class Wormiss_Rest_Client {
 			throw new Wormiss_Exception( sprintf( __( 'iMIS refused the login (%s).', 'wormiss' ), Wormiss_Logger::redact( $error ) ) );
 		}
 
+		// Logged without the request or response, which hold the password and the token.
+		Wormiss_Logger::record_call( 'POST /token', Wormiss_Logger::STATUS_SUCCESS );
 		$this->token = (string) $decoded->access_token;
 		// Refresh a minute before the stated expiry to avoid racing the cut-off.
 		$expires_in         = (int) ( $decoded->expires_in ?? 3600 );
@@ -259,7 +261,9 @@ class Wormiss_Rest_Client {
 		do {
 			$path   = $base . '&Limit=' . self::PAGE_SIZE . '&Offset=' . $offset;
 			$result = $this->request( 'GET', $path, null, null, false );
-			if ( ! is_object( $result->body ) ) {
+			if ( ! self::is_paged_result( $result->body ) ) {
+				// Not a page of results (e.g. an error message sent with HTTP 200): never treat it
+				// as an empty page, or a partial read would be cached as complete.
 				Wormiss_Logger::record_call( 'GET ' . $path, Wormiss_Logger::STATUS_ERROR, 'Unreadable response body' );
 				throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
 			}
@@ -301,6 +305,18 @@ class Wormiss_Rest_Client {
 		}
 		$text = trim( (string) preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $text ) ) );
 		return mb_strlen( $text ) > 300 ? mb_substr( $text, 0, 297 ) . '...' : $text;
+	}
+
+	/**
+	 * Whether a decoded body is a page of results: an object with an `Items.$values` list
+	 * (which may be empty).
+	 *
+	 * @param mixed $body Decoded body.
+	 * @return bool
+	 */
+	public static function is_paged_result( $body ): bool {
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+		return is_object( $body ) && is_object( $body->Items ?? null ) && is_array( $body->Items->{'$values'} ?? null );
 	}
 
 	/**
