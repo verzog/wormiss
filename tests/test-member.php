@@ -81,11 +81,14 @@ class Test_Wormiss_Member extends Wormiss_Test_Case {
 		$this->assertSame( '', Wormiss_Member::imis_id( $user_id ) );
 
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'member_id_source' => 'login' ] ) );
-		$this->assertSame( get_userdata( $user_id )->user_login, Wormiss_Member::imis_id( $user_id ) );
+		$sso_user = self::factory()->user->create( [ 'user_login' => '54321' ] );
+		$this->assertSame( '54321', Wormiss_Member::imis_id( $sso_user ) );
+		// A username that is not an iMIS ID (it has a space) counts as no ID.
+		$this->assertSame( '', Wormiss_Member::imis_id( self::factory()->user->create( [ 'user_login' => 'Jane Smith' ] ) ) );
 
 		$filter = static fn() => 'SSO-777';
 		add_filter( 'wormiss_member_imis_id', $filter );
-		$this->assertSame( 'SSO-777', Wormiss_Member::imis_id( $user_id ) );
+		$this->assertSame( 'SSO-777', Wormiss_Member::imis_id( $sso_user ) );
 		remove_filter( 'wormiss_member_imis_id', $filter );
 	}
 
