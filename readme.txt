@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.4.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -57,7 +57,23 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
 * The full text never reaches non-members: the page, feeds, the REST API and
   excerpts all get the teaser. Anyone who can edit the post always sees it.
 
-Planned next: recording WordPress activity in iMIS.
+**Recording activity in iMIS**
+
+* Things signed-in members do here are written to iMIS as activity records (one
+  activity type you choose, e.g. `WEBACTIVITY`): **reads** of members-only posts
+  and pages, **downloads** through tracked links
+  (`[wormiss_download id="123"]Slides[/wormiss_download]`), clicks on a **Mark as
+  done** block (with optional CPD points), and **form submissions** (Gravity
+  Forms, WPForms, Contact Form 7; developers can use the `wormiss_record_activity`
+  action).
+* Each record carries what happened, the title and page address, the date, CPD
+  points and the WordPress post ID, in the full record format iMIS accepts.
+* Off, and a **dry run** (log only), until an administrator turns it on. Records
+  are sent in the background, so pages never wait on iMIS, and a failed send is
+  retried twice. A member's read or download of the same item is recorded once a
+  day; a Mark as done block once ever.
+* Mark as done points come from the saved block, never from the browser, and the
+  member must be able to read the page.
 
 iMIS is a trademark of Advanced Solutions International, Inc. This plugin is not
 made or endorsed by ASI.
@@ -126,7 +142,24 @@ and switch it on; add membership types or statuses to narrow it. For part of a
 page, add a *Members only* block and put the private blocks inside it. To check
 types or statuses, set a membership query under *Members-only content*.
 
+= What does an activity record contain? =
+
+`ACTIVITY_TYPE` (your type), `PartyId` (the member), `DESCRIPTION` (what it was
+about), `NOTE` (details and page address), `NOTE_2` (read, download, completion
+or form), `SOURCE_CODE` (WORDPRESS), `TRANSACTION_DATE` and `THRU_DATE`, `UF_4`
+(CPD points) and `UF_5` (WordPress post ID). Every other Activity column is sent
+empty, as iMIS requires. Check a dry run in the audit log before switching it on,
+and confirm the records against a test iMIS first.
+
+= Are downloaded files protected? =
+
+No: the tracked link records the download and then opens the file, but files in
+the Media Library can still be opened directly by anyone with their address.
+
 == Changelog ==
+
+= 0.4.0 =
+* Recording activity in iMIS: reads of members-only content, tracked downloads, the Mark as done block (with CPD points) and form submissions, as activity records of one configured type; off and a dry run by default, sent in the background with retries.
 
 = 0.3.0 =
 * Members-only content: the Members only editor panel for posts and pages (teaser for non-members), the Members only block, membership type and status rules from an approved membership query, and site-wide current statuses.

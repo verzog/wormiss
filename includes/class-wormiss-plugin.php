@@ -47,6 +47,8 @@ class Wormiss_Plugin {
 		add_filter( 'wp_privacy_personal_data_erasers', [ __CLASS__, 'register_eraser' ] );
 		Wormiss_Member::init();
 		Wormiss_Members_Only::init();
+		Wormiss_Activity::init();
+		Wormiss_Completion::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
 		}
@@ -62,6 +64,7 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/iqa' );
 		register_block_type( WORMISS_DIR . '/blocks/member' );
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
+		register_block_type( WORMISS_DIR . '/blocks/complete' );
 		add_shortcode( 'wormiss_iqa', [ 'Wormiss_Iqa_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_member', [ 'Wormiss_Member_Display', 'shortcode' ] );
 	}
@@ -106,6 +109,8 @@ class Wormiss_Plugin {
 	 */
 	public static function deactivate(): void {
 		wp_clear_scheduled_hook( self::CLEANUP_HOOK );
+		// Unsent activity records are dropped: nothing is sent while the plugin is inactive.
+		wp_unschedule_hook( Wormiss_Activity::SEND_HOOK );
 	}
 
 	/**
@@ -203,6 +208,12 @@ class Wormiss_Plugin {
 		unset( $page );
 		$user    = get_user_by( 'email', $email );
 		$removed = $user ? Wormiss_Logger::delete_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) ) : 0;
+		if ( $user ) {
+			// "Mark as done" completions stored on the account, and records not yet sent to iMIS
+			// (records already in iMIS stay there).
+			$removed += Wormiss_Completion::delete_for_user( $user->ID );
+			$removed += Wormiss_Activity::unschedule_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) );
+		}
 		return [
 			'items_removed'  => $removed > 0,
 			'items_retained' => false,
@@ -226,6 +237,8 @@ class Wormiss_Plugin {
 				. esc_html__( 'This site reads information from our iMIS membership system to show on pages, e.g. events.', 'wormiss' )
 				. ' ' . esc_html__( 'Results are kept on this site for a short time to make pages faster.', 'wormiss' )
 				. ' ' . esc_html__( 'Signed-in members can see their own iMIS details, read using the iMIS ID on their account.', 'wormiss' )
+				. ' ' . esc_html__( 'When switched on, some things members do here are recorded in iMIS against their record:', 'wormiss' )
+				. ' ' . esc_html__( 'reading members-only pages, downloading files, completing activities and submitting forms.', 'wormiss' )
 				. ' ' . esc_html__( 'A log of each request to iMIS (when, what, and whether it worked) is kept for a while.', 'wormiss' )
 				. '</p>'
 		);

@@ -1,0 +1,25 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/complete",
+	"version": "0.4.0",
+	"title": "Mark as done",
+	"category": "widgets",
+	"icon": "yes-alt",
+	"description": "A button signed-in members click to record a completion in iMIS, such as \"I've read this\" or a CPD activity with points.",
+	"keywords": [ "imis", "cpd", "complete", "done", "points" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"completionId": { "type": "string", "default": "" },
+		"label": { "type": "string", "default": "" },
+		"doneLabel": { "type": "string", "default": "" },
+		"activity": { "type": "string", "default": "" },
+		"points": { "type": "number", "default": 0 }
+	},
+	"supports": {
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "wormiss-iqa-style",
+	"render": "file:./render.php"
+}

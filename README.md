@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.3.0)
+## What it does (0.4.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -30,7 +30,12 @@ whose iMIS REST client and audit log it reuses.
   query. Non-members see a teaser (title and excerpt, then a sign-in message); the
   full text never reaches the page, feeds, REST API or excerpts. Fails closed.
 
-Planned next: recording WordPress activity in iMIS as activity records.
+* **Activity records in iMIS:** reads of members-only content, tracked downloads
+  (`[wormiss_download]`), a Mark as done block (with CPD points, read from the saved
+  block) and form submissions (Gravity Forms, WPForms, Contact Form 7, or the
+  `wormiss_record_activity` action), written as iMIS Activity records of one
+  configured type in the full record shape the Moodle bridge proved. Off and a dry
+  run by default; sent in the background via WP-Cron with two retries.
 
 ## Requirements
 

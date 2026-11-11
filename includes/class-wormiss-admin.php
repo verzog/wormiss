@@ -111,6 +111,15 @@ class Wormiss_Admin {
 		self::field( 'access_status_column', __( 'Membership status column', 'wormiss' ), 'wormiss_access' );
 		self::field( 'access_statuses', __( 'Current statuses', 'wormiss' ), 'wormiss_access' );
 
+		$title = __( 'Record activity in iMIS', 'wormiss' );
+		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
+		self::field( 'activity_enabled', __( 'Record activity', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'activity_dry_run', __( 'Dry run (log only)', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'activity_type', __( 'iMIS activity type', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'record_reads', __( 'Reads of members-only content', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'record_downloads', __( 'Tracked file downloads', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'record_forms', __( 'Form submissions', 'wormiss' ), 'wormiss_activity' );
+
 		add_settings_section( 'wormiss_log', __( 'Audit log', 'wormiss' ), '__return_false', self::PAGE );
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_capture', __( 'Keep full request and response bodies', 'wormiss' ), 'wormiss_log' );
@@ -204,6 +213,20 @@ class Wormiss_Admin {
 			. esc_html__( 'Posts, pages and Members only blocks can be limited to members, by membership type and status.', 'wormiss' )
 			. ' ' . esc_html__( "The membership query reads a member's own record (their iMIS ID is its first prompt).", 'wormiss' )
 			. ' ' . esc_html__( 'Without one, any signed-in member with an iMIS ID counts as a member.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the activity section (and the marker that its checkboxes were shown).
+	 *
+	 * @return void
+	 */
+	public static function activity_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[activity_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Records what signed-in members do here as iMIS activity records, sent in the background.', 'wormiss' )
+			. ' ' . esc_html__( 'Create the activity type in iMIS first. Mark as done buttons are recorded whenever this is on.', 'wormiss' )
+			. ' ' . esc_html__( 'Keep the dry run on until the audit log shows what you expect: it logs, but sends nothing.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -310,8 +333,21 @@ class Wormiss_Admin {
 					. esc_html__( 'The user meta key your single sign-on plugin fills with the iMIS ID (default imis_id).', 'wormiss' )
 					. '</p>';
 				return;
+			case 'activity_type':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" placeholder="WEBACTIVITY" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				return;
 			case 'log_enabled':
 			case 'log_capture':
+			case 'activity_enabled':
+			case 'activity_dry_run':
+			case 'record_reads':
+			case 'record_downloads':
+			case 'record_forms':
 				printf(
 					'<input type="checkbox" id="%1$s" name="%2$s" value="1" %3$s />',
 					esc_attr( $id ),
