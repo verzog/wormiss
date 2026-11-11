@@ -1,0 +1,28 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/iqa",
+	"version": "0.1.0",
+	"title": "iMIS data",
+	"category": "widgets",
+	"icon": "database",
+	"description": "Shows the results of an approved iMIS query (IQA) as a table, cards or a list, such as upcoming events.",
+	"keywords": [ "imis", "iqa", "events", "members", "report" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"query": { "type": "string", "default": "" },
+		"layout": { "type": "string", "enum": [ "table", "cards", "list" ], "default": "table" },
+		"columns": { "type": "string", "default": "" },
+		"parameters": { "type": "string", "default": "" },
+		"limit": { "type": "number", "default": 20 },
+		"link": { "type": "string", "default": "" },
+		"emptyText": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "file:./style.css",
+	"render": "file:./render.php"
+}

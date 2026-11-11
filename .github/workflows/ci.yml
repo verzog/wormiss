@@ -1,0 +1,142 @@
+name: Plugin CI
+
+# Modelled on moodle-plugin-ci: a fast static stage, then PHPUnit against real
+# WordPress (the WordPress test suite) on each supported version, with iMIS faked.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Deliberately Sydney, not Brisbane, so daylight-saving bugs show up in tests.
+  TZ: Australia/Sydney
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v5
+
+      - name: Set up PHP 8.1 (lowest supported)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dev tools
+        run: composer install --no-interaction --no-progress
+
+      - name: PHP lint
+        if: ${{ !cancelled() }}
+        run: composer lint
+
+      - name: WordPress coding standards (warnings fail)
+        if: ${{ !cancelled() }}
+        run: composer phpcs
+
+      - name: block.json files are valid JSON
+        if: ${{ !cancelled() }}
+        run: |
+          for f in blocks/*/block.json; do
+            php -r 'json_decode(file_get_contents($argv[1]), false, 512, JSON_THROW_ON_ERROR);' "$f"
+          done
+
+      - name: Plugin header and readme versions match
+        if: ${{ !cancelled() }}
+        run: |
+          header=$(sed -n 's/^ \* Version:[[:space:]]*//p' wormiss.php | tr -d '[:space:]')
+          constant=$(sed -n "s/^define( 'WORMISS_VERSION', '\([^']*\)' );/\1/p" wormiss.php)
+          stable=$(sed -n 's/^Stable tag:[[:space:]]*//p' readme.txt | tr -d '[:space:]')
+          echo "header=$header constant=$constant readme=$stable"
+          [ "$header" = "$constant" ] && [ "$header" = "$stable" ] || { echo "::error::Versions differ."; exit 1; }
+
+      - name: LF line endings, no trailing whitespace, no stray images
+        if: ${{ !cancelled() }}
+        run: |
+          files=$(git ls-files | grep -vE '\.(png|jpe?g|gif|webp)$')
+          if grep -lI $'\r' $files; then echo "::error::CRLF line endings found in the files above."; exit 1; fi
+          if grep -nIE '[[:blank:]]+$' $files; then echo "::error::Trailing whitespace found above."; exit 1; fi
+          stray=$(git ls-files | grep -iE '\.(png|jpe?g|gif|webp)$' | grep -v '^assets/' || true)
+          if [ -n "$stray" ]; then echo "$stray"; echo "::error::Images outside assets/ would ship in the plugin zip."; exit 1; fi
+
+  phpunit:
+    name: WP ${{ matrix.wp }} / PHP ${{ matrix.php }}
+    needs: static
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Lowest supported: the plugin header's "Requires at least" and "Requires PHP".
+          - {wp: '6.6', php: '8.1'}
+          - {wp: 'latest', php: '8.2'}
+          - {wp: 'latest', php: '8.3'}
+          - {wp: 'latest', php: '8.4'}
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress_tests
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v5
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: mysqli
+          tools: composer:v2, wp-cli
+
+      - name: Install dev tools and the WordPress test library
+        run: |
+          composer install --no-interaction --no-progress
+          if [ "${{ matrix.wp }}" = "latest" ]; then constraint='*'; else constraint='${{ matrix.wp }}.*'; fi
+          composer require --dev --no-interaction --no-progress "wp-phpunit/wp-phpunit:$constraint"
+          version=$(composer show wp-phpunit/wp-phpunit --format=json \
+            | php -r 'echo json_decode(stream_get_contents(STDIN))->versions[0];')
+          echo "WP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Testing against WordPress $version"
+
+      - name: Download WordPress ${{ env.WP_VERSION }}
+        run: wp core download --path="$RUNNER_TEMP/wordpress" --version="$WP_VERSION" --skip-content
+
+      - name: Write the test configuration
+        run: |
+          cat > tests/wp-tests-config.php <<PHP
+          <?php
+          define( 'ABSPATH', '$RUNNER_TEMP/wordpress/' );
+          define( 'WP_DEFAULT_THEME', 'default' );
+          define( 'WP_DEBUG', true );
+          define( 'DB_NAME', 'wordpress_tests' );
+          define( 'DB_USER', 'root' );
+          define( 'DB_PASSWORD', 'root' );
+          define( 'DB_HOST', '127.0.0.1' );
+          define( 'DB_CHARSET', 'utf8mb4' );
+          define( 'DB_COLLATE', '' );
+          \$table_prefix = 'wptests_';
+          define( 'WP_TESTS_DOMAIN', 'example.org' );
+          define( 'WP_TESTS_EMAIL', 'admin@example.org' );
+          define( 'WP_TESTS_TITLE', 'Wormiss tests' );
+          define( 'WP_PHP_BINARY', 'php' );
+          PHP
+
+      - name: PHPUnit
+        run: WP_PHPUNIT__TESTS_CONFIG="$GITHUB_WORKSPACE/tests/wp-tests-config.php" vendor/bin/phpunit

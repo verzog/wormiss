@@ -1,0 +1,24 @@
+{
+    "name": "verzog/wormiss",
+    "description": "Wormiss: an iMIS bridge for WordPress. Development tooling only; not shipped in the release zip.",
+    "type": "wordpress-plugin",
+    "license": "GPL-3.0-or-later",
+    "require-dev": {
+        "php-parallel-lint/php-parallel-lint": "^1.4",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
+        "phpunit/phpunit": "^9.6",
+        "wp-coding-standards/wpcs": "^3.1",
+        "yoast/phpunit-polyfills": "^2.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "lint": "parallel-lint --exclude vendor --exclude .git .",
+        "phpcs": "phpcs --warning-severity=1",
+        "test": "phpunit"
+    }
+}

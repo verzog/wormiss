@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="Wormiss">
+    <description>WordPress Coding Standards for the Wormiss plugin.</description>
+
+    <file>.</file>
+    <exclude-pattern>/vendor/*</exclude-pattern>
+    <exclude-pattern>/node_modules/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <!-- Lowest supported versions: the plugin header's "Requires PHP" and "Requires at least". -->
+    <config name="testVersion" value="8.1-"/>
+    <config name="minimum_wp_version" value="6.6"/>
+
+    <rule ref="WordPress">
+        <!-- The GPL licence header comes first, so the docblock is not the file comment. -->
+        <exclude name="Squiz.Commenting.FileComment.WrongStyle"/>
+        <!-- House style uses short arrays ([]), not array(). -->
+        <exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+        <!-- Wormiss_Exception messages are plain text, escaped with esc_html() wherever they are shown. -->
+        <exclude name="WordPress.Security.EscapeOutput.ExceptionNotEscaped"/>
+    </rule>
+    <rule ref="PHPCompatibilityWP"/>
+
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array">
+                <element value="wormiss"/>
+            </property>
+        </properties>
+    </rule>
+
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="wormiss"/>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- WordPress requires block script asset files to be named <script>.asset.php. -->
+    <rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+        <exclude-pattern>*.asset.php</exclude-pattern>
+    </rule>
+
+    <!-- Test classes follow the WordPress test-suite naming (test-*.php, Test_* classes). -->
+    <rule ref="WordPress.Files.FileName.InvalidClassFileName">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+</ruleset>

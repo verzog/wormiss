@@ -1,0 +1,44 @@
+<?php
+// This file is part of Wormiss, an iMIS bridge for WordPress.
+//
+// Wormiss is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Wormiss is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Uninstall: remove the plugin's settings, cached results and audit log.
+ *
+ * @package    wormiss
+ * @copyright  2026 Vernon Spain
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
+
+global $wpdb;
+
+delete_option( 'wormiss_settings' );
+delete_option( 'wormiss_password' );
+delete_option( 'wormiss_db_version' );
+wp_clear_scheduled_hook( 'wormiss_cleanup_log' );
+
+// Cached IQA results are transients named wormiss_iqa_*.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- One-off clean-up on uninstall.
+$wpdb->query(
+	$wpdb->prepare(
+		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+		$wpdb->esc_like( '_transient_wormiss_' ) . '%',
+		$wpdb->esc_like( '_transient_timeout_wormiss_' ) . '%'
+	)
+);
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin's own table.
+$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}wormiss_log" );
