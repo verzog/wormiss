@@ -1,0 +1,48 @@
+name: Release zip
+
+# Publishing a GitHub release builds wormiss-<tag>.zip and attaches it.
+# Never attach release zips by hand; re-run this workflow instead.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to rebuild, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Tag must match the plugin Version
+        run: |
+          VERSION=$(sed -n 's/^ \* Version:[[:space:]]*//p' wormiss.php | tr -d '[:space:]')
+          echo "Tag: $TAG  Plugin Version: $VERSION"
+          if [ "${TAG#v}" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match the plugin Version $VERSION (expected tag v$VERSION)."
+            exit 1
+          fi
+
+      - name: Build zip
+        # The folder inside the zip must be the plugin folder name (wormiss/), or WordPress
+        # installs it as a differently named plugin.
+        run: git archive --format=zip --prefix=wormiss/ -o "wormiss-$TAG.zip" "$TAG"
+
+      - name: List zip contents
+        run: unzip -l "wormiss-$TAG.zip"
+
+      - name: Attach zip to the release
+        run: gh release upload "$TAG" "wormiss-$TAG.zip" --clobber

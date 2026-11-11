@@ -1,0 +1,67 @@
+/*
+ * iMIS data block: front-end and editor styles. Kept light so the theme's styles apply.
+ * Copyright 2026 Vernon Spain. GNU GPL v3 or later.
+ */
+
+.wormiss-iqa--table {
+	overflow-x: auto;
+}
+
+.wormiss-iqa--table table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.wormiss-iqa--table th,
+.wormiss-iqa--table td {
+	padding: 0.5em 0.75em;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+	text-align: left;
+	vertical-align: top;
+}
+
+.wormiss-iqa--cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+	gap: 1.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wormiss-iqa__card {
+	padding: 1.25rem;
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 7px;
+}
+
+.wormiss-iqa__title {
+	margin-top: 0;
+}
+
+.wormiss-iqa__card dl {
+	margin: 0;
+}
+
+.wormiss-iqa__card dt {
+	font-weight: 700;
+}
+
+.wormiss-iqa__card dd {
+	margin: 0 0 0.5em;
+}
+
+.wormiss-iqa--list {
+	padding-left: 1.25em;
+}
+
+.wormiss-iqa__meta,
+.wormiss-iqa__reason {
+	opacity: 0.8;
+}
+
+.wormiss-iqa--notice {
+	padding: 0.75em 1em;
+	border-left: 4px solid currentColor;
+	background: rgba(0, 0, 0, 0.04);
+}
