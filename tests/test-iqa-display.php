@@ -183,7 +183,7 @@ class Test_Wormiss_Iqa_Display extends Wormiss_Test_Case {
 	public function test_unavailable(): void {
 		$this->imis->token()->reply( '/api/iqa', 500, '{"Message":"Query not found"}' );
 		$html = Wormiss_Iqa_Display::render( [ 'query' => self::QUERY ] );
-		$this->assertStringContainsString( "This information isn't available right now.", $html );
+		$this->assertStringContainsString( 'This information isn&#039;t available right now.', $html );
 		$this->assertStringNotContainsString( 'Query not found', $html );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
