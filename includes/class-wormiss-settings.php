@@ -70,6 +70,13 @@ class Wormiss_Settings {
 			'access_type_column'   => 'MemberType',
 			'access_status_column' => 'Status',
 			'access_statuses'      => [],
+			// Recording activity in iMIS: off, and a dry run, until an administrator turns it on.
+			'activity_enabled'     => false,
+			'activity_dry_run'     => true,
+			'activity_type'        => '',
+			'record_reads'         => true,
+			'record_downloads'     => true,
+			'record_forms'         => false,
 		];
 	}
 
@@ -316,6 +323,25 @@ class Wormiss_Settings {
 		}
 		if ( isset( $input['log_retention_days'] ) ) {
 			$clean['log_retention_days'] = min( 365, max( 1, absint( $input['log_retention_days'] ) ) );
+		}
+		if ( isset( $input['activity_type'] ) ) {
+			$type = trim( (string) $input['activity_type'] );
+			if ( '' === $type || preg_match( '/^[A-Za-z0-9_]{1,32}$/', $type ) ) {
+				$clean['activity_type'] = $type;
+			} else {
+				$message = __( 'The iMIS activity type can only use letters, digits and _.', 'wormiss' );
+				add_settings_error( self::OPTION, 'activity_type', $message );
+			}
+		}
+		// Checkboxes: from the settings form (which marks its activity section, since an unticked
+		// box is not submitted), or from an already-cleaned array (WordPress sanitises a first
+		// save twice); otherwise they keep their saved values.
+		foreach ( [ 'activity_enabled', 'activity_dry_run', 'record_reads', 'record_downloads', 'record_forms' ] as $box ) {
+			if ( isset( $input['activity_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
 		}
 		$clean['log_enabled'] = ! empty( $input['log_enabled'] );
 		$clean['log_capture'] = ! empty( $input['log_capture'] );

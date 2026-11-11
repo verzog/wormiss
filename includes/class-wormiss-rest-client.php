@@ -282,6 +282,137 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * Create an activity record in iMIS.
+	 *
+	 * @param array  $body    Body from build_activity_body().
+	 * @param string $imis_id The member's iMIS ID, for the audit log.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function add_activity( array $body, string $imis_id ): object {
+		return $this->request( 'POST', '/api/Activity', $body, $imis_id );
+	}
+
+	/**
+	 * An iMIS Activity record (GenericEntityData) for something a member did on the site.
+	 *
+	 * Ported from local_membershipbridge's note record: iMIS rejected an activity carrying
+	 * only the filled-in columns and accepted one with every column, typed decimals, ints
+	 * and booleans, and the envelope `$type`s, so every column is sent.
+	 *
+	 * @param string $activity_type iMIS activity type (e.g. WEBACTIVITY).
+	 * @param string $imis_id       The member's iMIS ID.
+	 * @param string $kind          read, download, completion or form (stored in NOTE_2).
+	 * @param string $description   What it was about (DESCRIPTION, max 255).
+	 * @param string $note          Detail, e.g. the title and page address (NOTE).
+	 * @param string $date          ISO date-time, e.g. 2026-11-12T09:30:00.
+	 * @param float  $points        CPD points or score (UF_4).
+	 * @param int    $post_id       WordPress post ID (UF_5).
+	 * @return array
+	 */
+	public static function build_activity_body(
+		string $activity_type,
+		string $imis_id,
+		string $kind,
+		string $description,
+		string $note,
+		string $date,
+		float $points = 0,
+		int $post_id = 0
+	): array {
+		$values = [
+			'ACTION_CODES'          => null,
+			'ACTIVITY_TYPE'         => $activity_type,
+			'AMOUNT'                => self::typed( 'System.Decimal', 0 ),
+			'ATTACH_SEQN'           => self::typed( 'System.Int32', 0 ),
+			'ATTACH_TOTAL'          => self::typed( 'System.Int32', 0 ),
+			'BATCH_NUM'             => null,
+			'CAMPAIGN_CODE'         => null,
+			'CATEGORY'              => null,
+			'CO_ID'                 => null,
+			'DESCRIPTION'           => mb_substr( $description, 0, 255 ),
+			'EFFECTIVE_DATE'        => null,
+			'GRACE_PERIOD'          => self::typed( 'System.Int32', 0 ),
+			'PartyId'               => $imis_id,
+			'INTENT_TO_EDIT'        => null,
+			'MEM_TRIB_CODE'         => null,
+			'MEMBER_TYPE'           => null,
+			'NEXT_INSTALL_DATE'     => null,
+			'NOTE'                  => $note,
+			'NOTE_2'                => $kind,
+			'OBJECT'                => null,
+			'ORG_CODE'              => null,
+			'ORIGINATING_TRANS_NUM' => self::typed( 'System.Int32', 0 ),
+			'OTHER_CODE'            => null,
+			'OTHER_ID'              => null,
+			'PAY_METHOD'            => null,
+			'PRODUCT_CODE'          => null,
+			'QUANTITY'              => self::typed( 'System.Decimal', 0 ),
+			'RECURRING_REQUEST'     => self::typed( 'System.Boolean', false ),
+			'SOLICITOR_ID'          => null,
+			'SOURCE_CODE'           => 'WORDPRESS',
+			'SOURCE_SYSTEM'         => null,
+			'STATUS_CODE'           => null,
+			'TAXABLE_VALUE'         => self::typed( 'System.Decimal', 0 ),
+			'THRU_DATE'             => $date,
+			'TICKLER_DATE'          => null,
+			'TRANSACTION_DATE'      => $date,
+			'UF_1'                  => null,
+			'UF_2'                  => null,
+			'UF_3'                  => null,
+			'UF_4'                  => self::typed( 'System.Decimal', $points ),
+			'UF_5'                  => self::typed( 'System.Decimal', $post_id ),
+			'UF_6'                  => null,
+			'UF_7'                  => null,
+			'UNITS'                 => self::typed( 'System.Decimal', 0 ),
+		];
+
+		$props = [];
+		foreach ( $values as $name => $value ) {
+			$prop = [
+				'$type' => 'Asi.Soa.Core.DataContracts.GenericPropertyData, Asi.Contracts',
+				'Name'  => $name,
+			];
+			if ( null !== $value && '' !== $value ) {
+				$prop['Value'] = $value;
+			}
+			$props[] = $prop;
+		}
+
+		return [
+			'$type'                       => 'Asi.Soa.Core.DataContracts.GenericEntityData, Asi.Contracts',
+			'EntityTypeName'              => 'Activity',
+			'PrimaryParentEntityTypeName' => 'Party',
+			'PrimaryParentIdentity'       => [
+				'$type'            => 'Asi.Soa.Core.DataContracts.IdentityData, Asi.Contracts',
+				'EntityTypeName'   => 'Party',
+				'IdentityElements' => [
+					'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
+					'$values' => [ $imis_id ],
+				],
+			],
+			'Properties'                  => [
+				'$type'   => 'Asi.Soa.Core.DataContracts.GenericPropertyDataCollection, Asi.Contracts',
+				'$values' => $props,
+			],
+		];
+	}
+
+	/**
+	 * A .NET-typed value for iMIS.
+	 *
+	 * @param string $type  .NET type name.
+	 * @param mixed  $value Value.
+	 * @return array
+	 */
+	private static function typed( string $type, $value ): array {
+		return [
+			'$type'  => $type,
+			'$value' => $value,
+		];
+	}
+
+	/**
 	 * A short, single-line reason from an iMIS error body, without markup (max 300 characters).
 	 *
 	 * @param string $raw Raw response body.
