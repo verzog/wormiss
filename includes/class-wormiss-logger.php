@@ -173,6 +173,54 @@ class Wormiss_Logger {
 	}
 
 	/**
+	 * Log rows about one person: their WordPress user ID or their iMIS ID.
+	 *
+	 * @param int    $user_id WordPress user ID.
+	 * @param string $imis_id iMIS ID ('' if none).
+	 * @param int    $limit   Rows.
+	 * @param int    $offset  Rows to skip.
+	 * @return array[]
+	 */
+	public static function for_person( int $user_id, string $imis_id, int $limit = 100, int $offset = 0 ): array {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom log table; privacy export.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE user_id = %d OR ( %s <> \'\' AND imis_id = %s ) ORDER BY id LIMIT %d OFFSET %d',
+				self::table(),
+				$user_id,
+				$imis_id,
+				$imis_id,
+				$limit,
+				$offset
+			),
+			ARRAY_A
+		);
+		return is_array( $rows ) ? $rows : [];
+	}
+
+	/**
+	 * Delete log rows about one person (privacy erasure).
+	 *
+	 * @param int    $user_id WordPress user ID.
+	 * @param string $imis_id iMIS ID ('' if none).
+	 * @return int Rows deleted.
+	 */
+	public static function delete_for_person( int $user_id, string $imis_id ): int {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom log table; privacy erasure.
+		return (int) $wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE user_id = %d OR ( %s <> \'\' AND imis_id = %s )',
+				self::table(),
+				$user_id,
+				$imis_id,
+				$imis_id
+			)
+		);
+	}
+
+	/**
 	 * Number of rows in the log.
 	 *
 	 * @return int

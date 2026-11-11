@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.1.0)
+## What it does (0.2.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -17,12 +17,18 @@ whose iMIS REST client and audit log it reuses.
 * **Connection test** on the settings page, and an **audit log** of every call
   (Tools > iMIS Bridge log) with credentials always redacted.
 
+* **My iMIS data block and shortcode:** show a signed-in member their own iMIS data
+  (membership status, CPD, results) from an approved member query. The member's
+  iMIS ID, from a user field set by single sign-on or the username, is always the
+  query's first prompt, added on the server. Cached per member; pages are marked
+  not to be page-cached; signed-out visitors get a sign-in link.
+* **iMIS ID on user profiles** for administrators (members cannot change their own),
+  and privacy export and erasure of a member's audit-log entries.
+
 Planned, each as its own release:
 
-1. Members' own data (membership status, CPD, results) for members signed in with
-   iMIS single sign-on.
-2. Members-only content, by iMIS membership type or status.
-3. Recording WordPress activity in iMIS as activity records.
+1. Members-only content, by iMIS membership type or status.
+2. Recording WordPress activity in iMIS as activity records.
 
 ## Requirements
 

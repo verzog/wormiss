@@ -245,12 +245,13 @@ class Wormiss_Rest_Client {
 	 * read to the end (up to MAX_ROWS). A page with an unreadable body aborts the
 	 * whole read rather than returning a partial set.
 	 *
-	 * @param string $query      IQA document path, e.g. '$/Events/UpcomingEvents'.
-	 * @param array  $parameters Prompt values in prompt order.
+	 * @param string      $query      IQA document path, e.g. '$/Events/UpcomingEvents'.
+	 * @param array       $parameters Prompt values in prompt order.
+	 * @param string|null $imis_id    The member the query is about, for the audit log.
 	 * @return array[] Rows, each property name => unwrapped value.
 	 * @throws Wormiss_Exception On any failed or unreadable page.
 	 */
-	public function run_iqa( string $query, array $parameters = [] ): array {
+	public function run_iqa( string $query, array $parameters = [], ?string $imis_id = null ): array {
 		$base = '/api/iqa?QueryName=' . rawurlencode( $query );
 		foreach ( $parameters as $value ) {
 			$base .= '&Parameter=' . rawurlencode( (string) $value );
@@ -260,7 +261,7 @@ class Wormiss_Rest_Client {
 		$offset = 0;
 		do {
 			$path   = $base . '&Limit=' . self::PAGE_SIZE . '&Offset=' . $offset;
-			$result = $this->request( 'GET', $path, null, null, false );
+			$result = $this->request( 'GET', $path, null, $imis_id, false );
 			if ( ! self::is_paged_result( $result->body ) ) {
 				// Not a page of results (e.g. an error message sent with HTTP 200): never treat it
 				// as an empty page, or a partial read would be cached as complete.

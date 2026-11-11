@@ -71,10 +71,8 @@ class Wormiss_Iqa_Display {
 	 * @return string HTML.
 	 */
 	public static function render( array $args ): string {
-		$args   = array_merge( self::defaults(), $args );
-		$query  = trim( (string) $args['query'] );
-		$layout = in_array( $args['layout'], [ 'table', 'cards', 'list' ], true ) ? $args['layout'] : 'table';
-		$limit  = min( self::MAX_LIMIT, max( 1, (int) $args['limit'] ) );
+		$args  = array_merge( self::defaults(), $args );
+		$query = trim( (string) $args['query'] );
 
 		if ( '' === $query ) {
 			return self::editor_notice( __( 'Choose an iMIS query in the block settings.', 'wormiss' ) );
@@ -89,6 +87,22 @@ class Wormiss_Iqa_Display {
 		} catch ( Wormiss_Exception $e ) {
 			return self::unavailable( $e->getMessage() );
 		}
+		return self::render_rows( $rows, $args );
+	}
+
+	/**
+	 * Render result rows with the display options (layout, columns, limit, link, empty text).
+	 *
+	 * Shared by the public iMIS data block and the member's-own-data block.
+	 *
+	 * @param array[] $rows Rows.
+	 * @param array   $args Display options (see defaults()).
+	 * @return string HTML.
+	 */
+	public static function render_rows( array $rows, array $args ): string {
+		$args   = array_merge( self::defaults(), $args );
+		$layout = in_array( $args['layout'], [ 'table', 'cards', 'list', 'details' ], true ) ? $args['layout'] : 'table';
+		$limit  = min( self::MAX_LIMIT, max( 1, (int) $args['limit'] ) );
 
 		$rows = array_slice( $rows, 0, $limit );
 		if ( ! $rows ) {
@@ -103,9 +117,31 @@ class Wormiss_Iqa_Display {
 				return self::render_cards( $rows, $columns, $link );
 			case 'list':
 				return self::render_list( $rows, $columns, $link );
+			case 'details':
+				return self::render_details( $rows, $columns );
 			default:
 				return self::render_table( $rows, $columns, $link );
 		}
+	}
+
+	/**
+	 * Results as labelled details (one description list per row), for single records
+	 * such as a membership status.
+	 *
+	 * @param array[] $rows    Rows.
+	 * @param array   $columns Property => label.
+	 * @return string
+	 */
+	private static function render_details( array $rows, array $columns ): string {
+		$html = '<div class="wormiss-iqa wormiss-iqa--details">';
+		foreach ( $rows as $row ) {
+			$html .= '<dl class="wormiss-iqa__details">';
+			foreach ( $columns as $property => $label ) {
+				$html .= '<dt>' . esc_html( $label ) . '</dt><dd>' . esc_html( self::format_value( $row[ $property ] ?? null ) ) . '</dd>';
+			}
+			$html .= '</dl>';
+		}
+		return $html . '</div>';
 	}
 
 	/**
@@ -346,7 +382,7 @@ class Wormiss_Iqa_Display {
 	 * @param string $reason Short failure reason.
 	 * @return string
 	 */
-	private static function unavailable( string $reason ): string {
+	public static function unavailable( string $reason ): string {
 		$html = '<div class="wormiss-iqa wormiss-iqa--unavailable"><p>'
 			. esc_html__( "This information isn't available right now. Please try again later.", 'wormiss' ) . '</p>';
 		if ( current_user_can( 'edit_posts' ) ) {
@@ -363,7 +399,7 @@ class Wormiss_Iqa_Display {
 	 * @param string $message Message.
 	 * @return string
 	 */
-	private static function editor_notice( string $message ): string {
+	public static function editor_notice( string $message ): string {
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			return '';
 		}

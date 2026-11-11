@@ -99,6 +99,12 @@ class Wormiss_Admin {
 		self::field( 'allowed_queries', __( 'Approved IQA queries', 'wormiss' ), 'wormiss_queries' );
 		self::field( 'cache_minutes', __( 'Keep results for (minutes)', 'wormiss' ), 'wormiss_queries' );
 
+		add_settings_section( 'wormiss_members', __( "Members' own data", 'wormiss' ), [ __CLASS__, 'members_intro' ], self::PAGE );
+		self::field( 'member_id_source', __( "Where each member's iMIS ID is kept", 'wormiss' ), 'wormiss_members' );
+		self::field( 'member_id_meta', __( 'User field name', 'wormiss' ), 'wormiss_members' );
+		self::field( 'member_queries', __( 'Approved member queries', 'wormiss' ), 'wormiss_members' );
+		self::field( 'member_cache_minutes', __( 'Keep member results for (minutes)', 'wormiss' ), 'wormiss_members' );
+
 		add_settings_section( 'wormiss_log', __( 'Audit log', 'wormiss' ), '__return_false', self::PAGE );
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_capture', __( 'Keep full request and response bodies', 'wormiss' ), 'wormiss_log' );
@@ -170,6 +176,19 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * Intro text for the members section.
+	 *
+	 * @return void
+	 */
+	public static function members_intro(): void {
+		echo '<p>'
+			. esc_html__( 'The My iMIS data block shows a signed-in member their own data.', 'wormiss' )
+			. ' ' . esc_html__( "Each member query is run with the member's iMIS ID as its first prompt, so build it in iMIS", 'wormiss' )
+			. ' ' . esc_html__( 'with a required filter on the contact ID. Pages never choose whose data is read.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
 	 * Render one field.
 	 *
 	 * @param array $args Field arguments (key).
@@ -214,14 +233,37 @@ class Wormiss_Admin {
 				);
 				return;
 			case 'allowed_queries':
+			case 'member_queries':
+				$queries = 'member_queries' === $key ? Wormiss_Settings::member_queries() : Wormiss_Settings::allowed_queries();
 				printf(
 					'<textarea class="large-text code" rows="5" id="%1$s" name="%2$s">%3$s</textarea>',
 					esc_attr( $id ),
 					esc_attr( $name ),
-					esc_textarea( implode( "\n", Wormiss_Settings::allowed_queries() ) )
+					esc_textarea( implode( "\n", $queries ) )
 				);
 				echo '<p class="description">'
 					. esc_html__( 'One IQA document path per line, e.g. $/Events/UpcomingEvents.', 'wormiss' ) . '</p>';
+				return;
+			case 'member_id_source':
+				printf( '<select id="%1$s" name="%2$s">', esc_attr( $id ), esc_attr( $name ) );
+				printf(
+					'<option value="meta" %1$s>%2$s</option><option value="login" %3$s>%4$s</option></select>',
+					selected( $value, 'meta', false ),
+					esc_html__( 'A user field set by single sign-on', 'wormiss' ),
+					selected( $value, 'login', false ),
+					esc_html__( 'The WordPress username', 'wormiss' )
+				);
+				return;
+			case 'member_id_meta':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'The user meta key your single sign-on plugin fills with the iMIS ID (default imis_id).', 'wormiss' )
+					. '</p>';
 				return;
 			case 'log_enabled':
 			case 'log_capture':
