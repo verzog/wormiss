@@ -92,6 +92,11 @@ class Wormiss_Members_Only {
 		if ( ! $post_id || null === Wormiss_Access::post_rules( $post_id ) ) {
 			return $content;
 		}
+		// A password-protected post still needs its password: keep WordPress's password form,
+		// which reveals nothing, rather than a teaser built from the hidden text.
+		if ( post_password_required( $post_id ) ) {
+			return $content;
+		}
 		if ( Wormiss_Access::can_view_post( $post_id ) ) {
 			// A member's view of members-only content must not be stored by page caches.
 			self::no_page_cache();

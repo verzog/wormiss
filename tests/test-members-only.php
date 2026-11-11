@@ -207,6 +207,26 @@ class Test_Wormiss_Members_Only extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A password-protected members-only post keeps its password form and reveals no text.
+	 *
+	 * @return void
+	 */
+	public function test_password_protection_comes_first(): void {
+		$post_id = $this->members_post();
+		wp_update_post(
+			[
+				'ID'            => $post_id,
+				'post_password' => 'letmein',
+				'post_excerpt'  => '',
+			]
+		);
+		$html = $this->content( $post_id );
+		$this->assertStringContainsString( 'post-password-form', $html );
+		$this->assertStringNotContainsString( self::SECRET, $html );
+		$this->assertStringNotContainsString( 'Body with', $html );
+	}
+
+	/**
 	 * Anyone who can edit the post always sees it in full.
 	 *
 	 * @return void
