@@ -39,7 +39,8 @@ class Wormiss_Members_Only {
 	 * @return void
 	 */
 	public static function init(): void {
-		add_action( 'init', [ __CLASS__, 'register_meta' ] );
+		// After other plugins' custom post types (usually registered at priority 10).
+		add_action( 'init', [ __CLASS__, 'register_meta' ], 20 );
 		add_filter( 'the_content', [ __CLASS__, 'filter_content' ], 1 );
 		add_action( 'enqueue_block_editor_assets', [ __CLASS__, 'editor_panel' ] );
 	}

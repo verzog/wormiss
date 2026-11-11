@@ -288,6 +288,8 @@ class Test_Wormiss_Members_Only extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_meta_registered_and_cleaned(): void {
+		// The test framework resets post types before each test; register as init would.
+		Wormiss_Members_Only::register_meta();
 		$this->assertTrue( registered_meta_key_exists( 'post', Wormiss_Access::META_ENABLED, 'post' ) );
 		$this->assertTrue( registered_meta_key_exists( 'post', Wormiss_Access::META_TYPES, 'page' ) );
 		$post_id = self::factory()->post->create();
