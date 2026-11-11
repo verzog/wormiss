@@ -76,7 +76,9 @@ class Wormiss_Completion {
 	public static function render( array $attributes ): string {
 		$post_id = (int) get_the_ID();
 		$id      = self::clean_id( (string) ( $attributes['completionId'] ?? '' ) );
-		if ( ! $post_id || '' === $id ) {
+		// Without recording there is nothing for the button to do: hide it rather than let a
+		// member use up a completion that is never sent.
+		if ( ! $post_id || '' === $id || ! Wormiss_Activity::is_on() ) {
 			return '';
 		}
 		$label = '' !== trim( (string) ( $attributes['label'] ?? '' ) ) ? (string) $attributes['label'] : __( 'Mark as done', 'wormiss' );
@@ -122,10 +124,20 @@ class Wormiss_Completion {
 			return null;
 		}
 		$stack = parse_blocks( $post->post_content );
+		$seen  = [ $post_id => true ];
 		while ( $stack ) {
 			$block = array_shift( $stack );
-			if ( 'wormiss/complete' === ( $block['blockName'] ?? '' ) && ( $block['attrs']['completionId'] ?? '' ) === $completion_id ) {
+			$name  = $block['blockName'] ?? '';
+			if ( 'wormiss/complete' === $name && ( $block['attrs']['completionId'] ?? '' ) === $completion_id ) {
 				return $block['attrs'];
+			}
+			// A synced pattern is stored as a reference: follow it once (cycles are skipped).
+			$ref = (int) ( $block['attrs']['ref'] ?? 0 );
+			if ( 'core/block' === $name && $ref && ! isset( $seen[ $ref ] ) && 'wp_block' === get_post_type( $ref ) ) {
+				$seen[ $ref ] = true;
+				foreach ( parse_blocks( (string) get_post_field( 'post_content', $ref ) ) as $inner ) {
+					$stack[] = $inner;
+				}
 			}
 			foreach ( $block['innerBlocks'] ?? [] as $inner ) {
 				$stack[] = $inner;
@@ -154,14 +166,13 @@ class Wormiss_Completion {
 		}
 		$attributes = self::find_block( $post_id, $completion_id );
 		$key        = self::meta_key( $post_id, $completion_id );
-		if ( null === $attributes || get_user_meta( $user_id, $key, true ) ) {
+		if ( null === $attributes || get_user_meta( $user_id, $key, true ) || ! Wormiss_Activity::is_on() ) {
 			return false;
 		}
-		update_user_meta( $user_id, $key, time() );
 
 		$activity = trim( (string) ( $attributes['activity'] ?? '' ) );
 		$activity = '' !== $activity ? $activity : get_the_title( $post_id );
-		Wormiss_Activity::record(
+		$recorded = Wormiss_Activity::record(
 			'completion',
 			$activity,
 			[
@@ -170,6 +181,12 @@ class Wormiss_Completion {
 				'post_id' => $post_id,
 			]
 		);
+		// Marked done only once a real record is queued: a dry run (log only) changes nothing,
+		// so the member can still record it when recording goes live.
+		if ( ! $recorded || Wormiss_Settings::get( 'activity_dry_run' ) ) {
+			return false;
+		}
+		update_user_meta( $user_id, $key, time() );
 		return true;
 	}
 

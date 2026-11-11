@@ -162,6 +162,18 @@ class Wormiss_Activity {
 		if ( ! is_array( $record ) || empty( $record['imis_id'] ) || ! self::is_on() ) {
 			return false;
 		}
+		// Dry run switched on after this was queued: log it, send nothing, and drop it.
+		if ( Wormiss_Settings::get( 'activity_dry_run' ) ) {
+			Wormiss_Logger::record_call(
+				'DRY RUN POST /api/Activity (queued, not sent: ' . $record['kind'] . ')',
+				Wormiss_Logger::STATUS_SUCCESS,
+				null,
+				null,
+				null,
+				(string) $record['imis_id']
+			);
+			return false;
+		}
 		try {
 			( new Wormiss_Rest_Client() )->add_activity( self::body( $record ), (string) $record['imis_id'] );
 			return true;
@@ -173,6 +185,31 @@ class Wormiss_Activity {
 			// The failed call is already in the audit log; after the last attempt it is not retried.
 			return false;
 		}
+	}
+
+	/**
+	 * Remove a person's records still waiting to be sent (privacy erasure).
+	 *
+	 * @param int    $user_id WordPress user ID.
+	 * @param string $imis_id iMIS ID ('' if none).
+	 * @return int Records removed.
+	 */
+	public static function unschedule_for_person( int $user_id, string $imis_id ): int {
+		$removed = 0;
+		foreach ( (array) _get_cron_array() as $time => $hooks ) {
+			foreach ( $hooks[ self::SEND_HOOK ] ?? [] as $event ) {
+				$record = $event['args'][0] ?? null;
+				if ( ! is_array( $record ) ) {
+					continue;
+				}
+				$mine = (int) ( $record['user_id'] ?? 0 ) === $user_id
+					|| ( '' !== $imis_id && (string) ( $record['imis_id'] ?? '' ) === $imis_id );
+				if ( $mine && wp_unschedule_event( (int) $time, self::SEND_HOOK, $event['args'] ) ) {
+					++$removed;
+				}
+			}
+		}
+		return $removed;
 	}
 
 	/**
@@ -277,9 +314,27 @@ class Wormiss_Activity {
 		if ( '' === $url ) {
 			return;
 		}
-		// The file is in this site's Media Library, so a safe (same-site) redirect.
+		// The file's address comes from the Media Library (it may be on an upload domain or a
+		// CDN), so its host is allowed for this redirect; any other host is still refused.
+		add_filter( 'allowed_redirect_hosts', static fn( $hosts ) => self::allow_file_host( (array) $hosts, $url ) );
 		wp_safe_redirect( $url );
 		exit;
+	}
+
+	/**
+	 * Add a Media Library file's host to the allowed redirect hosts.
+	 *
+	 * @param string[] $hosts Allowed hosts.
+	 * @param string   $url   The file's address (from wp_get_attachment_url()).
+	 * @return string[]
+	 */
+	public static function allow_file_host( array $hosts, string $url ): array {
+		$parts  = wp_parse_url( $url );
+		$scheme = is_array( $parts ) ? strtolower( $parts['scheme'] ?? '' ) : '';
+		if ( in_array( $scheme, [ 'http', 'https' ], true ) && ! empty( $parts['host'] ) ) {
+			$hosts[] = strtolower( $parts['host'] );
+		}
+		return array_values( array_unique( $hosts ) );
 	}
 
 	/**

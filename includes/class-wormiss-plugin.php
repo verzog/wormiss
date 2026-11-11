@@ -209,8 +209,10 @@ class Wormiss_Plugin {
 		$user    = get_user_by( 'email', $email );
 		$removed = $user ? Wormiss_Logger::delete_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) ) : 0;
 		if ( $user ) {
-			// "Mark as done" completions stored on the account (records already in iMIS stay there).
+			// "Mark as done" completions stored on the account, and records not yet sent to iMIS
+			// (records already in iMIS stay there).
 			$removed += Wormiss_Completion::delete_for_user( $user->ID );
+			$removed += Wormiss_Activity::unschedule_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) );
 		}
 		return [
 			'items_removed'  => $removed > 0,

@@ -383,6 +383,114 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A record queued before dry run was switched on is logged, not sent.
+	 *
+	 * @return void
+	 */
+	public function test_send_honours_dry_run(): void {
+		$this->turn_on();
+		$this->sign_in();
+		$this->assertTrue( Wormiss_Activity::record( 'webinar', 'Watched the webinar' ) );
+		$record = $this->queued()[0]['args'][0];
+
+		$this->turn_on( true );
+		$this->assertFalse( Wormiss_Activity::send( $record, 1 ) );
+		foreach ( $this->imis->requests as $request ) {
+			$this->assertStringNotContainsString( '/api/Activity', $request['url'] );
+		}
+	}
+
+	/**
+	 * Mark as done is hidden and refused while recording is off, and a dry run marks nothing done.
+	 *
+	 * @return void
+	 */
+	public function test_mark_as_done_not_used_up_while_off(): void {
+		$user_id = $this->sign_in();
+		$post_id = self::factory()->post->create(
+			[ 'post_content' => '<!-- wp:wormiss/complete {"completionId":"abc-3"} /-->' ]
+		);
+		$key     = Wormiss_Completion::meta_key( $post_id, 'abc-3' );
+		$this->go_to( get_permalink( $post_id ) );
+		$GLOBALS['post'] = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Set up the loop.
+		setup_postdata( $GLOBALS['post'] );
+		$block = '<!-- wp:wormiss/complete {"completionId":"abc-3"} /-->';
+
+		// Off: no button and no completion.
+		$this->assertSame( '', trim( do_blocks( $block ) ) );
+		$this->assertFalse( Wormiss_Completion::complete( $post_id, 'abc-3' ) );
+		$this->assertSame( '', get_user_meta( $user_id, $key, true ) );
+
+		// Dry run: logged, but the member can still complete it later.
+		$this->turn_on( true );
+		$this->assertFalse( Wormiss_Completion::complete( $post_id, 'abc-3' ) );
+		$this->assertSame( '', get_user_meta( $user_id, $key, true ) );
+
+		// Live: recorded and marked done.
+		$this->turn_on();
+		$this->assertTrue( Wormiss_Completion::complete( $post_id, 'abc-3' ) );
+		$this->assertNotEmpty( get_user_meta( $user_id, $key, true ) );
+		wp_reset_postdata();
+	}
+
+	/**
+	 * A Mark as done block inside a synced pattern is found; a pattern that includes itself does not loop.
+	 *
+	 * @return void
+	 */
+	public function test_find_block_in_synced_pattern(): void {
+		$pattern = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_content' => '<!-- wp:wormiss/complete {"completionId":"in-pattern","points":1} /-->',
+			]
+		);
+		$loop    = self::factory()->post->create( [ 'post_type' => 'wp_block' ] );
+		wp_update_post(
+			[
+				'ID'           => $loop,
+				'post_content' => '<!-- wp:block {"ref":' . $loop . '} /-->',
+			]
+		);
+		$post_id = self::factory()->post->create(
+			[ 'post_content' => '<!-- wp:block {"ref":' . $loop . '} /--><!-- wp:block {"ref":' . $pattern . '} /-->' ]
+		);
+		$found   = Wormiss_Completion::find_block( $post_id, 'in-pattern' );
+		$this->assertSame( 1, $found['points'] ?? null );
+		$this->assertNull( Wormiss_Completion::find_block( $post_id, 'nowhere' ) );
+	}
+
+	/**
+	 * Downloads may redirect to the Media Library's own host (e.g. a CDN), and only that host.
+	 *
+	 * @return void
+	 */
+	public function test_download_redirect_allows_file_host(): void {
+		$hosts = Wormiss_Activity::allow_file_host( [ 'example.org' ], 'https://CDN.example.net/uploads/a.pdf' );
+		$this->assertSame( [ 'example.org', 'cdn.example.net' ], $hosts );
+		$this->assertSame( [ 'example.org' ], Wormiss_Activity::allow_file_host( [ 'example.org' ], 'javascript:alert(1)' ) );
+	}
+
+	/**
+	 * Erasing personal data also removes the person's records still waiting to be sent.
+	 *
+	 * @return void
+	 */
+	public function test_privacy_erase_removes_queued_records(): void {
+		$this->turn_on();
+		$other = $this->sign_in( '999' );
+		Wormiss_Activity::record( 'webinar', 'Other member' );
+		$user_id = $this->sign_in();
+		Wormiss_Activity::record( 'webinar', 'Mine' );
+		$this->assertCount( 2, $this->queued() );
+
+		Wormiss_Plugin::erase_personal_data( get_userdata( $user_id )->user_email );
+		$queued = $this->queued();
+		$this->assertCount( 1, $queued );
+		$this->assertSame( $other, $queued[0]['args'][0]['user_id'] );
+	}
+
+	/**
 	 * The activity switches survive WordPress's double first save, and unticked boxes are saved as off.
 	 *
 	 * @return void
