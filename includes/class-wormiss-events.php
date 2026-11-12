@@ -413,13 +413,15 @@ class Wormiss_Events {
 	}
 
 	/**
-	 * Cache key for an event's places count on the current iMIS connection.
+	 * Cache key for an event's places count on the current iMIS connection and places IQA.
 	 *
 	 * @param string $event_id iMIS event ID.
 	 * @return string
 	 */
 	private static function places_key( string $event_id ): string {
-		return 'wormiss_places_' . md5( Wormiss_Settings::base_url() . "\0" . $event_id );
+		// The query is part of the key, so changing the places IQA never shows the old one's counts.
+		$query = (string) Wormiss_Settings::get( 'event_places_query' );
+		return 'wormiss_places_' . md5( Wormiss_Settings::base_url() . "\0" . $query . "\0" . $event_id );
 	}
 
 	/**

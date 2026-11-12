@@ -212,6 +212,12 @@ class Test_Wormiss_Event_Numbers extends Wormiss_Test_Case {
 
 		$this->assertNull( Wormiss_Events::places( self::listed( [ 'Capacity' => 0 ] ) ) );
 
+		// A different places IQA is counted afresh, not read from the old one's cache.
+		$this->settings( [ 'event_places_query' => '$/Events/OtherCount' ] );
+		$this->places_reply( 5 );
+		$this->assertSame( 25, Wormiss_Events::places( self::listed() )['left'] );
+		$this->assertSame( 3, $this->imis->count( '/api/iqa' ) );
+
 		$this->imis->token()->fail( '/api/iqa' );
 		$this->assertNull( Wormiss_Events::places( self::listed( [ 'EventId' => 'OTHER' ] ) ) );
 	}
