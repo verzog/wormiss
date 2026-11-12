@@ -674,8 +674,9 @@ class Wormiss_Admin {
 			return;
 		}
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss settings', 'wormiss' ) . '</h1>';
-		// Pages outside the Settings menu show "Settings saved" and errors themselves.
-		settings_errors( Wormiss_Settings::OPTION );
+		// Pages outside the Settings menu show "Settings saved" and errors themselves. Not filtered
+		// by option: WordPress files its "Settings saved" notice under "general".
+		settings_errors();
 		self::connection_result_notice();
 		echo '<form action="options.php" method="post">';
 		settings_fields( self::PAGE );

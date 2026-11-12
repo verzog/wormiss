@@ -148,4 +148,18 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		$this->assertStringContainsString( 'edit-tags.php?taxonomy=wormiss_event_type', $html );
 		$this->assertStringNotContainsString( 'page=wormiss-settings', $html );
 	}
+
+	/**
+	 * The settings page, now outside the Settings menu, shows WordPress's "Settings saved".
+	 *
+	 * @return void
+	 */
+	public function test_settings_saved_notice(): void {
+		require_once ABSPATH . 'wp-admin/includes/template.php';
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+		add_settings_error( 'general', 'settings_updated', 'Settings saved.', 'success' );
+		ob_start();
+		Wormiss_Admin::render_settings();
+		$this->assertStringContainsString( 'Settings saved.', (string) ob_get_clean() );
+	}
 }
