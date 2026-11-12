@@ -1,7 +1,7 @@
 /**
  * "iMIS event" panel in the Event editor sidebar. Plain JavaScript (no build step).
  *
- * Edits the event's code, start, end, place, online link, numbers and waitlist, and shows
+ * Edits the event's code, start, end, place, address, online link, numbers and waitlist, and shows
  * places left and what happened the last time it was sent to iMIS.
  *
  * @copyright  2026 Vernon Spain
@@ -149,6 +149,21 @@
 			field('_wormiss_event_start', __('Starts', 'wormiss'), {type: 'datetime-local'}),
 			field('_wormiss_event_end', __('Ends', 'wormiss'), {type: 'datetime-local'}),
 			field('_wormiss_event_location', __('Place', 'wormiss'), {help: __('Venue name. Blank keeps the template\'s.', 'wormiss')}),
+			field('_wormiss_event_address1', __('Street address', 'wormiss'), {maxLength: 100}),
+			field('_wormiss_event_address2', __('Street address, line 2', 'wormiss'), {maxLength: 100}),
+			field('_wormiss_event_city', __('Suburb or city', 'wormiss'), {maxLength: 100}),
+			field('_wormiss_event_state', __('State', 'wormiss'), {
+				help: __('As iMIS has it, e.g. QLD, NSW or VIC.', 'wormiss'),
+				maxLength: 15,
+			}),
+			field('_wormiss_event_postcode', __('Postcode', 'wormiss'), {maxLength: 10}),
+			choose('_wormiss_event_country', __('Country', 'wormiss'), [
+				{label: __('The template\'s', 'wormiss'), value: ''},
+				{label: __('Australia', 'wormiss'), value: 'Australia'},
+				{label: __('New Zealand', 'wormiss'), value: 'New Zealand'},
+			]),
+			el('p', {className: 'description'}, __('With any part of the address filled in, the whole address is saved in iMIS'
+				+ ' (a blank state or country keeps the template\'s). With none, the template\'s address is kept.', 'wormiss')),
 			field('_wormiss_event_online', __('Online link', 'wormiss'), {type: 'url'}),
 			sync.places && el('p', {className: 'description'},
 				sprintf(__('Places in iMIS: %s', 'wormiss'), sync.places)),

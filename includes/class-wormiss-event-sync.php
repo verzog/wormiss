@@ -58,6 +58,27 @@ class Wormiss_Event_Sync {
 	/** Online meeting link. */
 	const META_ONLINE = '_wormiss_event_online';
 
+	/** Street address, first line. */
+	const META_ADDRESS1 = '_wormiss_event_address1';
+
+	/** Street address, second line. */
+	const META_ADDRESS2 = '_wormiss_event_address2';
+
+	/** Suburb or city. */
+	const META_CITY = '_wormiss_event_city';
+
+	/** State or region, as iMIS has it (e.g. QLD). */
+	const META_STATE = '_wormiss_event_state';
+
+	/** Postcode. */
+	const META_POSTCODE = '_wormiss_event_postcode';
+
+	/** Country, as iMIS names it (Australia or New Zealand; '' keeps the template's). */
+	const META_COUNTRY = '_wormiss_event_country';
+
+	/** Countries the address can be in, as iMIS names them. */
+	const COUNTRIES = [ 'Australia', 'New Zealand' ];
+
 	/** Capacity (0 keeps the template's). */
 	const META_CAPACITY = '_wormiss_event_capacity';
 
@@ -161,6 +182,12 @@ class Wormiss_Event_Sync {
 			self::META_END          => [ __CLASS__, 'clean_datetime' ],
 			self::META_LOCATION     => 'sanitize_text_field',
 			self::META_ONLINE       => static fn( $value ) => (string) esc_url_raw( (string) $value, [ 'https', 'http' ] ),
+			self::META_ADDRESS1     => [ __CLASS__, 'clean_address' ],
+			self::META_ADDRESS2     => [ __CLASS__, 'clean_address' ],
+			self::META_CITY         => [ __CLASS__, 'clean_address' ],
+			self::META_STATE        => static fn( $value ) => strtoupper( substr( sanitize_text_field( (string) $value ), 0, 15 ) ),
+			self::META_POSTCODE     => static fn( $value ) => substr( (string) preg_replace( '/[^A-Za-z0-9 ]/', '', (string) $value ), 0, 10 ),
+			self::META_COUNTRY      => static fn( $value ) => in_array( (string) $value, self::COUNTRIES, true ) ? (string) $value : '',
 			self::META_WAITLIST     => [ 'Wormiss_Event_Types', 'clean_waitlist' ],
 			self::META_AUTO_RELEASE => [ 'Wormiss_Event_Types', 'clean_yes_no' ],
 		];
@@ -457,6 +484,14 @@ class Wormiss_Event_Sync {
 			'end'          => (string) $meta( self::META_END ),
 			'location'     => (string) $meta( self::META_LOCATION ),
 			'online'       => (string) $meta( self::META_ONLINE ),
+			'address'      => [
+				'line1'    => (string) $meta( self::META_ADDRESS1 ),
+				'line2'    => (string) $meta( self::META_ADDRESS2 ),
+				'city'     => (string) $meta( self::META_CITY ),
+				'state'    => (string) $meta( self::META_STATE ),
+				'postcode' => (string) $meta( self::META_POSTCODE ),
+				'country'  => (string) $meta( self::META_COUNTRY ),
+			],
 			// The event's own numbers, else its type's defaults (0 keeps what iMIS has).
 			'capacity'     => (int) $meta( self::META_CAPACITY ) > 0 ? (int) $meta( self::META_CAPACITY ) : $type['capacity'],
 			'minimum'      => (int) $meta( self::META_MINIMUM ) > 0 ? (int) $meta( self::META_MINIMUM ) : $type['minimum'],
@@ -465,6 +500,101 @@ class Wormiss_Event_Sync {
 			'waitlist'     => self::own_or( (string) $meta( self::META_WAITLIST ), $type['waitlist'] ),
 			'release'      => self::own_or( (string) $meta( self::META_AUTO_RELEASE ), $type['release'] ),
 		];
+	}
+
+	/**
+	 * One line of an address: plain text, at most 100 characters.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function clean_address( $value ): string {
+		return mb_substr( sanitize_text_field( (string) $value ), 0, 100 );
+	}
+
+	/**
+	 * Whether an address has anything filled in.
+	 *
+	 * @param array $address From details()['address'].
+	 * @return bool
+	 */
+	public static function has_address( array $address ): bool {
+		return '' !== implode( '', array_map( 'strval', $address ) );
+	}
+
+	/**
+	 * Put the address on an iMIS event: iMIS keeps it in AdditionalAttributes, under
+	 * fullAddressAttribute (lines, city, state, postcode and country, with the display text).
+	 * The country and state left blank keep the template's; the other parts are written as
+	 * they are, so a cleared line is cleared in iMIS too.
+	 *
+	 * @param object $event   iMIS EventData, changed in place.
+	 * @param array  $address From details()['address'].
+	 * @return void
+	 */
+	public static function apply_address( object $event, array $address ): void {
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		if ( ! isset( $event->AdditionalAttributes ) || ! is_object( $event->AdditionalAttributes ) ) {
+			$event->AdditionalAttributes = (object) [
+				'$type'   => 'Asi.Soa.Core.DataContracts.GenericPropertyDataCollection, Asi.Contracts',
+				'$values' => [],
+			];
+		}
+		$values = isset( $event->AdditionalAttributes->{'$values'} ) && is_array( $event->AdditionalAttributes->{'$values'} )
+			? $event->AdditionalAttributes->{'$values'} : [];
+		$entry  = null;
+		foreach ( $values as $value ) {
+			if ( is_object( $value ) && 'fullAddressAttribute' === ( $value->Name ?? '' ) ) {
+				$entry = $value;
+				break;
+			}
+		}
+		if ( null === $entry ) {
+			$entry    = (object) [
+				'$type' => 'Asi.Soa.Core.DataContracts.GenericPropertyData, Asi.Contracts',
+				'Name'  => 'fullAddressAttribute',
+			];
+			$values[] = $entry;
+		}
+		if ( ! isset( $entry->Value ) || ! is_object( $entry->Value ) ) {
+			$entry->Value = (object) [ '$type' => 'Asi.Soa.Membership.DataContracts.FullAddressData, Asi.Contracts' ];
+		}
+		if ( ! isset( $entry->Value->Address ) || ! is_object( $entry->Value->Address ) ) {
+			$entry->Value->Address = (object) [ '$type' => 'Asi.Soa.Membership.DataContracts.AddressData, Asi.Contracts' ];
+		}
+		$to               = $entry->Value->Address;
+		$to->AddressLines = (object) [
+			'$type'   => 'Asi.Soa.Membership.DataContracts.AddressLineDataCollection, Asi.Contracts',
+			'$values' => [ $address['line1'], $address['line2'], '' ],
+		];
+		$to->CityName     = $address['city'];
+		$to->PostalCode   = $address['postcode'];
+		if ( '' !== $address['state'] ) {
+			$to->CountrySubEntityCode = $address['state'];
+		}
+		if ( '' !== $address['country'] ) {
+			$to->CountryCode = $address['country'];
+		}
+		$state   = (string) ( $to->CountrySubEntityCode ?? '' );
+		$country = (string) ( $to->CountryCode ?? '' );
+		// The display text, laid out as iMIS lays it out (it may redo it when it saves).
+		$place                                    = trim( $address['city'] . ' ' . $state . '  ' . $address['postcode'] );
+		$lines                                    = array_filter( [ $address['line1'], $address['line2'], $place, strtoupper( $country ) ], static fn( $line ) => '' !== $line );
+		$to->FullAddress                          = implode( "\r", $lines );
+		$entry->Value->DisplayName                = trim( implode( ' ', array_filter( [ $address['line1'], $address['city'], $state, $country ] ) ) );
+		$event->AdditionalAttributes->{'$values'} = $values;
+		// phpcs:enable
+	}
+
+	/**
+	 * The address as one line for people, e.g. "1 Main St, Brisbane QLD 4000".
+	 *
+	 * @param array $address From details()['address'].
+	 * @return string
+	 */
+	public static function address_text( array $address ): string {
+		$place = trim( implode( ' ', array_filter( [ $address['city'] ?? '', $address['state'] ?? '', $address['postcode'] ?? '' ] ) ) );
+		return implode( ', ', array_filter( [ $address['line1'] ?? '', $address['line2'] ?? '', $place ] ) );
 	}
 
 	/**
@@ -566,6 +696,9 @@ class Wormiss_Event_Sync {
 				'$type'           => 'Asi.Soa.Events.DataContracts.EventCategoryData, Asi.Contracts',
 				'EventCategoryId' => $details['category'],
 			];
+		}
+		if ( self::has_address( $details['address'] ?? [] ) ) {
+			self::apply_address( $event, $details['address'] );
 		}
 		if ( '' !== $details['location'] ) {
 			if ( isset( $event->Location ) && is_object( $event->Location ) ) {
@@ -725,9 +858,11 @@ class Wormiss_Event_Sync {
 			$when  = Wormiss_Events::when( $details['start'], $details['end'] );
 			$rows .= '<dt>' . esc_html__( 'When', 'wormiss' ) . '</dt><dd>' . esc_html( $when ) . '</dd>';
 		}
-		$where = '' !== $details['location'] ? $details['location'] : ( '' !== $details['online'] ? __( 'Online', 'wormiss' ) : '' );
-		if ( '' !== $where ) {
-			$rows .= '<dt>' . esc_html__( 'Where', 'wormiss' ) . '</dt><dd>' . esc_html( $where ) . '</dd>';
+		$where   = '' !== $details['location'] ? $details['location'] : ( '' !== $details['online'] ? __( 'Online', 'wormiss' ) : '' );
+		$address = self::address_text( $details['address'] );
+		if ( '' !== $where || '' !== $address ) {
+			$rows .= '<dt>' . esc_html__( 'Where', 'wormiss' ) . '</dt><dd>' . esc_html( $where )
+				. ( '' !== $where && '' !== $address ? '<br />' : '' ) . esc_html( $address ) . '</dd>';
 		}
 		if ( '' !== $details['code'] ) {
 			$rows .= '<dt>' . esc_html__( 'Event code', 'wormiss' ) . '</dt><dd>' . esc_html( $details['code'] ) . '</dd>';
