@@ -300,6 +300,7 @@ class Wormiss_Admin {
 		$title = __( 'Import iMIS events', 'wormiss' );
 		add_settings_section( 'wormiss_event_import', $title, [ __CLASS__, 'event_import_intro' ], self::PAGE );
 		self::field( 'event_import_enabled', __( 'Import iMIS events daily', 'wormiss' ), 'wormiss_event_import' );
+		self::field( 'event_import_since', __( 'Also import past events since', 'wormiss' ), 'wormiss_event_import' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -614,6 +615,19 @@ class Wormiss_Admin {
 					. ' ' . esc_html__( 'An IQA path with one prompt, the event ID, returning one row per place taken', 'wormiss' )
 					. ' ' . esc_html__( '(or a Registered column). Leave out cancelled and waitlisted registrations.', 'wormiss' )
 					. ' ' . esc_html__( 'A capacity of 1000 or more shows "Places available". Blank shows no places.', 'wormiss' )
+					. '</p>';
+				return;
+			case 'event_import_since':
+				printf(
+					'<input type="date" id="%1$s" name="%2$s" value="%3$s" max="%4$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value ),
+					esc_attr( gmdate( 'Y-m-d' ) )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'For historical records: finished events that started on or after this date are imported too,', 'wormiss' )
+					. ' ' . esc_html__( 'as drafts. Up to 100 pages are made per import. Blank imports upcoming events only.', 'wormiss' )
 					. '</p>';
 				return;
 			case 'user_sync_query':

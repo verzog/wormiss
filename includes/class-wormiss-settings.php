@@ -105,6 +105,8 @@ class Wormiss_Settings {
 			'event_cancel_on_trash'      => false,
 			// Importing iMIS events as draft Event pages: off until an administrator turns it on.
 			'event_import_enabled'       => false,
+			// Also import finished events that started on or after this date (YYYY-MM-DD; '' for none).
+			'event_import_since'         => '',
 		];
 	}
 
@@ -380,6 +382,15 @@ class Wormiss_Settings {
 			} else {
 				$message = __( 'The event page address must start with https:// or /, with no spaces.', 'wormiss' );
 				add_settings_error( self::OPTION, 'event_url', $message );
+			}
+		}
+		if ( isset( $input['event_import_since'] ) ) {
+			$since = trim( (string) $input['event_import_since'] );
+			$date  = DateTimeImmutable::createFromFormat( '!Y-m-d', $since );
+			if ( '' === $since || ( $date && $date->format( 'Y-m-d' ) === $since && $since <= gmdate( 'Y-m-d' ) ) ) {
+				$clean['event_import_since'] = $since;
+			} else {
+				add_settings_error( self::OPTION, 'event_import_since', __( 'The past events date must be a real date, not in the future.', 'wormiss' ) );
 			}
 		}
 		if ( isset( $input['event_template_id'] ) ) {

@@ -314,4 +314,53 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->serve( [ $event ] );
 		$this->assertSame( 0, Wormiss_Event_Import::run()['updated'] );
 	}
+
+	/**
+	 * With a past-events date, finished events since then come in too (expired ones included);
+	 * earlier ones, templates and unlisted statuses do not.
+	 *
+	 * @return void
+	 */
+	public function test_past_events(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_since' => '2024-01-01' ] ) );
+		$past   = static fn( string $id, string $date, array $more = [] ) => self::imis_event(
+			$id,
+			array_merge(
+				[
+					'StartDateTime' => $date . 'T09:00:00',
+					'EndDateTime'   => $date . 'T17:00:00',
+				],
+				$more
+			)
+		);
+		$this->serve(
+			[
+				self::imis_event( 'NEXT26' ),
+				$past( 'PAST25', '2025-03-01', [ 'PublishingInformation' => [ 'PublishingState' => 'Expired' ] ] ),
+				$past( 'OLD23', '2023-06-01' ),
+				$past( 'TPL25', '2025-03-01', [ 'TemplateState' => 'StandardTemplate' ] ),
+				$past( 'PEND25', '2025-03-01', [ 'Status' => 'P' ] ),
+			]
+		);
+		$report = Wormiss_Event_Import::run();
+		$this->assertSame( 2, $report['created'] );
+		$this->assertStringContainsString( 'StartDateTime=ge%3A2024-01-01', $this->imis->requests[1]['url'] );
+		$this->assertCount( 1, self::pages( 'NEXT26' ) );
+		$this->assertCount( 1, self::pages( 'PAST25' ) );
+		$this->assertCount( 0, self::pages( 'OLD23' ) );
+		$this->assertCount( 0, self::pages( 'TPL25' ) );
+		$this->assertCount( 0, self::pages( 'PEND25' ) );
+	}
+
+	/**
+	 * The past-events date must be a real date, not in the future.
+	 *
+	 * @return void
+	 */
+	public function test_since_setting(): void {
+		$this->assertSame( '2024-01-01', Wormiss_Settings::sanitize( [ 'event_import_since' => '2024-01-01' ] )['event_import_since'] );
+		$this->assertSame( '', Wormiss_Settings::sanitize( [ 'event_import_since' => '' ] )['event_import_since'] );
+		$this->assertSame( '', Wormiss_Settings::sanitize( [ 'event_import_since' => '2024-02-30' ] )['event_import_since'] );
+		$this->assertSame( '', Wormiss_Settings::sanitize( [ 'event_import_since' => '2999-01-01' ] )['event_import_since'] );
+	}
 }
