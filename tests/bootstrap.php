@@ -46,4 +46,6 @@ require $wormiss_tests . '/includes/bootstrap.php';
 Wormiss_Logger::install();
 
 require_once __DIR__ . '/class-wormiss-fake-imis.php';
+require_once __DIR__ . '/class-wormiss-test-order-item.php';
+require_once __DIR__ . '/class-wormiss-test-order.php';
 require_once __DIR__ . '/class-wormiss-test-case.php';

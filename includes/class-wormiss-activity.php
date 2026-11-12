@@ -92,7 +92,8 @@ class Wormiss_Activity {
 		if ( ! self::is_on() ) {
 			return false;
 		}
-		$user_id = get_current_user_id();
+		// A purchase can be completed by a payment notice with no one signed in: the caller names the member.
+		$user_id = isset( $args['user_id'] ) ? (int) $args['user_id'] : get_current_user_id();
 		$imis_id = Wormiss_Member::imis_id( $user_id );
 		if ( '' === $imis_id ) {
 			return false;
@@ -113,6 +114,7 @@ class Wormiss_Activity {
 			'note'        => wp_strip_all_tags( (string) ( $args['note'] ?? '' ) ),
 			'points'      => (float) ( $args['points'] ?? 0 ),
 			'post_id'     => (int) ( $args['post_id'] ?? 0 ),
+			'amount'      => round( (float) ( $args['amount'] ?? 0 ), 2 ),
 			'date'        => wp_date( 'Y-m-d\TH:i:s' ),
 		];
 
@@ -148,7 +150,8 @@ class Wormiss_Activity {
 			(string) $record['date'],
 			(float) $record['points'],
 			(int) $record['post_id'],
-			(string) Wormiss_Settings::get( 'cpd_ceu_type' )
+			(string) Wormiss_Settings::get( 'cpd_ceu_type' ),
+			(float) ( $record['amount'] ?? 0 )
 		);
 	}
 
