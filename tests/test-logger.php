@@ -26,6 +26,7 @@
  * The audit log.
  *
  * @covers Wormiss_Logger
+ * @covers Wormiss_Admin::log_bodies
  */
 class Test_Wormiss_Logger extends Wormiss_Test_Case {
 
@@ -81,5 +82,33 @@ class Test_Wormiss_Logger extends Wormiss_Test_Case {
 		$before = Wormiss_Logger::count();
 		Wormiss_Logger::record_call( 'GET /x', Wormiss_Logger::STATUS_SUCCESS );
 		$this->assertSame( $before, Wormiss_Logger::count() );
+	}
+
+	/**
+	 * The log page shows a kept request and response, escaped and folded away; nothing when
+	 * none was kept.
+	 *
+	 * @return void
+	 */
+	public function test_log_bodies(): void {
+		$this->assertSame(
+			'',
+			Wormiss_Admin::log_bodies(
+				[
+					'request'  => null,
+					'response' => null,
+				]
+			)
+		);
+		$html = Wormiss_Admin::log_bodies(
+			[
+				'request'  => '{"Name":"<b>Course</b>"}',
+				'response' => 'Not JSON <script>',
+			]
+		);
+		$this->assertStringContainsString( '<details><summary>Show</summary>', $html );
+		$this->assertStringContainsString( '&quot;Name&quot;: &quot;&lt;b&gt;Course&lt;/b&gt;&quot;', $html );
+		$this->assertStringContainsString( 'Not JSON &lt;script&gt;', $html );
+		$this->assertStringNotContainsString( '<script>', $html );
 	}
 }
