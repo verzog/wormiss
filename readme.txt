@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.22.0
+Stable tag: 0.22.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -197,6 +197,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.22.1 =
+* The audit log shows what was sent to iMIS and what iMIS replied ("Show" on each line), when "Keep full request and response bodies" is on, so a rejected call can be checked. Passwords and tokens are removed before anything is saved.
 
 = 0.22.0 =
 * Send member changes to iMIS (Wormiss > Settings > Sync members into WordPress): when a member's first name, last name or email changes in WordPress (their profile, or an administrator), their iMIS contact is read, those three are set (the primary email; other emails and details are kept), and it is saved, in the background. Blank WordPress values never clear iMIS's. Only members with an iMIS ID; staff accounts and the member sync's own changes (which come from iMIS) are never sent. Off, and a dry run, by default.

@@ -947,6 +947,40 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * A log row's kept request and response (redacted when saved), folded away under "Show",
+	 * so a rejected call can be checked field by field. Empty when nothing was kept (the
+	 * "Keep full request and response bodies" setting was off, or the call has no body).
+	 *
+	 * @param array $row Log row.
+	 * @return string Escaped HTML.
+	 */
+	public static function log_bodies( array $row ): string {
+		$parts = [];
+		foreach (
+			[
+				'request'  => __( 'Sent to iMIS', 'wormiss' ),
+				'response' => __( 'iMIS replied', 'wormiss' ),
+			] as $key => $label
+		) {
+			$body = (string) ( $row[ $key ] ?? '' );
+			if ( '' === $body ) {
+				continue;
+			}
+			$json = json_decode( $body );
+			if ( null !== $json ) {
+				$body = (string) wp_json_encode( $json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+			}
+			$parts[] = '<p><strong>' . esc_html( $label ) . '</strong></p>'
+				. '<pre style="max-height:24em;overflow:auto;white-space:pre-wrap;word-break:break-all;">'
+				. esc_html( $body ) . '</pre>';
+		}
+		if ( ! $parts ) {
+			return '';
+		}
+		return '<details><summary>' . esc_html__( 'Show', 'wormiss' ) . '</summary>' . implode( '', $parts ) . '</details>';
+	}
+
+	/**
 	 * The audit log page (newest first, 50 per page).
 	 *
 	 * @return void
@@ -973,23 +1007,25 @@ class Wormiss_Admin {
 			__( 'Result', 'wormiss' ),
 			__( 'Error', 'wormiss' ),
 			__( 'User', 'wormiss' ),
+			__( 'Details', 'wormiss' ),
 		];
 		foreach ( $headings as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
 		echo '</tr></thead><tbody>';
 		if ( ! $rows ) {
-			echo '<tr><td colspan="5">' . esc_html__( 'No calls logged yet.', 'wormiss' ) . '</td></tr>';
+			echo '<tr><td colspan="6">' . esc_html__( 'No calls logged yet.', 'wormiss' ) . '</td></tr>';
 		}
 		foreach ( $rows as $row ) {
 			$user = (int) $row['user_id'] ? get_userdata( (int) $row['user_id'] ) : false;
 			printf(
-				'<tr><td>%1$s</td><td><code>%2$s</code></td><td>%3$s</td><td>%4$s</td><td>%5$s</td></tr>',
+				'<tr><td>%1$s</td><td><code>%2$s</code></td><td>%3$s</td><td>%4$s</td><td>%5$s</td><td>%6$s</td></tr>',
 				esc_html( get_date_from_gmt( $row['created'], get_option( 'date_format' ) . ' ' . get_option( 'time_format' ) ) ),
 				esc_html( $row['endpoint'] ),
 				esc_html( $row['status'] ),
 				esc_html( (string) $row['error'] ),
-				esc_html( $user ? $user->user_login : '' )
+				esc_html( $user ? $user->user_login : '' ),
+				self::log_bodies( $row ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in log_bodies().
 			);
 		}
 		echo '</tbody></table>';
