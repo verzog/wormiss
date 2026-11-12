@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.8.0
+Stable tag: 0.9.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -169,6 +169,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.9.0 =
+* WooCommerce purchases: each paid order (processing or completed) by a member with an iMIS ID is recorded once as an iMIS activity, with the items and order number in the description and note and the order total in Amount. Nothing is created in iMIS finance. Off by default; uses the activity type and dry run of Record activity in iMIS.
 
 = 0.8.0 =
 * CPD points from Mark as done also go in the iMIS activity's Quantity/CEU, with the CEU type set in a new "CEU type for CPD points" setting (UF_4 keeps the points too).

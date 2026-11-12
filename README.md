@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.8.0)
+## What it does (0.9.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -35,7 +35,10 @@ whose iMIS REST client and audit log it reuses.
   block) and form submissions (Gravity Forms, WPForms, Contact Form 7, or the
   `wormiss_record_activity` action), written as iMIS Activity records of one
   configured type in the full record shape the Moodle bridge proved. CPD points also
-  go in the activity's Quantity/CEU, with a chosen CEU type. Off and a dry
+  go in the activity's Quantity/CEU, with a chosen CEU type.
+* **WooCommerce purchases:** each paid order by a member is recorded once as an
+  iMIS activity (items and order number in the description and note, the total in
+  Amount). No iMIS order, invoice or payment is created. Guest orders are skipped. Off and a dry
   run by default; sent in the background via WP-Cron with two retries.
 
 * **Upcoming iMIS events block and shortcode** (`[wormiss_events]`): lists events

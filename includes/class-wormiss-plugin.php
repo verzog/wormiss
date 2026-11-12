@@ -49,6 +49,7 @@ class Wormiss_Plugin {
 		Wormiss_Members_Only::init();
 		Wormiss_Activity::init();
 		Wormiss_Completion::init();
+		Wormiss_Woocommerce::init();
 		Wormiss_Event_Types::init();
 		Wormiss_Event_Sync::init();
 		if ( is_admin() ) {
@@ -250,6 +251,7 @@ class Wormiss_Plugin {
 				. ' ' . esc_html__( 'Signed-in members can see their own iMIS details, read using the iMIS ID on their account.', 'wormiss' )
 				. ' ' . esc_html__( 'When switched on, some things members do here are recorded in iMIS against their record:', 'wormiss' )
 				. ' ' . esc_html__( 'reading members-only pages, downloading files, completing activities and submitting forms.', 'wormiss' )
+				. ' ' . esc_html__( 'If you buy from our online shop, the order number, items and total may be recorded too.', 'wormiss' )
 				. ' ' . esc_html__( 'A log of each request to iMIS (when, what, and whether it worked) is kept for a while.', 'wormiss' )
 				. '</p>'
 		);

@@ -131,6 +131,7 @@ class Wormiss_Admin {
 		self::field( 'record_reads', __( 'Reads of members-only content', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_downloads', __( 'Tracked file downloads', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_forms', __( 'Form submissions', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'record_purchases', __( 'WooCommerce purchases', 'wormiss' ), 'wormiss_activity' );
 
 		add_settings_section( 'wormiss_log', __( 'Audit log', 'wormiss' ), '__return_false', self::PAGE );
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
@@ -434,6 +435,7 @@ class Wormiss_Admin {
 			case 'record_reads':
 			case 'record_downloads':
 			case 'record_forms':
+			case 'record_purchases':
 			case 'event_sync_enabled':
 			case 'event_sync_dry_run':
 			case 'event_cancel_on_trash':
@@ -443,6 +445,11 @@ class Wormiss_Admin {
 					esc_attr( $name ),
 					checked( (bool) $value, true, false )
 				);
+				if ( 'record_purchases' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'One activity per paid order, with its total in Amount. Orders are not created in iMIS.', 'wormiss' )
+						. '</span>';
+				}
 				if ( 'event_cancel_on_trash' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'Off by default: cancelling affects registrants. Registrations stay in iMIS.', 'wormiss' )

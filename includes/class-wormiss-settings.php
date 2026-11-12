@@ -82,6 +82,7 @@ class Wormiss_Settings {
 			'record_reads'          => true,
 			'record_downloads'      => true,
 			'record_forms'          => false,
+			'record_purchases'      => false,
 			// iMIS events on pages: the statuses that count as open, and each event's public page
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
 			'event_statuses'        => [ 'A' ],
@@ -397,7 +398,8 @@ class Wormiss_Settings {
 		// Checkboxes: from the settings form (which marks its activity section, since an unticked
 		// box is not submitted), or from an already-cleaned array (WordPress sanitises a first
 		// save twice); otherwise they keep their saved values.
-		foreach ( [ 'activity_enabled', 'activity_dry_run', 'record_reads', 'record_downloads', 'record_forms' ] as $box ) {
+		$boxes = [ 'activity_enabled', 'activity_dry_run', 'record_reads', 'record_downloads', 'record_forms', 'record_purchases' ];
+		foreach ( $boxes as $box ) {
 			if ( isset( $input['activity_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {

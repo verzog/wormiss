@@ -520,6 +520,7 @@ class Wormiss_Rest_Client {
 	 * @param int    $post_id       WordPress post ID (UF_5).
 	 * @return array
 	 * @param string $ceu_type    iMIS CEU type for the points ('' to leave it empty).
+	 * @param float  $amount      Money amount, e.g. an order total (0 for none).
 	 */
 	public static function build_activity_body(
 		string $activity_type,
@@ -530,12 +531,13 @@ class Wormiss_Rest_Client {
 		string $date,
 		float $points = 0,
 		int $post_id = 0,
-		string $ceu_type = ''
+		string $ceu_type = '',
+		float $amount = 0
 	): array {
 		$values = [
 			'ACTION_CODES'          => null,
 			'ACTIVITY_TYPE'         => $activity_type,
-			'AMOUNT'                => self::typed( 'System.Decimal', 0 ),
+			'AMOUNT'                => self::typed( 'System.Decimal', $amount ),
 			'ATTACH_SEQN'           => self::typed( 'System.Int32', 0 ),
 			'ATTACH_TOTAL'          => self::typed( 'System.Int32', 0 ),
 			'BATCH_NUM'             => null,
