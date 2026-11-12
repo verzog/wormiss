@@ -64,8 +64,11 @@ class Wormiss_Event_Cpd {
 	/** Most hours in one category of one row. */
 	const MAX_HOURS = 1000;
 
-	/** Most rows an event can have. */
-	const MAX_ROWS = 20;
+	/** Most lines an event can have; more is refused, never cut short (that would remove lines). */
+	const MAX_ROWS = 50;
+
+	/** Post meta: why the CPD hours tab was last not saved ('' when it was). */
+	const META_PROBLEM = '_wormiss_event_cpd_problem';
 
 	/**
 	 * The program level requirements iMIS offers (its CPD Hours panel's list), as iMIS stores them.
@@ -366,12 +369,16 @@ class Wormiss_Event_Cpd {
 			$requirement          = (string) ( $row['requirement'] ?? '' );
 			$clean['requirement'] = in_array( $requirement, self::REQUIREMENTS, true ) ? $requirement : '';
 			$clean['ordinal']     = absint( $row['ordinal'] ?? 0 );
+			// A line's own key, so a row number iMIS gives it reaches the right line even when
+			// the lines were saved again meanwhile.
+			$uid          = preg_replace( '/[^a-z0-9]/', '', strtolower( (string) ( $row['uid'] ?? '' ) ) );
+			$clean['uid'] = '' !== $uid ? substr( (string) $uid, 0, 20 ) : strtolower( wp_generate_password( 12, false ) );
 			if ( 0 === $clean['ordinal'] && '' === $clean['requirement'] && 0.0 === array_sum( array_intersect_key( $clean, self::FIELDS ) ) ) {
 				continue; // A blank new row.
 			}
 			$rows[] = $clean;
 		}
-		return array_slice( $rows, 0, self::MAX_ROWS );
+		return $rows;
 	}
 
 	/**
@@ -388,7 +395,43 @@ class Wormiss_Event_Cpd {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Cleaned by clean_rows().
 		$input = isset( $_POST[ self::FIELD_ROWS ] ) ? wp_unslash( $_POST[ self::FIELD_ROWS ] ) : [];
 		// phpcs:enable
-		update_post_meta( $post_id, self::META, self::clean_rows( $input ) );
+		$rows = self::clean_rows( $input );
+		if ( count( $rows ) > self::MAX_ROWS ) {
+			// Refused, keeping the lines as they were: cutting them short would remove lines in iMIS.
+			update_post_meta(
+				$post_id,
+				self::META_PROBLEM,
+				sprintf(
+					/* translators: %d: most lines. */
+					__( 'CPD hours were not saved: an event can have at most %d lines.', 'wormiss' ),
+					self::MAX_ROWS
+				)
+			);
+			return;
+		}
+		delete_post_meta( $post_id, self::META_PROBLEM );
+		update_post_meta( $post_id, self::META, $rows );
+	}
+
+	/**
+	 * Record the row number iMIS gave a new line, on the line as now saved (found by its key), so
+	 * lines saved again while it was being added keep their changes.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $uid     The line's key.
+	 * @param int    $ordinal Its iMIS row number.
+	 * @return void
+	 */
+	private static function record_ordinal( int $post_id, string $uid, int $ordinal ): void {
+		wp_cache_delete( $post_id, 'post_meta' );
+		$rows = self::saved_rows( $post_id );
+		foreach ( $rows as &$row ) {
+			if ( '' !== $uid && ( $row['uid'] ?? '' ) === $uid && 0 === (int) ( $row['ordinal'] ?? 0 ) ) {
+				$row['ordinal'] = $ordinal;
+			}
+		}
+		unset( $row );
+		update_post_meta( $post_id, self::META, $rows );
 	}
 
 	/**
@@ -452,9 +495,9 @@ class Wormiss_Event_Cpd {
 				} elseif ( 'DELETE' === $method ) {
 					$client->delete_entity( self::ENTITY, $keys );
 				} else {
-					$wanted[ $i ]['ordinal'] = self::new_ordinal( $client->create_entity( self::ENTITY, (array) $body ) );
+					$ordinal = self::new_ordinal( $client->create_entity( self::ENTITY, (array) $body ) );
 					// Kept straight away, so a failure later never adds this row a second time.
-					update_post_meta( $post_id, self::META, $wanted );
+					self::record_ordinal( $post_id, (string) ( $wanted[ $i ]['uid'] ?? '' ), $ordinal );
 				}
 				++$done;
 			}
@@ -576,13 +619,20 @@ class Wormiss_Event_Cpd {
 	public static function form_html( int $post_id ): string {
 		$rows = self::saved_rows( $post_id );
 		if ( ! self::owned( $post_id ) && '' !== self::event_id( $post_id ) ) {
-			$rows = self::rows( self::event_id( $post_id ) ) ?? [];
+			$read = self::rows( self::event_id( $post_id ) );
+			if ( null === $read ) {
+				// Not read: no form, so a save cannot take iMIS's lines for none (and remove them).
+				return '<p class="description">' . esc_html__( 'The CPD hours could not be read from iMIS, so they cannot be changed now. Try again later (see the audit log).', 'wormiss' ) . '</p>';
+			}
+			$rows = $read;
 		}
-		$head = '';
+		$problem = (string) get_post_meta( $post_id, self::META_PROBLEM, true );
+		$head    = '';
 		foreach ( self::categories() as [ $australia, $new_zealand ] ) {
 			$head .= '<th scope="col">' . esc_html( $australia . ' – ' . $new_zealand ) . '</th>';
 		}
 		$html  = '<input type="hidden" name="' . esc_attr( self::FIELD_SENT ) . '" value="1" />'
+			. ( '' !== $problem ? '<div class="notice notice-error inline"><p>' . esc_html( $problem ) . '</p></div>' : '' )
 			. '<p class="description">' . esc_html__( 'Hours in each category (decimals allowed, e.g. 1.5), one line per program level requirement.', 'wormiss' )
 			. ' ' . esc_html__( 'On update they are saved in the event\'s CPD Hours panel in iMIS: lines added, changed and removed to match.', 'wormiss' ) . '</p>'
 			. '<table class="widefat wormiss-cpd-rows"><thead><tr>' . $head . '<th scope="col">' . esc_html__( 'Program level requirement', 'wormiss' )
@@ -594,7 +644,8 @@ class Wormiss_Event_Cpd {
 		$html .= '</tbody></table>';
 		// A blank line to copy for "Add line" (the first one shows without JavaScript).
 		$html .= '<template class="wormiss-cpd-template">' . self::form_row( '__i__', [] ) . '</template>'
-			. '<p><button type="button" class="button wormiss-cpd-add" data-next="' . esc_attr( (string) $index ) . '">'
+			. '<p><button type="button" class="button wormiss-cpd-add" data-next="' . esc_attr( (string) $index ) . '" data-max="'
+			. esc_attr( (string) self::MAX_ROWS ) . '">'
 			. esc_html__( 'Add line', 'wormiss' ) . '</button></p>';
 		$html .= '<noscript><table class="widefat"><tbody>' . self::form_row( (string) $index, [] ) . '</tbody></table></noscript>';
 		return $html;
@@ -621,7 +672,8 @@ class Wormiss_Event_Cpd {
 			$html .= '<option value="' . esc_attr( $requirement ) . '"' . selected( (string) ( $row['requirement'] ?? '' ), $requirement, false ) . '>'
 				. esc_html( $requirement ) . '</option>';
 		}
-		$html .= '</select><input type="hidden" name="' . esc_attr( $name( 'ordinal' ) ) . '" value="' . esc_attr( (string) (int) ( $row['ordinal'] ?? 0 ) ) . '" /></td>'
+		$html .= '</select><input type="hidden" name="' . esc_attr( $name( 'ordinal' ) ) . '" value="' . esc_attr( (string) (int) ( $row['ordinal'] ?? 0 ) ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( $name( 'uid' ) ) . '" value="' . esc_attr( (string) ( $row['uid'] ?? '' ) ) . '" /></td>'
 			. '<td><input type="checkbox" value="1" name="' . esc_attr( $name( 'remove' ) ) . '" aria-label="' . esc_attr__( 'Remove this line', 'wormiss' ) . '" /></td></tr>';
 		return $html;
 	}

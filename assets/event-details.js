@@ -91,6 +91,11 @@
 			return;
 		}
 		const next = parseInt(button.dataset.next || '0', 10);
+		const max = parseInt(button.dataset.max || '0', 10);
+		if (max && body.children.length >= max) {
+			button.disabled = true;
+			return;
+		}
 		body.insertAdjacentHTML('beforeend', template.innerHTML.replace(/__i__/g, String(next)));
 		button.dataset.next = String(next + 1);
 		const first = body.lastElementChild && body.lastElementChild.querySelector('input');

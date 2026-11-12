@@ -379,10 +379,22 @@ class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 					'outcomes'    => 1.0,
 					'requirement' => 'Addressing health inequities',
 					'ordinal'     => 0,
+					'uid'         => 'new1',
 				],
 			]
 		);
-		$saved   = [
+		// An editor saves the lines again while iMIS is adding the new one: the row number
+		// iMIS gives it must not undo that save.
+		$editor = static function ( $pre, $args, $url ) use ( $post_id ) {
+			if ( 'POST' === ( $args['method'] ?? '' ) && str_ends_with( $url, '/api/EventCPD' ) ) {
+				$rows                 = Wormiss_Event_Cpd::saved_rows( $post_id );
+				$rows[1]['education'] = 9.0;
+				update_post_meta( $post_id, Wormiss_Event_Cpd::META, $rows );
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $editor, 5, 3 );
+		$saved = [
 			'Identity'   => [ 'IdentityElements' => [ '$values' => [ 'CSCM_JUL26', '31' ] ] ],
 			'Properties' => [ '$values' => [] ],
 		];
@@ -402,9 +414,14 @@ class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 		$post = json_decode( (string) $this->imis->requests[3]['body'], true );
 		$this->assertSame( [ 'CSCM_JUL26' ], $post['Identity']['IdentityElements']['$values'] );
 		$this->assertSame( 'Addressing health inequities', $post['Properties']['$values'][4]['Value'] );
+		remove_filter( 'pre_http_request', $editor, 5 );
 		$this->assertSame( 31, Wormiss_Event_Cpd::saved_rows( $post_id )[1]['ordinal'] );
+		$this->assertSame( 9.0, Wormiss_Event_Cpd::saved_rows( $post_id )[1]['education'], 'The later save is kept.' );
 
-		// iMIS now matches: nothing to change.
+		// iMIS now matches (with the 2.5 hours it was sent): nothing to change.
+		$rows                 = Wormiss_Event_Cpd::saved_rows( $post_id );
+		$rows[1]['education'] = 2.5;
+		update_post_meta( $post_id, Wormiss_Event_Cpd::META, $rows );
 		$this->imis->requests = [];
 		$now                  = Wormiss_Fake_Imis::page(
 			[
@@ -442,5 +459,36 @@ class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 		$this->assertSame( 2, count( $this->imis->requests ) );
 		$logged = array_column( Wormiss_Logger::recent( 5 ), 'endpoint' );
 		$this->assertContains( 'DRY RUN DELETE /api/EventCPD/~CSCM_JUL26|28', $logged );
+	}
+
+	/**
+	 * When iMIS cannot be read there is no form, so a save cannot remove iMIS's lines; too many
+	 * lines are refused with a reason, never cut short.
+	 *
+	 * @return void
+	 */
+	public function test_unread_and_too_many(): void {
+		$post_id = $this->own_event( [] );
+		delete_post_meta( $post_id, Wormiss_Event_Cpd::META );
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		$this->imis->token()->reply( '/api/EventCPD', 500, 'An error occurred.' );
+		$html = Wormiss_Event_Cpd::form_html( $post_id );
+		$this->assertStringContainsString( 'could not be read', $html );
+		$this->assertStringNotContainsString( Wormiss_Event_Cpd::FIELD_SENT, $html );
+
+		update_post_meta( $post_id, Wormiss_Event_Cpd::META, [] );
+		$lines = [];
+		for ( $i = 0; $i <= Wormiss_Event_Cpd::MAX_ROWS; $i++ ) {
+			$lines[] = [ 'education' => '1' ];
+		}
+		$_POST = [
+			Wormiss_Event_Cpd::FIELD_SENT => '1',
+			Wormiss_Event_Cpd::FIELD_ROWS => $lines,
+		];
+		Wormiss_Event_Cpd::save( $post_id );
+		$_POST = [];
+		$this->assertSame( [], Wormiss_Event_Cpd::saved_rows( $post_id ) );
+		$this->assertStringContainsString( 'at most', (string) get_post_meta( $post_id, Wormiss_Event_Cpd::META_PROBLEM, true ) );
+		$this->assertStringContainsString( 'at most', Wormiss_Event_Cpd::form_html( $post_id ) );
 	}
 }
