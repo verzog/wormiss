@@ -368,7 +368,7 @@ class Test_Wormiss_User_Sync extends Wormiss_Test_Case {
 
 		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
 		$this->serve( $rows );
-		$report = Wormiss_User_Sync::run();
+		$report = Wormiss_User_Sync::run_more();
 		$this->assertSame( 5, $report['created'] );
 		$this->assertSame( 0, $report['remaining'] );
 		$this->assertFalse( wp_next_scheduled( Wormiss_User_Sync::MORE_HOOK ) );
@@ -403,5 +403,41 @@ class Test_Wormiss_User_Sync extends Wormiss_Test_Case {
 		$this->assertSame( 'busy', $report['status'] );
 		$this->assertSame( 0, $this->imis->count( '/api/iqa' ) );
 		delete_transient( 'wormiss_user_sync_lock' );
+	}
+
+	/**
+	 * Members that cannot be synced never hold back the ones after them: the next batch
+	 * carries on after the members the last one reached.
+	 *
+	 * @return void
+	 */
+	public function test_batches_move_past_members_that_fail(): void {
+		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
+		$rows = [];
+		for ( $i = 1; $i <= Wormiss_User_Sync::BATCH; $i++ ) {
+			// Their email belongs to an account linked to someone else, so they cannot be created.
+			$other = $this->linked( (string) ( 50000 + $i ) );
+			wp_update_user(
+				[
+					'ID'         => $other,
+					'user_email' => 'taken' . $i . '@example.org',
+				]
+			);
+			$rows[] = self::row( (string) ( 40000 + $i ), 'A', [ 'Email' => 'taken' . $i . '@example.org' ] );
+		}
+		for ( $i = 1; $i <= 3; $i++ ) {
+			$rows[] = self::row( (string) ( 41000 + $i ) );
+		}
+		$this->serve( $rows );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( 0, $report['created'] );
+		$this->assertSame( 3, $report['remaining'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_User_Sync::MORE_HOOK ) );
+
+		$this->serve( $rows );
+		$report = Wormiss_User_Sync::run_more();
+		$this->assertSame( 3, $report['created'] );
+		$this->assertSame( 0, $report['remaining'] );
+		$this->assertFalse( get_option( Wormiss_User_Sync::OFFSET_OPTION ) );
 	}
 }

@@ -43,6 +43,9 @@ class Wormiss_User_Sync {
 	/** Most accounts created or changed in one run, so a page or cron run never times out. */
 	const BATCH = 50;
 
+	/** Option: where the next batch carries on in the list of members. */
+	const OFFSET_OPTION = 'wormiss_user_sync_offset';
+
 	/** Seconds before the next batch runs. */
 	const BATCH_GAP = MINUTE_IN_SECONDS;
 
@@ -74,7 +77,7 @@ class Wormiss_User_Sync {
 	 */
 	public static function init(): void {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
-		add_action( self::MORE_HOOK, [ __CLASS__, 'run' ] );
+		add_action( self::MORE_HOOK, [ __CLASS__, 'run_more' ] );
 		add_action( 'init', [ __CLASS__, 'maybe_schedule' ] );
 		add_action( 'admin_post_wormiss_user_sync_now', [ __CLASS__, 'handle_run_now' ] );
 		// Blocked members: password sign-in is refused, and any session (including single
@@ -149,11 +152,22 @@ class Wormiss_User_Sync {
 	}
 
 	/**
+	 * The next batch of a sync (cron): carries on after the members the last batch reached.
+	 *
+	 * @return array The report.
+	 */
+	public static function run_more(): array {
+		return self::run( true );
+	}
+
+	/**
 	 * Sync members from iMIS. Nothing changes if iMIS cannot be read.
 	 *
+	 * @param bool $carry_on Carry on from the last batch (else start from the first member).
 	 * @return array The report (also saved for the settings page).
 	 */
-	public static function run(): array {
+	public static function run( $carry_on = false ): array {
+		$start  = true === $carry_on ? max( 0, (int) get_option( self::OFFSET_OPTION, 0 ) ) : 0;
 		$report = [
 			'time'      => time(),
 			'dry_run'   => (bool) Wormiss_Settings::get( 'user_sync_dry_run' ),
@@ -180,7 +194,7 @@ class Wormiss_User_Sync {
 		}
 		set_transient( 'wormiss_user_sync_lock', 1, self::LOCK_SECONDS );
 		try {
-			return self::sync( $report, $query );
+			return self::sync( $report, $query, $start );
 		} finally {
 			delete_transient( 'wormiss_user_sync_lock' );
 		}
@@ -191,9 +205,10 @@ class Wormiss_User_Sync {
 	 *
 	 * @param array  $report Report so far.
 	 * @param string $query  IQA path.
+	 * @param int    $start  Index of the first member this batch may change.
 	 * @return array The report.
 	 */
-	private static function sync( array $report, string $query ): array {
+	private static function sync( array $report, string $query, int $start ): array {
 		try {
 			// One more than the limit is asked for, so a cut-off list is noticed, not synced in part.
 			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $query, [], null, self::MAX_MEMBERS + 1 );
@@ -264,37 +279,39 @@ class Wormiss_User_Sync {
 		add_filter( 'send_password_change_email', '__return_false' );
 		// At most one batch of changes per run; the rest carry on in the background, as
 		// creating an account takes a moment and a whole membership at once would time out.
+		// Each batch carries on after the members the last one reached, so members that cannot be
+		// synced (noted) never hold back the ones after them; the next full run tries them again.
 		$writes = 0;
-		$done   = 0;
+		$start  = $start < count( $plans ) ? $start : 0;
 		foreach ( $plans as $index => $plan ) {
+			if ( $index < $start ) {
+				continue;
+			}
 			if ( $writes >= self::BATCH ) {
 				$report['remaining'] = count( $plans ) - $index;
+				update_option( self::OFFSET_OPTION, $index, false );
 				break;
 			}
-			$before  = $report['created'] + $report['updated'] + $report['blocked'] + $report['unblocked'];
 			$writes += self::apply( $plan, $report, $hold ) ? 1 : 0;
-			$done   += ( $report['created'] + $report['updated'] + $report['blocked'] + $report['unblocked'] ) > $before ? 1 : 0;
 		}
 		remove_filter( 'send_email_change_email', '__return_false' );
 		remove_filter( 'send_password_change_email', '__return_false' );
 
 		if ( $report['remaining'] > 0 ) {
-			if ( $done > 0 ) {
-				if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
-					wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
-				}
-				self::note(
-					$report,
-					sprintf(
-						/* translators: 1: changes per batch, 2: members still to check. */
-						__( 'Synced in batches of %1$d: carrying on in the background with %2$d more members to check.', 'wormiss' ),
-						self::BATCH,
-						$report['remaining']
-					)
-				);
-			} else {
-				self::note( $report, __( 'Nothing in this batch could be changed, so the sync stopped. See the notes above.', 'wormiss' ) );
+			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
 			}
+			self::note(
+				$report,
+				sprintf(
+					/* translators: 1: changes per batch, 2: members still to check. */
+					__( 'Synced in batches of %1$d: carrying on in the background with %2$d more members to check.', 'wormiss' ),
+					self::BATCH,
+					$report['remaining']
+				)
+			);
+		} else {
+			delete_option( self::OFFSET_OPTION );
 		}
 		return self::save( $report );
 	}
