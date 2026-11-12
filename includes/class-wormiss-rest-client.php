@@ -295,17 +295,18 @@ class Wormiss_Rest_Client {
 	 * reads without it, since callers filter the dates again themselves.
 	 *
 	 * @param string $from Earliest start date, YYYY-MM-DD.
+	 * @param int    $max  Most events read (default MAX_EVENTS).
 	 * @return object[] EventData objects as iMIS sent them.
 	 * @throws Wormiss_Exception On any failed or unreadable page.
 	 */
-	public function get_events( string $from ): array {
+	public function get_events( string $from, int $max = self::MAX_EVENTS ): array {
 		try {
-			return $this->read_events( '/api/Event?StartDateTime=' . rawurlencode( 'ge:' . $from ) . '&' );
+			return $this->read_events( '/api/Event?StartDateTime=' . rawurlencode( 'ge:' . $from ) . '&', $max );
 		} catch ( Wormiss_Exception $e ) {
 			if ( 0 !== strpos( $e->getMessage(), 'HTTP 400' ) ) {
 				throw $e;
 			}
-			return $this->read_events( '/api/Event?' );
+			return $this->read_events( '/api/Event?', $max );
 		}
 	}
 
@@ -734,10 +735,11 @@ class Wormiss_Rest_Client {
 	 * Read every page of an Events API list.
 	 *
 	 * @param string $base Path and query ending in '?' or '&'.
+	 * @param int    $max  Most events read.
 	 * @return object[]
 	 * @throws Wormiss_Exception On any failed or unreadable page.
 	 */
-	private function read_events( string $base ): array {
+	private function read_events( string $base, int $max = self::MAX_EVENTS ): array {
 		$events = [];
 		$offset = 0;
 		do {
@@ -752,9 +754,9 @@ class Wormiss_Rest_Client {
 			$page_count            = count( $page );
 			$event_count           = count( $events );
 			[ $has_next, $offset ] = self::next_page( $result->body, $offset, $page_count );
-		} while ( $has_next && $page_count > 0 && $event_count < self::MAX_EVENTS );
+		} while ( $has_next && $page_count > 0 && $event_count < $max );
 
-		return array_slice( $events, 0, self::MAX_EVENTS );
+		return array_slice( $events, 0, $max );
 	}
 
 	/**

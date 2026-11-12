@@ -51,6 +51,9 @@ class Wormiss_Event_Import {
 	/** Seconds after which a lock left by a run that died is taken over. */
 	const LOCK_SECONDS = 600;
 
+	/** Most iMIS events read for a past-events import; more is an error, never a part-import. */
+	const MAX_READ = 10000;
+
 	/** Most notes kept in a report. */
 	const MAX_NOTES = 20;
 
@@ -163,16 +166,34 @@ class Wormiss_Event_Import {
 	 * @return array The report.
 	 */
 	private static function import( array $report ): array {
+		$since = (string) Wormiss_Settings::get( 'event_import_since' );
 		// A fresh read: new events come in today, and an earlier copy is never imported.
 		try {
-			$events = Wormiss_Events::get_events_fresh();
+			if ( '' !== $since ) {
+				// Past events too. The read starts at the earlier of that date and the usual lookback,
+				// so events under way are never missed; the date only limits finished ones. Every
+				// event is read (up to MAX_READ), not a first batch, so a long history is complete.
+				$lookback = (string) wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
+				$raw      = ( new Wormiss_Rest_Client() )->get_events( min( $since, $lookback ), self::MAX_READ + 1 );
+				if ( count( $raw ) > self::MAX_READ ) {
+					$report['status']  = 'error';
+					$report['notes'][] = sprintf(
+						/* translators: %s: number of events. */
+						__( 'More than %s iMIS events since that date, so nothing was imported. Choose a later date.', 'wormiss' ),
+						number_format_i18n( self::MAX_READ )
+					);
+					return self::save( $report );
+				}
+				$events = self::with_past( array_values( array_filter( array_map( [ 'Wormiss_Events', 'normalise' ], $raw ) ) ), $since );
+			} else {
+				// The same events the events block shows: real, public, listed statuses, not finished.
+				$events = Wormiss_Events::upcoming( Wormiss_Events::get_events_fresh(), '', time() );
+			}
 		} catch ( Wormiss_Exception $e ) {
 			$report['status']  = 'error';
 			$report['notes'][] = $e->getMessage();
 			return self::save( $report );
 		}
-		// The same events the events block shows: real, public, listed statuses, not finished.
-		$events         = Wormiss_Events::upcoming( $events, '', time() );
 		$report['read'] = count( $events );
 		foreach ( $events as $event ) {
 			unset( $event['_start'] );
@@ -201,6 +222,38 @@ class Wormiss_Event_Import {
 			);
 		}
 		return self::save( $report );
+	}
+
+	/**
+	 * Upcoming events as the events block lists them, plus finished ones that started on or
+	 * after $since. Finished events skip publish dates and may be expired or archived in iMIS
+	 * (as most past events are); templates, other unpublished events and unlisted statuses
+	 * stay out.
+	 *
+	 * @param array[] $events Events from Wormiss_Events::normalise().
+	 * @param string  $since  Earliest start, YYYY-MM-DD.
+	 * @return array[]
+	 */
+	public static function with_past( array $events, string $since ): array {
+		$now      = time();
+		$from     = Wormiss_Events::timestamp( $since ) ?? 0;
+		$statuses = array_map( 'strtolower', (array) Wormiss_Settings::get( 'event_statuses' ) );
+		$hidden   = array_diff( Wormiss_Events::HIDDEN_STATES, [ 'expired', 'archived' ] );
+		$out      = Wormiss_Events::upcoming( $events, '', $now );
+		foreach ( $events as $event ) {
+			$start = Wormiss_Events::timestamp( $event['start'] );
+			$end   = Wormiss_Events::timestamp( $event['end'] ) ?? $start;
+			if ( null === $start || $start < $from || $end >= $now ) {
+				continue; // No date, too early, or not finished (upcoming() decided those).
+			}
+			if ( in_array( strtolower( $event['template'] ), Wormiss_Events::TEMPLATE_STATES, true )
+				|| in_array( strtolower( $event['publishing'] ), $hidden, true )
+				|| ( $statuses && ! in_array( strtolower( $event['status'] ), $statuses, true ) ) ) {
+				continue;
+			}
+			$out[] = $event;
+		}
+		return $out;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.17.0
+Stable tag: 0.18.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -161,7 +161,7 @@ Yes. Add an Event (Wormiss > Add New Event), give it a title and any text you li
 
 = Can Wormiss make pages for all our iMIS events? =
 
-Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page, saved as a draft. Check, add a picture or text, and publish. Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again.
+Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page, saved as a draft. Check, add a picture or text, and publish. Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again. For historical records, set "Also import past events since" to a date to bring in finished events from then on as well.
 
 = Can members join a waitlist on the website? =
 
@@ -193,6 +193,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.18.0 =
+* Import past iMIS events: "Also import past events since" (Wormiss > Settings > Import iMIS events) brings in finished events that started on or after that date too, as linked draft pages, for historical records. Their iMIS publish dates are ignored and expired or archived events are included; templates and unlisted statuses still are not. Up to 100 pages per import; blank (the default) imports upcoming events only.
 
 = 0.17.0 =
 * Import iMIS events: once a day (or on "Import iMIS events now" in Wormiss > Settings), each upcoming iMIS event the events block would list gets a linked Event page, saved as a draft for an editor to publish, with its iMIS name and description. Later imports keep titles in step with iMIS and refresh the event details kept on the page; a page someone trashed is not made again, and pages WordPress sent to iMIS are left alone. Nothing is changed in iMIS and no page is ever removed. Off by default.
