@@ -205,11 +205,8 @@ the Media Library can still be opened directly by anyone with their address.
 = 0.28.0 =
 * Event details are edited in the page. Three blocks for event pages: Event facts (when, venue and address, online link, places and the Register button), CPD information (the CPD table) and iMIS settings (event code, existing iMIS event, attendance and waitlist; shown to editors only, never on the website). On an Event made in WordPress each is edited in place, laid out as on the website; on a linked or imported event they show what iMIS has. Events open inside their page template (WordPress 6.8 and later, and in the editor on earlier versions), with these blocks editable there, so editors see the page as it will look.
 * When the event template places the Event facts or CPD information block, they are no longer added to the event's text as well.
-* In the block editor the "Event details" box is gone (the classic editor keeps it). A block editor save is sent to iMIS as soon as it has finished.
+* In the block editor the "Event details" box is gone (the classic editor keeps it), so it can no longer be missed in the folded-away "Meta Boxes" panel. A block editor save is sent to iMIS as soon as it has finished.
 * CPD lines set in WordPress show on the event page straight away. Saving other details never sets an event's CPD (so never removes iMIS's lines), and only editors and administrators can change CPD lines.
-
-= 0.27.1 =
-* "Open Event details" button in the sidebar's iMIS event panel: newer WordPress folds the boxes under the content into a closed "Meta Boxes" panel at the bottom of the editor, which is easy to miss. The button opens that panel (and the Event details box, if collapsed) and scrolls to it.
 
 = 0.27.0 =
 * Set CPD hours in WordPress: on an Event made in WordPress, editors and administrators fill in the CPD hours tab of Event details, one line per program level requirement (hours in each category, decimals allowed; Add line, Remove). When the event is sent, its CPD Hours panel in iMIS is made to match: lines changed (by their iMIS row number), added (keeping the number iMIS gives them) and removed. The tab starts from the lines already in iMIS, so a first save keeps them, and nothing in iMIS changes until someone saves the tab. A dry run logs what would change. Events linked to or imported from iMIS still show their CPD read only.

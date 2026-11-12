@@ -2,8 +2,7 @@
  * "iMIS event" panel in the Event editor sidebar. Plain JavaScript (no build step).
  *
  * Shows whether the event is sent to iMIS, what happened the last time, and places left. The
- * details themselves are edited in the "Event details" box under the content, which a button
- * here opens and scrolls to.
+ * details themselves are edited in the page, in the event blocks (see event-blocks.js).
  *
  * @copyright  2026 Vernon Spain
  * @license    GNU GPL v3 or later
@@ -15,54 +14,13 @@
 	const el = wp.element.createElement;
 	const {__, sprintf} = wp.i18n;
 	const {useSelect} = wp.data;
-	const {Notice, Button} = wp.components;
+	const {Notice} = wp.components;
 	const Panel = (wp.editor && wp.editor.PluginDocumentSettingPanel)
 		|| (wp.editPost && wp.editPost.PluginDocumentSettingPanel);
 	const data = window.wormissEventSync || {enabled: false, dryRun: true, template: ''};
 
 	if (!Panel) {
 		return;
-	}
-
-	/**
-	 * Show the "Event details" box: open the editor's meta box panel at the bottom if it is
-	 * closed (newer WordPress folds it away under "Meta Boxes"), open the box if it is collapsed,
-	 * then scroll to it and move focus to its first tab.
-	 */
-	function openDetails() {
-		const box = document.getElementById('wormiss-event-details');
-		const panel = document.querySelector('.edit-post-meta-boxes-main');
-		// The panel's open state is a saved preference (WordPress 6.8 and later).
-		const preferences = wp.data.dispatch('core/preferences');
-		if (preferences && preferences.set) {
-			preferences.set('core/edit-post', 'metaBoxesMainIsOpen', true);
-		}
-		// The panel's own "Meta Boxes" toggle (not a box's collapse button).
-		const toggle = panel && panel.querySelector('.edit-post-meta-boxes-main__presenter[aria-expanded="false"],'
-			+ ' .edit-post-meta-boxes-main__presenter button[aria-expanded="false"]');
-		if (toggle) {
-			toggle.click();
-		}
-		if (box && box.classList.contains('closed')) {
-			const handle = box.querySelector('.handlediv');
-			if (handle) {
-				handle.click();
-			} else {
-				box.classList.remove('closed');
-			}
-		}
-		// After the panel has opened.
-		window.setTimeout(() => {
-			const target = document.getElementById('wormiss-event-details');
-			if (!target) {
-				return;
-			}
-			target.scrollIntoView({behavior: 'smooth', block: 'start'});
-			const tab = target.querySelector('[role="tab"][aria-selected="true"], [role="tab"], input, select');
-			if (tab) {
-				tab.focus({preventScroll: true});
-			}
-		}, 300);
 	}
 
 	/**
@@ -115,8 +73,7 @@
 			sync.places && el('p', {className: 'description'},
 				sprintf(__('Places in iMIS: %s', 'wormiss'), sync.places)),
 			el('p', {className: 'description'},
-				__('Fill in the dates, place, places, waitlist and CPD hours in "Event details" below the content.', 'wormiss')),
-			el(Button, {variant: 'secondary', onClick: openDetails}, __('Open Event details', 'wormiss'))
+				__('The dates, place, places, CPD hours and iMIS settings are edited in the page, in its event blocks.', 'wormiss'))
 		);
 	}
 
