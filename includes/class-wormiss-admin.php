@@ -985,7 +985,8 @@ class Wormiss_Admin {
 			. '</th></tr></thead><tbody>';
 		foreach ( $queries as $query ) {
 			$rule = Wormiss_Settings::query_rule( $query );
-			$base = Wormiss_Settings::OPTION . '[query_rules][' . $query . ']';
+			// Keyed by a hash: a path can hold [ and ], which form field names cannot.
+			$base = Wormiss_Settings::OPTION . '[query_rules][' . md5( $query ) . ']';
 			echo '<tr><td><code>' . esc_html( $query ) . '</code></td><td><select name="' . esc_attr( $base . '[audience]' ) . '" aria-label="'
 				. esc_attr__( 'Who may see it', 'wormiss' ) . '">';
 			foreach ( $audiences as $audience => $label ) {

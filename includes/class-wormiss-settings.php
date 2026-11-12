@@ -392,8 +392,14 @@ class Wormiss_Settings {
 			// Only for approved queries (as just saved, else as stored).
 			$approved             = $clean['allowed_queries'] ?? self::allowed_queries();
 			$clean['query_rules'] = [];
-			foreach ( $input['query_rules'] as $query => $rule ) {
-				if ( ! in_array( (string) $query, $approved, true ) || ! is_array( $rule ) ) {
+			// The form keys each rule by md5( path ) (paths can hold [ and ]); a saved list by path.
+			$by_hash = [];
+			foreach ( $approved as $path ) {
+				$by_hash[ md5( $path ) ] = $path;
+			}
+			foreach ( $input['query_rules'] as $key => $rule ) {
+				$query = in_array( (string) $key, $approved, true ) ? (string) $key : ( $by_hash[ (string) $key ] ?? '' );
+				if ( '' === $query || ! is_array( $rule ) ) {
 					continue;
 				}
 				$clean['query_rules'][ (string) $query ] = [

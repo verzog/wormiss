@@ -244,6 +244,21 @@ class Test_Wormiss_Iqa_Lockdown extends Wormiss_Test_Case {
 			],
 			$clean['query_rules']
 		);
+
+		// The settings form keys each rule by a hash, so a path with [ and ] still works.
+		$bracketed = '$/Events/Upcoming [Public]';
+		$clean     = Wormiss_Settings::sanitize(
+			[
+				'allowed_queries' => $bracketed,
+				'query_rules'     => [
+					md5( $bracketed ) => [
+						'audience' => 'everyone',
+						'columns'  => 'EventName',
+					],
+				],
+			]
+		);
+		$this->assertSame( 'everyone', $clean['query_rules'][ $bracketed ]['audience'] );
 	}
 
 	/**
