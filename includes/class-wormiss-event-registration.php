@@ -47,9 +47,11 @@ class Wormiss_Event_Registration {
 	public static function init(): void {
 		add_action( 'admin_post_wormiss_register', [ __CLASS__, 'handle_register' ] );
 		add_action( 'admin_post_wormiss_cancel_registration', [ __CLASS__, 'handle_cancel' ] );
+		add_action( 'admin_post_wormiss_join_waitlist', [ __CLASS__, 'handle_waitlist' ] );
 		// Signed out: send them to sign in, then back.
 		add_action( 'admin_post_nopriv_wormiss_register', [ __CLASS__, 'handle_signed_out' ] );
 		add_action( 'admin_post_nopriv_wormiss_cancel_registration', [ __CLASS__, 'handle_signed_out' ] );
+		add_action( 'admin_post_nopriv_wormiss_join_waitlist', [ __CLASS__, 'handle_signed_out' ] );
 	}
 
 	/**
@@ -109,6 +111,12 @@ class Wormiss_Event_Registration {
 
 		$html   = $notice;
 		$status = $show_status ? self::cached_status( $id, $imis_id ) : null;
+		if ( null !== $status && self::is_registered( $status ) && self::is_waitlisted( $status ) ) {
+			return $html . '<div class="wormiss-register wormiss-register--waitlist"><p>'
+				. esc_html__( "You're on the waitlist.", 'wormiss' ) . '</p>'
+				. self::form( 'wormiss_cancel_registration', $id, __( 'Leave the waitlist', 'wormiss' ), 'is-style-outline' )
+				. '</div>';
+		}
 		if ( null !== $status && self::is_registered( $status ) ) {
 			return $html . '<div class="wormiss-register wormiss-register--done"><p>'
 				. esc_html__( "You're registered.", 'wormiss' ) . '</p>'
@@ -117,7 +125,10 @@ class Wormiss_Event_Registration {
 		}
 		$places = $show_status ? Wormiss_Events::places( $event ) : null;
 		if ( null !== $places && ! $places['unlimited'] && $places['left'] <= 0 ) {
-			return $html . '<p class="wormiss-register wormiss-register--full">' . esc_html__( 'This event is full.', 'wormiss' ) . '</p>';
+			$html .= '<p class="wormiss-register wormiss-register--full">' . esc_html__( 'This event is full.', 'wormiss' ) . '</p>';
+			return self::waitlist_open( $event )
+				? $html . self::form( 'wormiss_join_waitlist', $id, __( 'Join the waitlist', 'wormiss' ), '' )
+				: $html;
 		}
 		return $html . self::form( 'wormiss_register', $id, __( 'Register', 'wormiss' ), '' );
 	}
@@ -148,6 +159,17 @@ class Wormiss_Event_Registration {
 	public static function handle_register(): void {
 		$event_id = self::posted_event( 'wormiss_register' );
 		self::set_notice( $event_id, self::register( $event_id ) );
+		self::go_back();
+	}
+
+	/**
+	 * Put the signed-in member on the waitlist (admin-post), then go back.
+	 *
+	 * @return void
+	 */
+	public static function handle_waitlist(): void {
+		$event_id = self::posted_event( 'wormiss_join_waitlist' );
+		self::set_notice( $event_id, self::join_waitlist( $event_id ) );
 		self::go_back();
 	}
 
@@ -193,7 +215,7 @@ class Wormiss_Event_Registration {
 			$status = $client->get_registration( $event_id, $imis_id );
 			if ( null !== $status && self::is_registered( $status ) ) {
 				self::forget_status( $event_id, $imis_id );
-				return 'already';
+				return self::is_waitlisted( $status ) ? 'already_waitlisted' : 'already';
 			}
 			$capacity = (int) $event['capacity'];
 			$query    = (string) Wormiss_Settings::get( 'event_places_query' );
@@ -227,7 +249,7 @@ class Wormiss_Event_Registration {
 	 * Cancel the current member's registration for an event.
 	 *
 	 * @param string $event_id iMIS event ID.
-	 * @return string Result: cancelled, not_registered, cannot_cancel, dry_run, not_member, off or error.
+	 * @return string Result: cancelled, left_waitlist, not_registered, cannot_cancel, dry_run, not_member, off or error.
 	 */
 	public static function cancel( string $event_id ): string {
 		$imis_id = Wormiss_Member::imis_id();
@@ -264,7 +286,75 @@ class Wormiss_Event_Registration {
 		}
 		self::forget_status( $event_id, $imis_id );
 		Wormiss_Events::forget_places( $event_id );
-		return 'cancelled';
+		return self::is_waitlisted( $status ) ? 'left_waitlist' : 'cancelled';
+	}
+
+	/**
+	 * Put the current member on a full free event's waitlist (RegisterEvent with Waitlist).
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @return string Result: waitlisted, already, already_waitlisted, not_full, no_waitlist, dry_run, closed,
+	 *                not_member, off or error.
+	 */
+	public static function join_waitlist( string $event_id ): string {
+		$imis_id = Wormiss_Member::imis_id();
+		$check   = self::check( $event_id, $imis_id );
+		if ( '' !== $check ) {
+			return $check;
+		}
+		$client = new Wormiss_Rest_Client();
+		try {
+			$event = Wormiss_Events::normalise( $client->get_event( $event_id ) );
+			if ( null === $event || ! self::is_open( $event, time() ) ) {
+				return 'closed';
+			}
+			if ( ! self::waitlist_open( $event ) ) {
+				return 'no_waitlist';
+			}
+			$status = $client->get_registration( $event_id, $imis_id );
+			if ( null !== $status && self::is_registered( $status ) ) {
+				self::forget_status( $event_id, $imis_id );
+				return self::is_waitlisted( $status ) ? 'already_waitlisted' : 'already';
+			}
+			// Only a confirmed full event takes waitlist requests: with no places IQA fullness cannot
+			// be known, and an event with no limit (or a place free again) should be registered for.
+			$capacity = (int) $event['capacity'];
+			$query    = (string) Wormiss_Settings::get( 'event_places_query' );
+			if ( '' === $query ) {
+				return 'no_waitlist';
+			}
+			if ( $capacity <= 0 || $capacity >= Wormiss_Events::UNLIMITED
+				|| $client->count_registrations( $query, $event_id ) < $capacity ) {
+				Wormiss_Events::forget_places( $event_id );
+				return 'not_full';
+			}
+			if ( Wormiss_Settings::get( 'event_registration_dry_run' ) ) {
+				Wormiss_Logger::record_call(
+					'DRY RUN POST /api/EventRegistration/_execute (RegisterEvent ' . $event_id . ', waitlist)',
+					Wormiss_Logger::STATUS_SUCCESS,
+					null,
+					(string) wp_json_encode( Wormiss_Rest_Client::register_body( $event_id, $imis_id, (string) $event['reg_option'], true ) ),
+					null,
+					$imis_id
+				);
+				return 'dry_run';
+			}
+			$client->register_event( $event_id, $imis_id, (string) $event['reg_option'], true );
+		} catch ( Wormiss_Exception $e ) {
+			return 'error';
+		}
+		self::forget_status( $event_id, $imis_id );
+		return 'waitlisted';
+	}
+
+	/**
+	 * Whether members can join the event's waitlist themselves (iMIS: StaffAndPublicUsers).
+	 *
+	 * @param array $event Event from Wormiss_Events::normalise().
+	 * @return bool
+	 */
+	public static function waitlist_open( array $event ): bool {
+		return 'StaffAndPublicUsers' === ( $event['waitlist'] ?? '' );
 	}
 
 	/**
@@ -289,6 +379,16 @@ class Wormiss_Event_Registration {
 	 */
 	public static function is_registered( array $status ): bool {
 		return 0 === strpos( (string) $status['status'], 'Registered' );
+	}
+
+	/**
+	 * Whether a registration is only on the waitlist.
+	 *
+	 * @param array $status From Wormiss_Rest_Client::get_registration().
+	 * @return bool
+	 */
+	public static function is_waitlisted( array $status ): bool {
+		return ! empty( $status['waitlisted'] );
 	}
 
 	/**
@@ -382,7 +482,7 @@ class Wormiss_Event_Registration {
 		delete_transient( $key );
 		$messages = self::messages();
 		$text     = $messages[ $notice['result'] ] ?? $messages['error'];
-		$type     = in_array( $notice['result'], [ 'registered', 'cancelled', 'dry_run' ], true ) ? 'success' : 'info';
+		$type     = in_array( $notice['result'], [ 'registered', 'cancelled', 'waitlisted', 'left_waitlist', 'dry_run' ], true ) ? 'success' : 'info';
 		return '<p class="wormiss-register-notice wormiss-register-notice--' . esc_attr( $type ) . '" role="status">'
 			. esc_html( $text ) . '</p>';
 	}
@@ -394,17 +494,22 @@ class Wormiss_Event_Registration {
 	 */
 	public static function messages(): array {
 		return [
-			'registered'     => __( "You're registered. A confirmation will come from us by email.", 'wormiss' ),
-			'already'        => __( "You're already registered for this event.", 'wormiss' ),
-			'cancelled'      => __( 'Your registration has been cancelled.', 'wormiss' ),
-			'not_registered' => __( "You're not registered for this event.", 'wormiss' ),
-			'dry_run'        => __( 'Test mode: nothing was sent to iMIS. The request is in the Wormiss audit log.', 'wormiss' ),
-			'closed'         => __( 'Registration for this event is closed.', 'wormiss' ),
-			'full'           => __( 'Sorry, this event is full.', 'wormiss' ),
-			'cannot_cancel'  => __( "This registration can't be cancelled here. Please contact us.", 'wormiss' ),
-			'not_member'     => __( 'Only signed-in members can register here.', 'wormiss' ),
-			'off'            => __( 'Registering here is not available at the moment.', 'wormiss' ),
-			'error'          => __( "Sorry, that didn't work. Please try again later, or contact us.", 'wormiss' ),
+			'registered'         => __( "You're registered. A confirmation will come from us by email.", 'wormiss' ),
+			'already'            => __( "You're already registered for this event.", 'wormiss' ),
+			'cancelled'          => __( 'Your registration has been cancelled.', 'wormiss' ),
+			'not_registered'     => __( "You're not registered for this event.", 'wormiss' ),
+			'dry_run'            => __( 'Test mode: nothing was sent to iMIS. The request is in the Wormiss audit log.', 'wormiss' ),
+			'closed'             => __( 'Registration for this event is closed.', 'wormiss' ),
+			'full'               => __( 'Sorry, this event is full.', 'wormiss' ),
+			'waitlisted'         => __( "You're on the waitlist. We'll let you know if a place comes up.", 'wormiss' ),
+			'already_waitlisted' => __( "You're already on the waitlist for this event.", 'wormiss' ),
+			'left_waitlist'      => __( "You've left the waitlist.", 'wormiss' ),
+			'not_full'           => __( 'Good news: a place is free now. Please register.', 'wormiss' ),
+			'no_waitlist'        => __( "This event's waitlist can't be joined here. Please contact us.", 'wormiss' ),
+			'cannot_cancel'      => __( "This registration can't be cancelled here. Please contact us.", 'wormiss' ),
+			'not_member'         => __( 'Only signed-in members can register here.', 'wormiss' ),
+			'off'                => __( 'Registering here is not available at the moment.', 'wormiss' ),
+			'error'              => __( "Sorry, that didn't work. Please try again later, or contact us.", 'wormiss' ),
 		];
 	}
 
