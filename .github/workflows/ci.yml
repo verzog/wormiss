@@ -34,6 +34,12 @@ jobs:
       - name: Install dev tools
         run: composer install --no-interaction --no-progress
 
+      - name: Known vulnerabilities in dev tools (composer audit)
+        # The release zip ships none of these packages; this catches advisories in the tools CI runs.
+        # Abandoned packages are reported but do not fail the build.
+        if: ${{ !cancelled() }}
+        run: composer audit --locked --abandoned=report --no-interaction
+
       - name: PHP lint
         if: ${{ !cancelled() }}
         run: composer lint
