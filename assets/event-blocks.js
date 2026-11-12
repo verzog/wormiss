@@ -322,25 +322,56 @@
 		save: () => null,
 	});
 
-	// Events open inside their page template on any WordPress version: once the editor is
-	// ready (switching earlier is undone as it finishes loading), unless this editor chose
-	// otherwise ("Show template" off, which WordPress remembers).
-	const unsubscribe = wp.data.subscribe(() => {
+	// Events are always edited inside their page template, on any WordPress version, so editors
+	// see where each detail goes and how the page will look. Once the editor is ready (switching
+	// earlier is undone as it finishes loading) the template view is turned on, and turned back on
+	// whenever "Show template" is switched off. The remembered choice is set to the template view
+	// too, so the next event opens in it straight away.
+	let ready = false;
+	let lastMode = '';
+	wp.data.subscribe(() => {
 		const editor = wp.data.select('core/editor');
-		const ready = editor && (editor.__unstableIsEditorReady ? editor.__unstableIsEditorReady() : !!editor.getCurrentPostType());
-		if (!ready || !editor.getCurrentPostType()) {
+		if (!editor || !editor.getRenderingMode || POST_TYPE !== editor.getCurrentPostType()) {
 			return;
 		}
-		unsubscribe();
-		if (POST_TYPE !== editor.getCurrentPostType() || !editor.getRenderingMode || 'post-only' !== editor.getRenderingMode()) {
+		if (!ready) {
+			if (editor.__unstableIsEditorReady && !editor.__unstableIsEditorReady()) {
+				return;
+			}
+			ready = true;
+			rememberTemplateView();
+		}
+		const mode = editor.getRenderingMode();
+		if (mode === lastMode) {
 			return;
 		}
-		const theme = (wp.data.select('core').getCurrentTheme() || {}).stylesheet;
-		const preferences = wp.data.select('core/preferences');
-		const chosen = preferences && ((preferences.get('core', 'renderingModes') || {})[theme] || {})[POST_TYPE];
+		lastMode = mode;
 		const settings = editor.getEditorSettings ? editor.getEditorSettings() : {};
-		if (!chosen && settings.supportsTemplateMode) {
+		if ('post-only' === mode && settings.supportsTemplateMode) {
 			wp.data.dispatch('core/editor').setRenderingMode('template-locked');
 		}
 	});
+
+	/**
+	 * Save "template view" as this user's choice for events, keeping their choices for other
+	 * themes and post types.
+	 *
+	 * @return {void}
+	 */
+	function rememberTemplateView() {
+		const preferences = wp.data.select('core/preferences');
+		const theme = (wp.data.select('core').getCurrentTheme() || {}).stylesheet;
+		if (!preferences || !theme) {
+			return;
+		}
+		const modes = preferences.get('core', 'renderingModes') || {};
+		const forTheme = modes[theme] || {};
+		if ('template-locked' === forTheme[POST_TYPE]) {
+			return;
+		}
+		const updated = Object.assign({}, modes);
+		updated[theme] = Object.assign({}, forTheme);
+		updated[theme][POST_TYPE] = 'template-locked';
+		wp.data.dispatch('core/preferences').set('core', 'renderingModes', updated);
+	}
 })(window.wp);

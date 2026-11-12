@@ -203,7 +203,7 @@ the Media Library can still be opened directly by anyone with their address.
 == Changelog ==
 
 = 0.28.1 =
-* Events open inside their page template again on current WordPress, which reads the post type's editor default mode (the 0.28.0 setting was only read by WordPress 6.8). The editor also switches to the template once it has finished loading (switching earlier was undone), unless an editor has turned "Show template" off, which WordPress remembers.
+* Events open inside their page template again on current WordPress, which reads the post type's editor default mode (the 0.28.0 setting was only read by WordPress 6.8). Events are always edited in their template, so editors see where each detail goes and how the page will look: the editor switches to it once it has finished loading (switching earlier was undone), and switches back if "Show template" is turned off.
 
 = 0.28.0 =
 * Event details are edited in the page. Three blocks for event pages: Event facts (when, venue and address, online link, places and the Register button), CPD information (the CPD table) and iMIS settings (event code, existing iMIS event, attendance and waitlist; shown to editors only, never on the website). On an Event made in WordPress each is edited in place, laid out as on the website; on a linked or imported event they show what iMIS has. Events open inside their page template (WordPress 6.8 and later, and in the editor on earlier versions), with these blocks editable there, so editors see the page as it will look.
