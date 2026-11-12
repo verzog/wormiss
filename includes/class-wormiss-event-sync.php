@@ -842,7 +842,8 @@ class Wormiss_Event_Sync {
 		try {
 			$event = Wormiss_Events::normalise( ( new Wormiss_Rest_Client() )->get_event( $existing ) );
 		} catch ( Wormiss_Exception $e ) {
-			$event = null;
+			// Some events cannot be read on their own (iMIS errors on them); the events list may have it.
+			$event = self::listed_event( $existing );
 			/* translators: 1: iMIS event ID, 2: reason. */
 			$reason = sprintf( __( 'iMIS event %1$s could not be read (%2$s).', 'wormiss' ), $existing, $e->getMessage() );
 		}
@@ -855,7 +856,7 @@ class Wormiss_Event_Sync {
 		update_post_meta( $post_id, self::META_IMIS_ID, $event['id'] );
 		update_post_meta( $post_id, self::META_LINKED, 1 );
 		// Kept for the page, as the events list only reaches back LOOKBACK_DAYS.
-		update_post_meta( $post_id, self::META_LINKED_DETAILS, $event );
+		update_post_meta( $post_id, self::META_LINKED_DETAILS, wp_slash( $event ) );
 		/* translators: 1: iMIS event ID, 2: event name in iMIS. */
 		$message = __( 'Linked to iMIS event %1$s (%2$s). Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' );
 		return self::link_result( $post_id, 'linked', sprintf( $message, $event['id'], $event['name'] ) );

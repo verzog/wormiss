@@ -217,6 +217,7 @@ class Wormiss_Admin {
 			__( 'Send events to iMIS', 'wormiss' )     => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
 			__( 'Free event registration', 'wormiss' ) => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
 			__( 'Member sync', 'wormiss' )             => $state( $on( 'user_sync_enabled' ), $on( 'user_sync_dry_run' ) ),
+			__( 'iMIS event import', 'wormiss' )       => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
@@ -295,6 +296,10 @@ class Wormiss_Admin {
 		self::field( 'event_sync_dry_run', __( 'Dry run (check only)', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_template_id', __( 'Default iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_cancel_on_trash', __( 'Cancel in iMIS when trashed', 'wormiss' ), 'wormiss_event_sync' );
+
+		$title = __( 'Import iMIS events', 'wormiss' );
+		add_settings_section( 'wormiss_event_import', $title, [ __CLASS__, 'event_import_intro' ], self::PAGE );
+		self::field( 'event_import_enabled', __( 'Import iMIS events daily', 'wormiss' ), 'wormiss_event_import' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -437,6 +442,20 @@ class Wormiss_Admin {
 			. ' ' . esc_html__( 'with the title, description, dates, place, online link and capacity from WordPress.', 'wormiss' )
 			. ' ' . esc_html__( 'The service account needs rights to create and edit events.', 'wormiss' )
 			. ' ' . esc_html__( 'Keep the dry run on until it works: iMIS only checks the event, and nothing is created.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the event import section (and the marker that its checkbox was shown).
+	 *
+	 * @return void
+	 */
+	public static function event_import_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[event_import_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Once a day, each upcoming iMIS event (the same ones the events block lists) gets an Event page', 'wormiss' )
+			. ' ' . esc_html__( 'linked to it, saved as a draft for an editor to publish. Titles follow iMIS; dates, place and', 'wormiss' )
+			. ' ' . esc_html__( 'places left always come from iMIS. Nothing is changed in iMIS, and pages are never removed.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -671,6 +690,7 @@ class Wormiss_Admin {
 			case 'record_downloads':
 			case 'record_forms':
 			case 'record_purchases':
+			case 'event_import_enabled':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
 			case 'event_registration_enabled':
@@ -763,6 +783,23 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="action" value="wormiss_test_connection" />';
 		wp_nonce_field( 'wormiss_test_connection' );
 		submit_button( __( 'Test connection', 'wormiss' ), 'secondary', 'submit', false );
+		echo '</form>';
+
+		echo '<h2 id="wormiss-event-import">' . esc_html__( 'Import iMIS events now', 'wormiss' ) . '</h2>';
+		$summary = Wormiss_Event_Import::summary();
+		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The event import has not run yet.', 'wormiss' ) ) . '</p>';
+		$notes = Wormiss_Event_Import::notes();
+		if ( $notes ) {
+			echo '<ul class="ul-disc">';
+			foreach ( $notes as $note ) {
+				echo '<li>' . esc_html( $note ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		echo '<input type="hidden" name="action" value="wormiss_event_import_now" />';
+		wp_nonce_field( 'wormiss_event_import_now' );
+		submit_button( __( 'Import iMIS events now', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
 		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';

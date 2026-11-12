@@ -54,6 +54,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Registration::init();
 		Wormiss_User_Sync::init();
 		Wormiss_Event_Sync::init();
+		Wormiss_Event_Import::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
 		}
@@ -124,6 +125,7 @@ class Wormiss_Plugin {
 		wp_unschedule_hook( Wormiss_Event_Sync::CANCEL_HOOK );
 		wp_clear_scheduled_hook( Wormiss_User_Sync::HOOK );
 		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
+		wp_clear_scheduled_hook( Wormiss_Event_Import::HOOK );
 		// The Events post type goes away with the plugin: rebuild permalinks next time.
 		delete_option( 'wormiss_rewrite_version' );
 		flush_rewrite_rules( false );

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.16.0
+Stable tag: 0.17.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -159,6 +159,10 @@ Yes. Build an iMIS IQA with no prompts that returns ID, Email, FirstName, LastNa
 
 Yes. Add an Event (Wormiss > Add New Event), give it a title and any text you like, enter the iMIS event's ID (e.g. CONGRESS26) in "Existing iMIS event ID" in the iMIS event panel, and save. The page then takes its dates, place, places left and Register button from iMIS. WordPress never changes or cancels a linked event in iMIS. Clear the box and save to unlink it.
 
+= Can Wormiss make pages for all our iMIS events? =
+
+Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page, saved as a draft. Check, add a picture or text, and publish. Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again.
+
 = Can members join a waitlist on the website? =
 
 Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
@@ -189,6 +193,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.17.0 =
+* Import iMIS events: once a day (or on "Import iMIS events now" in Wormiss > Settings), each upcoming iMIS event the events block would list gets a linked Event page, saved as a draft for an editor to publish, with its iMIS name and description. Later imports keep titles in step with iMIS and refresh the event details kept on the page; a page someone trashed is not made again, and pages WordPress sent to iMIS are left alone. Nothing is changed in iMIS and no page is ever removed. Off by default.
+* Linking an Event to an existing iMIS event now falls back to the events list when iMIS cannot read that event on its own.
 
 = 0.16.0 =
 * Link to an existing iMIS event: enter its ID (e.g. CONGRESS26) in the Event's "Existing iMIS event ID" box and save. Wormiss checks it is in iMIS and links the page, which then shows its dates, place, event code, places left and Register button from iMIS. A linked event is only read: WordPress never sends, changes or cancels it (trashing the page leaves it alone). Clear the box to unlink. Editors and administrators only.
