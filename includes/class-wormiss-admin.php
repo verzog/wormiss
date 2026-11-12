@@ -300,6 +300,7 @@ class Wormiss_Admin {
 		$title = __( 'Import iMIS events', 'wormiss' );
 		add_settings_section( 'wormiss_event_import', $title, [ __CLASS__, 'event_import_intro' ], self::PAGE );
 		self::field( 'event_import_enabled', __( 'Import iMIS events daily', 'wormiss' ), 'wormiss_event_import' );
+		self::field( 'event_import_publish', __( 'Publish imported pages', 'wormiss' ), 'wormiss_event_import' );
 		self::field( 'event_import_since', __( 'Also import past events since', 'wormiss' ), 'wormiss_event_import' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
@@ -455,8 +456,9 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[event_import_section]" value="1" />';
 		echo '<p>'
 			. esc_html__( 'Once a day, each upcoming iMIS event (the same ones the events block lists) gets an Event page', 'wormiss' )
-			. ' ' . esc_html__( 'linked to it, saved as a draft for an editor to publish. Titles follow iMIS; dates, place and', 'wormiss' )
-			. ' ' . esc_html__( 'places left always come from iMIS. Nothing is changed in iMIS, and pages are never removed.', 'wormiss' )
+			. ' ' . esc_html__( 'linked to it, with its iMIS description, image and event type, published or as a draft.', 'wormiss' )
+			. ' ' . esc_html__( 'Title and description follow iMIS; dates, place and places left always come from iMIS.', 'wormiss' )
+			. ' ' . esc_html__( 'Nothing is changed in iMIS, and pages are never removed.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -705,6 +707,7 @@ class Wormiss_Admin {
 			case 'record_forms':
 			case 'record_purchases':
 			case 'event_import_enabled':
+			case 'event_import_publish':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
 			case 'event_registration_enabled':
@@ -733,6 +736,12 @@ class Wormiss_Admin {
 				if ( 'record_purchases' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'One activity per paid order, with its total in Amount. Orders are not created in iMIS.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'event_import_publish' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Imported pages go live with their iMIS description, image and event type. Off: drafts.', 'wormiss' )
+						. ' ' . esc_html__( 'Drafts made earlier are published too; a page an editor unpublishes stays a draft.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'event_cancel_on_trash' === $key ) {

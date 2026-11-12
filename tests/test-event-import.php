@@ -409,4 +409,200 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->assertSame( 2, Wormiss_Event_Import::run()['created'] );
 		$this->assertStringContainsString( 'limit=100&offset=100', $this->imis->requests[2]['url'] );
 	}
+
+	/**
+	 * With publishing on, new pages go live and the import's earlier drafts are published; a page
+	 * an editor unpublished afterwards stays a draft.
+	 *
+	 * @return void
+	 */
+	public function test_publishing(): void {
+		$this->serve( [ self::imis_event( 'EARLY26' ) ] );
+		Wormiss_Event_Import::run();
+		$early = self::pages( 'EARLY26' )[0];
+		$this->assertSame( 'draft', get_post_status( $early ) );
+
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_publish' => true ] ) );
+		$this->serve( [ self::imis_event( 'EARLY26' ), self::imis_event( 'NEW26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 'publish', get_post_status( $early ) );
+		$this->assertSame( 'publish', get_post_status( self::pages( 'NEW26' )[0] ) );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $early ] ) );
+
+		wp_update_post(
+			[
+				'ID'          => $early,
+				'post_status' => 'draft',
+			]
+		);
+		$this->serve( [ self::imis_event( 'EARLY26' ), self::imis_event( 'NEW26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 'draft', get_post_status( $early ) );
+	}
+
+	/**
+	 * The full iMIS description (formatting kept, scripts removed) becomes the page text and
+	 * follows iMIS when it changes there; an editor's change stands until iMIS changes.
+	 *
+	 * @return void
+	 */
+	public function test_description_follows_imis(): void {
+		$html = '<p>Two days of <strong>talks</strong>.</p><script>alert(1)</script>';
+		$this->serve( [ self::imis_event( 'DESC26', [ 'Description' => $html ] ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'DESC26' )[0];
+		$content = get_post_field( 'post_content', $post_id );
+		$this->assertStringContainsString( '<strong>talks</strong>', $content );
+		$this->assertStringNotContainsString( '<script>', $content );
+
+		wp_update_post(
+			[
+				'ID'           => $post_id,
+				'post_content' => 'Edited here.',
+			]
+		);
+		$this->serve( [ self::imis_event( 'DESC26', [ 'Description' => $html ] ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 'Edited here.', get_post_field( 'post_content', $post_id ) );
+
+		$this->serve( [ self::imis_event( 'DESC26', [ 'Description' => '<p>New programme.</p>' ] ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( '<p>New programme.</p>', get_post_field( 'post_content', $post_id ) );
+	}
+
+	/**
+	 * The iMIS category becomes the page's event type, made once with the category's ID.
+	 *
+	 * @return void
+	 */
+	public function test_event_type_from_category(): void {
+		$category = [
+			'Category' => [
+				'EventCategoryId' => 'M/L',
+				'Name'            => 'Masterclass',
+			],
+		];
+		$this->serve( [ self::imis_event( 'ML1', $category ), self::imis_event( 'ML2', $category ) ] );
+		Wormiss_Event_Import::run();
+		$term = get_term_by( 'name', 'Masterclass', Wormiss_Event_Types::TAXONOMY );
+		$this->assertInstanceOf( WP_Term::class, $term );
+		$this->assertSame( 'M/L', get_term_meta( $term->term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		foreach ( [ 'ML1', 'ML2' ] as $id ) {
+			$this->assertSame( [ $term->term_id ], wp_get_object_terms( self::pages( $id )[0], Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
+		}
+		$this->assertCount(
+			1,
+			get_terms(
+				[
+					'taxonomy'   => Wormiss_Event_Types::TAXONOMY,
+					'hide_empty' => false,
+				]
+			)
+		);
+	}
+
+	/**
+	 * The iMIS event image becomes the featured image, downloaded once.
+	 *
+	 * @return void
+	 */
+	public function test_featured_image(): void {
+		$png       = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- A test image.
+		$downloads = 0;
+		$image     = static function ( $pre, $args, $url ) use ( $png, &$downloads ) {
+			if ( false === strpos( $url, '/images/ev1.png' ) ) {
+				return $pre;
+			}
+			++$downloads;
+			if ( ! empty( $args['filename'] ) ) {
+				file_put_contents( $args['filename'], $png ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- The download's temporary file.
+			}
+			return [
+				'headers'  => [ 'content-type' => 'image/png' ],
+				'body'     => '',
+				'response' => [
+					'code'    => 200,
+					'message' => 'OK',
+				],
+				'cookies'  => [],
+				'filename' => $args['filename'] ?? null,
+			];
+		};
+		// After the fake iMIS, which answers every request it was not told about with an error.
+		add_filter( 'pre_http_request', $image, 20, 3 );
+		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
+		$report  = Wormiss_Event_Import::run();
+		$post_id = self::pages( 'IMG26' )[0];
+		$this->assertTrue( has_post_thumbnail( $post_id ), implode( ' ', $report['notes'] ) );
+
+		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 1, $downloads );
+		remove_filter( 'pre_http_request', $image, 20 );
+
+		// Taken off the event in iMIS: taken off the page.
+		$this->serve( [ self::imis_event( 'IMG26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertFalse( has_post_thumbnail( $post_id ) );
+	}
+
+	/**
+	 * An image an editor chose instead is kept when iMIS drops the event's image.
+	 *
+	 * @return void
+	 */
+	public function test_editors_image_kept(): void {
+		$this->serve( [ self::imis_event( 'OWN26' ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'OWN26' )[0];
+		$own     = self::factory()->attachment->create_object( 'own.jpg', $post_id, [ 'post_mime_type' => 'image/jpeg' ] );
+		set_post_thumbnail( $post_id, $own );
+		update_post_meta( $post_id, Wormiss_Event_Import::META_IMAGE, 'https://imis.example.org/images/old.png' );
+		update_post_meta( $post_id, Wormiss_Event_Import::META_IMAGE_ID, $own + 1000 );
+		$this->serve( [ self::imis_event( 'OWN26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( $own, get_post_thumbnail_id( $post_id ) );
+	}
+
+	/**
+	 * A page an editor published by hand and later took down is not published again.
+	 *
+	 * @return void
+	 */
+	public function test_hand_published_page_stays_down(): void {
+		$this->serve( [ self::imis_event( 'HAND26' ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'HAND26' )[0];
+		wp_publish_post( $post_id );
+		wp_update_post(
+			[
+				'ID'          => $post_id,
+				'post_status' => 'draft',
+			]
+		);
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_publish' => true ] ) );
+		$this->serve( [ self::imis_event( 'HAND26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 'draft', get_post_status( $post_id ) );
+	}
+
+	/**
+	 * A linked page shows when registration closes, while it is still to come.
+	 *
+	 * @return void
+	 */
+	public function test_registration_closes_shown(): void {
+		$closes = gmdate( 'Y-m-d', time() + 20 * DAY_IN_SECONDS ) . 'T17:00:00';
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_publish' => true ] ) );
+		$this->serve( [ self::imis_event( 'REG26', [ 'RegistrationEndDate' => $closes ] ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'REG26' )[0];
+		$this->serve( [ self::imis_event( 'REG26', [ 'RegistrationEndDate' => $closes ] ) ] );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$GLOBALS['wp_query']->the_post();
+		$html = apply_filters( 'the_content', get_the_content() );
+		wp_reset_postdata();
+		$this->assertStringContainsString( '<dt>Registration closes</dt>', $html );
+	}
 }

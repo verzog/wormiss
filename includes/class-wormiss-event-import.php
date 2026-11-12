@@ -27,8 +27,9 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Reads the iMIS events list (the same events the events block shows) and makes a linked
- * Event page, as a draft, for each one that has none yet. Pages already linked get their title
- * and kept details brought up to date. Nothing is ever changed in iMIS, and pages are never
+ * Event page for each one that has none yet, with iMIS's name, description, event type (from
+ * its category) and image; published or a draft, as Settings says. Later imports keep those
+ * in step with iMIS. Nothing is ever changed in iMIS, and pages are never
  * removed: finished events keep their pages. Off until an administrator turns it on.
  */
 class Wormiss_Event_Import {
@@ -41,6 +42,18 @@ class Wormiss_Event_Import {
 
 	/** Post meta: set on pages the import made. */
 	const META_IMPORTED = '_wormiss_event_imported';
+
+	/** Post meta: a fingerprint of the iMIS name and description the page last took. */
+	const META_SOURCE = '_wormiss_event_import_source';
+
+	/** Post meta: set once the import has published the page (so an editor's unpublishing stands). */
+	const META_PUBLISHED = '_wormiss_event_import_published';
+
+	/** Post meta: the iMIS image address last used for the featured image. */
+	const META_IMAGE = '_wormiss_event_import_image';
+
+	/** Post meta: the attachment the import made the featured image. */
+	const META_IMAGE_ID = '_wormiss_event_import_image_id';
 
 	/** Most pages made in one run (the rest come on the next run). */
 	const MAX_CREATE = 100;
@@ -66,6 +79,24 @@ class Wormiss_Event_Import {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
 		add_action( 'init', [ __CLASS__, 'maybe_schedule' ] );
 		add_action( 'admin_post_wormiss_event_import_now', [ __CLASS__, 'handle_run_now' ] );
+		add_action( 'transition_post_status', [ __CLASS__, 'note_published' ], 10, 3 );
+	}
+
+	/**
+	 * Remember that an imported page has been live, whoever published it, so that once an
+	 * editor takes it down the import never publishes it again.
+	 *
+	 * @param string  $new_status New status.
+	 * @param string  $old_status Old status.
+	 * @param WP_Post $post       Post.
+	 * @return void
+	 */
+	public static function note_published( $new_status, $old_status, $post ): void {
+		unset( $old_status ); // Only where the page is going matters.
+		if ( 'publish' === $new_status && $post instanceof WP_Post && Wormiss_Event_Sync::POST_TYPE === $post->post_type
+			&& get_post_meta( $post->ID, self::META_IMPORTED, true ) ) {
+			update_post_meta( $post->ID, self::META_PUBLISHED, 1 );
+		}
 	}
 
 	/**
@@ -167,48 +198,58 @@ class Wormiss_Event_Import {
 	 */
 	private static function import( array $report ): array {
 		$since = (string) Wormiss_Settings::get( 'event_import_since' );
-		// A fresh read: new events come in today, and an earlier copy is never imported.
+		// The read starts at the earlier of the past-events date and the usual lookback, so events
+		// under way are never missed; the date only limits finished events (with_past()).
+		$lookback = (string) wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
+		$from     = '' !== $since ? min( $since, $lookback ) : $lookback;
+		// A fresh read (never an earlier copy), kept as iMIS sent it for the full descriptions.
 		try {
-			if ( '' !== $since ) {
-				// Past events too. The read starts at the earlier of that date and the usual lookback,
-				// so events under way are never missed; the date only limits finished ones. Every
-				// event is read (up to MAX_READ), not a first batch, so a long history is complete.
-				$lookback = (string) wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
-				$raw      = ( new Wormiss_Rest_Client() )->get_events( min( $since, $lookback ), self::MAX_READ + 1 );
-				if ( count( $raw ) > self::MAX_READ ) {
-					$report['status']  = 'error';
-					$report['notes'][] = sprintf(
-						/* translators: %s: number of events. */
-						__( 'More than %s iMIS events since that date, so nothing was imported. Choose a later date.', 'wormiss' ),
-						number_format_i18n( self::MAX_READ )
-					);
-					return self::save( $report );
-				}
-				$events = self::with_past( array_values( array_filter( array_map( [ 'Wormiss_Events', 'normalise' ], $raw ) ) ), $since );
-			} else {
-				// The same events the events block shows: real, public, listed statuses, not finished.
-				$events = Wormiss_Events::upcoming( Wormiss_Events::get_events_fresh(), '', time() );
+			// With a past-events date, every event since then is read (up to MAX_READ), not a capped
+			// first batch, so a long history is complete; more than that is an error, not a part-import.
+			$max = '' !== $since ? self::MAX_READ + 1 : Wormiss_Rest_Client::MAX_EVENTS;
+			$raw = ( new Wormiss_Rest_Client() )->get_events( $from, $max );
+			if ( '' !== $since && count( $raw ) > self::MAX_READ ) {
+				$report['status']  = 'error';
+				$report['notes'][] = sprintf(
+					/* translators: %s: number of events. */
+					__( 'More than %s iMIS events since that date, so nothing was imported. Choose a later date.', 'wormiss' ),
+					number_format_i18n( self::MAX_READ )
+				);
+				return self::save( $report );
 			}
 		} catch ( Wormiss_Exception $e ) {
 			$report['status']  = 'error';
 			$report['notes'][] = $e->getMessage();
 			return self::save( $report );
 		}
+		$events = [];
+		$extras = [];
+		foreach ( $raw as $data ) {
+			$event = Wormiss_Events::normalise( $data );
+			if ( null !== $event ) {
+				$events[]               = $event;
+				$extras[ $event['id'] ] = self::extras( $data );
+			}
+		}
+		// The events the events block shows (real, public, listed statuses, not finished), plus
+		// finished ones since the past-events date when one is set.
+		$events         = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
 		$report['read'] = count( $events );
 		foreach ( $events as $event ) {
 			unset( $event['_start'] );
+			$extra   = $extras[ $event['id'] ] ?? self::extras( null );
 			$post_id = self::page_for( (string) $event['id'] );
 			if ( 0 === $post_id ) {
 				if ( $report['created'] >= self::MAX_CREATE ) {
 					++$report['skipped'];
 					continue;
 				}
-				if ( self::create( $event, $report ) ) {
+				if ( self::create( $event, $extra, $report ) ) {
 					++$report['created'];
 				}
 				continue;
 			}
-			if ( self::refresh( $post_id, $event ) ) {
+			if ( self::refresh( $post_id, $event, $extra, $report ) ) {
 				++$report['updated'];
 			} else {
 				++$report['skipped'];
@@ -222,6 +263,37 @@ class Wormiss_Event_Import {
 			);
 		}
 		return self::save( $report );
+	}
+
+	/**
+	 * What the import takes from an iMIS event besides normalise(): the full description (safe
+	 * HTML) and the category's ID and name.
+	 *
+	 * @param mixed $data EventData from iMIS.
+	 * @return array{html: string, category_id: string, category: string}
+	 */
+	public static function extras( $data ): array {
+		$out = [
+			'html'        => '',
+			'category_id' => '',
+			'category'    => '',
+		];
+		if ( ! is_object( $data ) ) {
+			return $out;
+		}
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		$description = $data->Description ?? '';
+		if ( is_object( $description ) && property_exists( $description, '$value' ) ) {
+			$description = $description->{'$value'};
+		}
+		$out['html'] = is_string( $description ) ? trim( wp_kses_post( $description ) ) : '';
+		$category    = $data->Category ?? null;
+		if ( is_object( $category ) ) {
+			$out['category_id'] = Wormiss_Event_Types::clean_category( $category->EventCategoryId ?? '' );
+			$out['category']    = is_scalar( $category->Name ?? null ) ? trim( sanitize_text_field( (string) $category->Name ) ) : '';
+		}
+		// phpcs:enable
+		return $out;
 	}
 
 	/**
@@ -281,38 +353,42 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Make a draft Event page linked to an iMIS event.
+	 * Make an Event page linked to an iMIS event: published, or a draft, as Settings says.
 	 *
 	 * @param array $event  Event from Wormiss_Events::normalise().
+	 * @param array $extra  From extras().
 	 * @param array $report Report, for notes.
 	 * @return bool
 	 */
-	private static function create( array $event, array &$report ): bool {
-		$content = '' !== $event['description']
-			? '<!-- wp:paragraph --><p>' . esc_html( $event['description'] ) . '</p><!-- /wp:paragraph -->'
-			: '';
+	private static function create( array $event, array $extra, array &$report ): bool {
+		$publish = (bool) Wormiss_Settings::get( 'event_import_publish' );
+		$meta    = [
+			Wormiss_Event_Sync::META_EXISTING       => $event['id'],
+			Wormiss_Event_Sync::META_IMIS_ID        => $event['id'],
+			Wormiss_Event_Sync::META_LINKED         => 1,
+			Wormiss_Event_Sync::META_LINKED_DETAILS => $event,
+			Wormiss_Event_Sync::META_STATUS         => 'linked',
+			Wormiss_Event_Sync::META_MESSAGE        => sprintf(
+				/* translators: %s: iMIS event ID. */
+				__( 'Imported from iMIS event %s. Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' ),
+				$event['id']
+			),
+			self::META_IMPORTED                     => 1,
+			self::META_SOURCE                       => self::source_hash( $event, $extra ),
+		];
+		if ( $publish ) {
+			$meta[ self::META_PUBLISHED ] = 1;
+		}
 		// The link is saved with the page, so it is never queued to be sent to iMIS. Slashed, as
 		// WordPress strips one level of backslashes from what it saves.
 		$post_id = wp_insert_post(
 			wp_slash(
 				[
 					'post_type'    => Wormiss_Event_Sync::POST_TYPE,
-					'post_status'  => 'draft',
+					'post_status'  => $publish ? 'publish' : 'draft',
 					'post_title'   => $event['name'],
-					'post_content' => $content,
-					'meta_input'   => [
-						Wormiss_Event_Sync::META_EXISTING => $event['id'],
-						Wormiss_Event_Sync::META_IMIS_ID  => $event['id'],
-						Wormiss_Event_Sync::META_LINKED   => 1,
-						Wormiss_Event_Sync::META_LINKED_DETAILS => $event,
-						Wormiss_Event_Sync::META_STATUS   => 'linked',
-						Wormiss_Event_Sync::META_MESSAGE  => sprintf(
-							/* translators: %s: iMIS event ID. */
-							__( 'Imported from iMIS event %s. Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' ),
-							$event['id']
-						),
-						self::META_IMPORTED               => 1,
-					],
+					'post_content' => $extra['html'],
+					'meta_input'   => $meta,
 				]
 			),
 			true
@@ -322,37 +398,165 @@ class Wormiss_Event_Import {
 			self::note( $report, sprintf( __( 'Event %1$s: no page made (%2$s).', 'wormiss' ), $event['id'], $post_id->get_error_message() ) );
 			return false;
 		}
+		self::apply_extras( (int) $post_id, $event, $extra, $report );
 		return true;
 	}
 
 	/**
-	 * Bring a linked page's title and kept details up to date. Pages WordPress sent to iMIS, and
+	 * Bring a linked page up to date. Every linked page's title follows iMIS; pages the import
+	 * made also get iMIS's description, event type and image, and are published when Settings
+	 * says so (unless an editor has since unpublished them). Pages WordPress sent to iMIS, and
 	 * trashed pages, are left alone.
 	 *
 	 * @param int   $post_id Post ID.
 	 * @param array $event   Event from Wormiss_Events::normalise().
+	 * @param array $extra   From extras().
+	 * @param array $report  Report, for notes.
 	 * @return bool Whether the page was changed.
 	 */
-	private static function refresh( int $post_id, array $event ): bool {
-		if ( 'trash' === get_post_status( $post_id ) || ! get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED, true ) ) {
+	private static function refresh( int $post_id, array $event, array $extra, array &$report ): bool {
+		$status = get_post_status( $post_id );
+		if ( 'trash' === $status || ! get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED, true ) ) {
 			return false;
 		}
-		$changed = get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, true ) !== $event;
+		$imported = (bool) get_post_meta( $post_id, self::META_IMPORTED, true );
+		$changed  = get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, true ) !== $event;
 		if ( $changed ) {
 			update_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, wp_slash( $event ) );
 		}
-		if ( '' !== $event['name'] && get_post_field( 'post_title', $post_id, 'raw' ) !== $event['name'] ) {
-			wp_update_post(
-				wp_slash(
-					[
-						'ID'         => $post_id,
-						'post_title' => $event['name'],
-					]
-				)
-			);
+		$update = [];
+		if ( $imported ) {
+			// What iMIS sent changed: its name and description replace the page's.
+			$hash = self::source_hash( $event, $extra );
+			if ( get_post_meta( $post_id, self::META_SOURCE, true ) !== $hash ) {
+				$update['post_title']   = $event['name'];
+				$update['post_content'] = $extra['html'];
+				update_post_meta( $post_id, self::META_SOURCE, $hash );
+			}
+			// Live now (pages published by hand before this was tracked included): remember it.
+			if ( 'publish' === $status ) {
+				update_post_meta( $post_id, self::META_PUBLISHED, 1 );
+			}
+			// Once live, a draft means an editor took it down: it stays down.
+			if ( 'draft' === $status && Wormiss_Settings::get( 'event_import_publish' ) && ! get_post_meta( $post_id, self::META_PUBLISHED, true ) ) {
+				$update['post_status'] = 'publish';
+				update_post_meta( $post_id, self::META_PUBLISHED, 1 );
+			}
+		} elseif ( '' !== $event['name'] && get_post_field( 'post_title', $post_id, 'raw' ) !== $event['name'] ) {
+			$update['post_title'] = $event['name'];
+		}
+		if ( $update ) {
+			wp_update_post( wp_slash( array_merge( [ 'ID' => $post_id ], $update ) ) );
+			$changed = true;
+		}
+		if ( $imported && self::apply_extras( $post_id, $event, $extra, $report ) ) {
 			$changed = true;
 		}
 		return $changed;
+	}
+
+	/**
+	 * A fingerprint of what the page takes from iMIS (name and description), to tell when iMIS
+	 * changed them (comparing the saved page would see WordPress's own clean-up as a change).
+	 *
+	 * @param array $event Event from Wormiss_Events::normalise().
+	 * @param array $extra From extras().
+	 * @return string
+	 */
+	private static function source_hash( array $event, array $extra ): string {
+		return md5( $event['name'] . "\0" . $extra['html'] );
+	}
+
+	/**
+	 * Give an imported page its event type (from the iMIS category) and featured image (from
+	 * the iMIS event image).
+	 *
+	 * @param int   $post_id Post ID.
+	 * @param array $event   Event from Wormiss_Events::normalise().
+	 * @param array $extra   From extras().
+	 * @param array $report  Report, for notes.
+	 * @return bool Whether anything changed.
+	 */
+	private static function apply_extras( int $post_id, array $event, array $extra, array &$report ): bool {
+		$changed = false;
+		if ( '' !== $extra['category'] ) {
+			$term = get_term_by( 'name', $extra['category'], Wormiss_Event_Types::TAXONOMY );
+			if ( ! $term instanceof WP_Term ) {
+				$made = wp_insert_term( $extra['category'], Wormiss_Event_Types::TAXONOMY );
+				$term = is_wp_error( $made ) ? null : get_term( (int) $made['term_id'], Wormiss_Event_Types::TAXONOMY );
+				if ( $term instanceof WP_Term && '' !== $extra['category_id'] ) {
+					update_term_meta( $term->term_id, Wormiss_Event_Types::META_CATEGORY, $extra['category_id'] );
+				}
+			}
+			if ( $term instanceof WP_Term ) {
+				$now = wp_get_object_terms( $post_id, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] );
+				if ( ! is_array( $now ) || array_map( 'intval', $now ) !== [ $term->term_id ] ) {
+					wp_set_object_terms( $post_id, [ $term->term_id ], Wormiss_Event_Types::TAXONOMY );
+					$changed = true;
+				}
+			}
+		}
+		/**
+		 * Whether imported pages get the iMIS event image as their featured image.
+		 *
+		 * @param bool $download Download images (default true).
+		 */
+		$download = (bool) apply_filters( 'wormiss_event_import_images', true );
+		$image    = Wormiss_Events::absolute_url( (string) $event['image'] );
+		if ( '' === $image && '' !== (string) get_post_meta( $post_id, self::META_IMAGE, true ) ) {
+			// The image was taken off the event in iMIS: take the imported one off the page too,
+			// unless an editor has chosen a different one since.
+			$imported = (int) get_post_meta( $post_id, self::META_IMAGE_ID, true );
+			if ( $imported && get_post_thumbnail_id( $post_id ) === $imported ) {
+				delete_post_thumbnail( $post_id );
+				$changed = true;
+			}
+			delete_post_meta( $post_id, self::META_IMAGE );
+			delete_post_meta( $post_id, self::META_IMAGE_ID );
+		}
+		if ( $download && '' !== $image && get_post_meta( $post_id, self::META_IMAGE, true ) !== $image
+			&& self::set_image( $post_id, $image, $event, $report ) ) {
+			$changed = true;
+		}
+		return $changed;
+	}
+
+	/**
+	 * Download an image into the Media Library and make it the page's featured image.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $url     Image address.
+	 * @param array  $event   Event, for the image's name and notes.
+	 * @param array  $report  Report, for notes.
+	 * @return bool
+	 */
+	private static function set_image( int $post_id, string $url, array $event, array &$report ): bool {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		// Remembered whatever happens, so a broken image is not downloaded again every day.
+		update_post_meta( $post_id, self::META_IMAGE, $url );
+		$tmp = download_url( $url, 30 );
+		if ( is_wp_error( $tmp ) ) {
+			/* translators: 1: iMIS event ID, 2: reason. */
+			self::note( $report, sprintf( __( 'Event %1$s: its image could not be downloaded (%2$s).', 'wormiss' ), $event['id'], $tmp->get_error_message() ) );
+			return false;
+		}
+		$name       = sanitize_file_name( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
+		$file       = [
+			'name'     => '' !== $name ? $name : 'event-image.jpg',
+			'tmp_name' => $tmp,
+		];
+		$attachment = media_handle_sideload( $file, $post_id, $event['name'] );
+		if ( is_wp_error( $attachment ) ) {
+			wp_delete_file( $tmp );
+			/* translators: 1: iMIS event ID, 2: reason. */
+			self::note( $report, sprintf( __( 'Event %1$s: its image could not be added (%2$s).', 'wormiss' ), $event['id'], $attachment->get_error_message() ) );
+			return false;
+		}
+		set_post_thumbnail( $post_id, (int) $attachment );
+		update_post_meta( $post_id, self::META_IMAGE_ID, (int) $attachment );
+		return true;
 	}
 
 	/**
