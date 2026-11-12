@@ -96,13 +96,13 @@ class Test_Wormiss_Event_Numbers extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * A reply from the places IQA.
+	 * A reply from the places IQA, with the sign-in its new client needs first.
 	 *
 	 * @param int $taken Rows (places taken).
 	 * @return self
 	 */
 	private function places_reply( int $taken ): self {
-		$this->imis->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( array_fill( 0, $taken, [ 'ID' => '1' ] ) ) );
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( array_fill( 0, $taken, [ 'ID' => '1' ] ) ) );
 		return $this;
 	}
 
@@ -189,7 +189,6 @@ class Test_Wormiss_Event_Numbers extends Wormiss_Test_Case {
 		$this->assertNull( Wormiss_Events::places( self::listed() ) );
 
 		$this->settings( [ 'event_places_query' => self::PLACES_QUERY ] );
-		$this->imis->token();
 		$this->places_reply( 18 );
 		$places = Wormiss_Events::places( self::listed() );
 		$this->assertSame( 12, $places['left'] );
@@ -213,7 +212,7 @@ class Test_Wormiss_Event_Numbers extends Wormiss_Test_Case {
 
 		$this->assertNull( Wormiss_Events::places( self::listed( [ 'Capacity' => 0 ] ) ) );
 
-		$this->imis->fail( '/api/iqa' );
+		$this->imis->token()->fail( '/api/iqa' );
 		$this->assertNull( Wormiss_Events::places( self::listed( [ 'EventId' => 'OTHER' ] ) ) );
 	}
 

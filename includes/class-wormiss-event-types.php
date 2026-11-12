@@ -152,7 +152,7 @@ class Wormiss_Event_Types {
 	 * @return int
 	 */
 	public static function clean_number( $value ): int {
-		return min( 100000, absint( $value ) );
+		return is_numeric( $value ) ? min( 100000, max( 0, (int) $value ) ) : 0;
 	}
 
 	/**
