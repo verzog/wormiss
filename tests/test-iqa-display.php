@@ -130,7 +130,21 @@ class Test_Wormiss_Iqa_Display extends Wormiss_Test_Case {
 		);
 		$this->assertSame( 1, substr_count( $html, '<tr><td>' ) );
 
-		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'allowed_queries' => [ '$/Empty' ] ] ) );
+		update_option(
+			Wormiss_Settings::OPTION,
+			array_merge(
+				Wormiss_Settings::all(),
+				[
+					'allowed_queries' => [ '$/Empty' ],
+					'query_rules'     => [
+						'$/Empty' => [
+							'audience' => 'everyone',
+							'columns'  => [ 'EventName' ],
+						],
+					],
+				]
+			)
+		);
 		$this->serve( [] );
 		$html = Wormiss_Iqa_Display::render(
 			[

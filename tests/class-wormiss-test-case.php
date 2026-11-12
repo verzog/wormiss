@@ -55,6 +55,13 @@ abstract class Wormiss_Test_Case extends WP_UnitTestCase {
 					'base_url'        => 'https://imis.example.org',
 					'username'        => 'svc-wordpress',
 					'allowed_queries' => [ self::QUERY ],
+					'query_rules'     => [
+						self::QUERY => [
+							'audience' => 'everyone',
+							'columns'  => [ 'EventKey', 'EventName', 'StartDate', 'City', 'Online' ],
+							'people'   => false,
+						],
+					],
 					'member_queries'  => [ self::MEMBER_QUERY ],
 				]
 			)

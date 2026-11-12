@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.25.1
+Stable tag: 0.26.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -201,6 +201,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.26.0 =
+* Approved IQA queries are locked down. For each approved query, Wormiss > Settings sets who may see it (staff, signed-in members or everyone) and the only columns that may show; a page asking for other columns never gets them. A query that lists people (ticked, or with a column that looks personal: names, emails, phones, addresses, birth dates, IDs) is never shown on the website, to anyone, and is flagged in red. Only administrators can add the iMIS data block (it is hidden from other users' inserter) and its shortcode, and data only shows on pages an administrator made and last edited. The settings list the pages that show each query.
+* Upgrading: existing approved queries start as staff only with no columns, so they show nothing until an administrator sets them up.
 
 = 0.25.1 =
 * A lighter iMIS event import, so it no longer slows the site while it runs: iMIS's event list is read once at the start of an import and kept for its later batches (each batch used to read every event again); each batch makes or changes at most 5 pages and downloads at most 2 images (each image is saved in several sizes), every 2 minutes. A kept list older than 30 minutes is read again.

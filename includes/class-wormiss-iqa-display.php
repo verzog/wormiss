@@ -81,13 +81,151 @@ class Wormiss_Iqa_Display {
 			// Only queries an administrator has approved may be shown, whatever a page asks for.
 			return self::editor_notice( __( 'This iMIS query is not on the approved list (Wormiss > Settings).', 'wormiss' ) );
 		}
+		if ( ! self::placed_by_admin() ) {
+			return self::editor_notice( __( 'iMIS data only shows when an administrator added it (and last edited the page).', 'wormiss' ) );
+		}
+		$rule = Wormiss_Settings::query_rule( $query );
+		if ( self::lists_people( $query ) ) {
+			// Lists of people never go on the website, for anyone.
+			return self::editor_notice( __( 'This iMIS query lists people, so it is never shown on the website.', 'wormiss' ) );
+		}
+		if ( ! $rule['columns'] ) {
+			return self::editor_notice( __( 'Choose which columns of this iMIS query may show (Wormiss > Settings).', 'wormiss' ) );
+		}
+		if ( ! self::may_see( $rule['audience'] ) ) {
+			return self::editor_notice( __( 'This iMIS data is not shown to you (its audience is set in Wormiss > Settings).', 'wormiss' ) );
+		}
 
 		try {
 			$rows = self::get_rows( $query, self::parse_parameters( (string) $args['parameters'] ) );
 		} catch ( Wormiss_Exception $e ) {
 			return self::unavailable( $e->getMessage() );
 		}
+		// Only the allowed columns reach the page, whatever the block or shortcode asks for.
+		$allowed = array_fill_keys( $rule['columns'], true );
+		$rows    = array_map( static fn( $row ) => array_intersect_key( (array) $row, $allowed ), $rows );
 		return self::render_rows( $rows, $args );
+	}
+
+	/**
+	 * Column names that look like personal details (email, phone, address, birth date, a
+	 * person's name or ID, and so on).
+	 *
+	 * @param string $column Column name.
+	 * @return bool
+	 */
+	public static function is_personal_column( string $column ): bool {
+		$name = strtolower( (string) preg_replace( '/[^A-Za-z0-9]/', '', $column ) );
+		return 1 === preg_match(
+			'/e?mail|phone|mobile|fax|address|street|postcode|postal|zip|birth|dob|gender|firstname|lastname|surname|'
+				. 'fullname|informal|prefix|partyid|contactkey|contactid|imisid|memberid|customerid|username|login|password/',
+			$name
+		);
+	}
+
+	/**
+	 * Whether an approved query lists people: an administrator said so, or a column allowed to
+	 * show looks personal.
+	 *
+	 * @param string $query IQA path.
+	 * @return bool
+	 */
+	public static function lists_people( string $query ): bool {
+		$rule = Wormiss_Settings::query_rule( $query );
+		if ( $rule['people'] ) {
+			return true;
+		}
+		foreach ( $rule['columns'] as $column ) {
+			if ( self::is_personal_column( $column ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the visitor is in a query's audience.
+	 *
+	 * @param string $audience staff, members or everyone.
+	 * @return bool
+	 */
+	public static function may_see( string $audience ): bool {
+		if ( 'everyone' === $audience ) {
+			return true;
+		}
+		if ( 'members' === $audience ) {
+			return is_user_logged_in();
+		}
+		return current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * Whether the page showing the data was added and last edited by administrators. Outside a
+	 * page (e.g. a widget, which only administrators can change) it counts as theirs.
+	 *
+	 * @return bool
+	 */
+	public static function placed_by_admin(): bool {
+		$post = get_post();
+		if ( ! $post instanceof WP_Post ) {
+			return true;
+		}
+		$last = (int) get_post_meta( $post->ID, '_edit_last', true );
+		return user_can( (int) $post->post_author, 'manage_options' ) && ( 0 === $last || user_can( $last, 'manage_options' ) );
+	}
+
+	/**
+	 * The posts that show an approved query (in an iMIS data block or shortcode), by query.
+	 *
+	 * @return array query => WP_Post[]
+	 */
+	public static function where_used(): array {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- A search of post text; no API exists.
+		$ids  = $wpdb->get_col(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_status NOT IN ('auto-draft','inherit','trash')"
+			. " AND post_type NOT IN ('revision') AND ( post_content LIKE '%wp:wormiss/iqa%' OR post_content LIKE '%[wormiss_iqa%' )"
+			. ' ORDER BY ID LIMIT 500'
+		);
+		$used = [];
+		foreach ( $ids as $id ) {
+			$post = get_post( (int) $id );
+			if ( ! $post instanceof WP_Post ) {
+				continue;
+			}
+			foreach ( self::queries_in( $post->post_content ) as $query ) {
+				$used[ $query ][ $post->ID ] = $post;
+			}
+		}
+		return $used;
+	}
+
+	/**
+	 * The queries an iMIS data block or shortcode in some content shows.
+	 *
+	 * @param string $content Post content.
+	 * @return string[]
+	 */
+	public static function queries_in( string $content ): array {
+		$queries = [];
+		$walk    = static function ( array $blocks ) use ( &$walk, &$queries ): void {
+			foreach ( $blocks as $block ) {
+				if ( 'wormiss/iqa' === ( $block['blockName'] ?? '' ) && '' !== (string) ( $block['attrs']['query'] ?? '' ) ) {
+					$queries[] = (string) $block['attrs']['query'];
+				}
+				$walk( $block['innerBlocks'] ?? [] );
+			}
+		};
+		$walk( parse_blocks( $content ) );
+		if ( preg_match_all( '/' . get_shortcode_regex( [ 'wormiss_iqa' ] ) . '/', $content, $found, PREG_SET_ORDER ) ) {
+			foreach ( $found as $match ) {
+				$atts = shortcode_parse_atts( $match[3] );
+				if ( is_array( $atts ) && '' !== (string) ( $atts['query'] ?? '' ) ) {
+					$queries[] = (string) $atts['query'];
+				}
+			}
+		}
+		return array_values( array_unique( $queries ) );
 	}
 
 	/**
