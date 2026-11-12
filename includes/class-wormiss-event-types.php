@@ -41,6 +41,18 @@ class Wormiss_Event_Types {
 	/** Term meta: default capacity for events of this type (0 for none). */
 	const META_CAPACITY = 'wormiss_capacity';
 
+	/** Term meta: default minimum attendance for events of this type (0 for none). */
+	const META_MINIMUM = 'wormiss_minimum';
+
+	/** Term meta: default expected attendance for events of this type (0 for none). */
+	const META_EXPECTED = 'wormiss_expected';
+
+	/** Term meta: default waitlist permission (None, OnlyStaff, StaffAndPublicUsers; '' keeps iMIS's). */
+	const META_WAITLIST = 'wormiss_waitlist';
+
+	/** Term meta: default for releasing places to the waitlist automatically (yes, no; '' keeps iMIS's). */
+	const META_AUTO_RELEASE = 'wormiss_auto_release';
+
 	/** Term meta: what happened the last time the type's category was created in iMIS. */
 	const META_CATEGORY_STATUS = 'wormiss_category_status';
 
@@ -96,19 +108,28 @@ class Wormiss_Event_Types {
 				'rewrite'           => [ 'slug' => 'event-type' ],
 			]
 		);
-		register_term_meta(
-			self::TAXONOMY,
-			self::META_CAPACITY,
-			[
-				'type'              => 'integer',
-				'single'            => true,
-				'default'           => 0,
-				'show_in_rest'      => true,
-				'sanitize_callback' => static fn( $value ) => min( 100000, absint( $value ) ),
-				'auth_callback'     => static fn( $allowed, $meta_key, $term_id ) => current_user_can( 'edit_term', (int) $term_id ),
-			]
-		);
-		foreach ( [ self::META_TEMPLATE, self::META_CATEGORY ] as $key ) {
+		$auth = static fn( $allowed, $meta_key, $term_id ) => current_user_can( 'edit_term', (int) $term_id );
+		foreach ( [ self::META_CAPACITY, self::META_MINIMUM, self::META_EXPECTED ] as $key ) {
+			register_term_meta(
+				self::TAXONOMY,
+				$key,
+				[
+					'type'              => 'integer',
+					'single'            => true,
+					'default'           => 0,
+					'show_in_rest'      => true,
+					'sanitize_callback' => [ __CLASS__, 'clean_number' ],
+					'auth_callback'     => $auth,
+				]
+			);
+		}
+		$strings = [
+			self::META_TEMPLATE     => [ __CLASS__, 'clean_id' ],
+			self::META_CATEGORY     => [ __CLASS__, 'clean_category' ],
+			self::META_WAITLIST     => [ __CLASS__, 'clean_waitlist' ],
+			self::META_AUTO_RELEASE => [ __CLASS__, 'clean_yes_no' ],
+		];
+		foreach ( $strings as $key => $sanitize ) {
 			register_term_meta(
 				self::TAXONOMY,
 				$key,
@@ -117,11 +138,81 @@ class Wormiss_Event_Types {
 					'single'            => true,
 					'default'           => '',
 					'show_in_rest'      => true,
-					'sanitize_callback' => [ __CLASS__, 'clean_id' ],
-					'auth_callback'     => static fn( $allowed, $meta_key, $term_id ) => current_user_can( 'edit_term', (int) $term_id ),
+					'sanitize_callback' => $sanitize,
+					'auth_callback'     => $auth,
 				]
 			);
 		}
+	}
+
+	/**
+	 * A number of places or people: 0 to 100000.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public static function clean_number( $value ): int {
+		return min( 100000, absint( $value ) );
+	}
+
+	/**
+	 * An iMIS event category ID: letters, digits, _ and -, with / between parts (e.g. M/L), upper case.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string '' if it is not usable.
+	 */
+	public static function clean_category( $value ): string {
+		$id = strtoupper( trim( (string) $value ) );
+		return Wormiss_Rest_Client::is_category_id( $id ) ? $id : '';
+	}
+
+	/**
+	 * A waitlist permission as iMIS names it, or '' to keep iMIS's.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function clean_waitlist( $value ): string {
+		$value = trim( (string) $value );
+		return array_key_exists( $value, self::waitlist_options() ) ? $value : '';
+	}
+
+	/**
+	 * Yes, no, or '' (keep iMIS's).
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function clean_yes_no( $value ): string {
+		$value = strtolower( trim( (string) $value ) );
+		return in_array( $value, [ 'yes', 'no' ], true ) ? $value : '';
+	}
+
+	/**
+	 * Waitlist permissions: iMIS value => label ('' keeps iMIS's).
+	 *
+	 * @return string[]
+	 */
+	public static function waitlist_options(): array {
+		return [
+			''                    => __( 'Keep iMIS\'s setting', 'wormiss' ),
+			'None'                => __( 'No waitlist', 'wormiss' ),
+			'OnlyStaff'           => __( 'Staff can add people', 'wormiss' ),
+			'StaffAndPublicUsers' => __( 'Anyone can join', 'wormiss' ),
+		];
+	}
+
+	/**
+	 * Automatic release choices: value => label ('' keeps iMIS's).
+	 *
+	 * @return string[]
+	 */
+	public static function release_options(): array {
+		return [
+			''    => __( 'Keep iMIS\'s setting', 'wormiss' ),
+			'yes' => __( 'Offer freed places to the waitlist automatically', 'wormiss' ),
+			'no'  => __( 'Staff offer freed places', 'wormiss' ),
+		];
 	}
 
 	/**
@@ -140,13 +231,17 @@ class Wormiss_Event_Types {
 	 * template in Settings.
 	 *
 	 * @param int $post_id Event post ID.
-	 * @return array{template: string, category: string, type: string, problem: string}
+	 * @return array Keys: template, category, capacity, minimum, expected, waitlist, release, type, problem.
 	 */
 	public static function for_event( int $post_id ): array {
 		$out   = [
 			'template' => (string) Wormiss_Settings::get( 'event_template_id' ),
 			'category' => '',
 			'capacity' => 0,
+			'minimum'  => 0,
+			'expected' => 0,
+			'waitlist' => '',
+			'release'  => '',
 			'type'     => '',
 			'problem'  => '',
 		];
@@ -164,6 +259,10 @@ class Wormiss_Event_Types {
 		$out['template'] = '' !== $template ? $template : $out['template'];
 		$out['category'] = (string) get_term_meta( $term->term_id, self::META_CATEGORY, true );
 		$out['capacity'] = (int) get_term_meta( $term->term_id, self::META_CAPACITY, true );
+		$out['minimum']  = (int) get_term_meta( $term->term_id, self::META_MINIMUM, true );
+		$out['expected'] = (int) get_term_meta( $term->term_id, self::META_EXPECTED, true );
+		$out['waitlist'] = self::clean_waitlist( get_term_meta( $term->term_id, self::META_WAITLIST, true ) );
+		$out['release']  = self::clean_yes_no( get_term_meta( $term->term_id, self::META_AUTO_RELEASE, true ) );
 		return $out;
 	}
 
@@ -183,13 +282,23 @@ class Wormiss_Event_Types {
 				esc_html( $help )
 			);
 		}
-		printf(
-			'<div class="form-field"><label for="%1$s">%2$s</label>'
-				. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="" /><p>%3$s</p></div>',
-			esc_attr( self::META_CAPACITY ),
-			esc_html__( 'Default capacity', 'wormiss' ),
-			esc_html( self::capacity_help() )
-		);
+		foreach ( self::number_fields() as $key => [ $label, $help ] ) {
+			printf(
+				'<div class="form-field"><label for="%1$s">%2$s</label>'
+					. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="" /><p>%3$s</p></div>',
+				esc_attr( $key ),
+				esc_html( $label ),
+				esc_html( $help )
+			);
+		}
+		foreach ( self::select_fields() as $key => [ $label, $options ] ) {
+			printf(
+				'<div class="form-field"><label for="%1$s">%2$s</label>%3$s</div>',
+				esc_attr( $key ),
+				esc_html( $label ),
+				self::select( $key, $options, '' ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in select().
+			);
+		}
 		printf(
 			'<div class="form-field"><label><input type="checkbox" name="%1$s" value="1" /> %2$s</label><p>%3$s</p></div>',
 			esc_attr( self::FIELD_CREATE ),
@@ -216,16 +325,27 @@ class Wormiss_Event_Types {
 				esc_html( $help )
 			);
 		}
-		$capacity = (int) get_term_meta( $term->term_id, self::META_CAPACITY, true );
-		printf(
-			'<tr class="form-field"><th scope="row"><label for="%1$s">%2$s</label></th><td>'
-				. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="%3$s" />'
-				. '<p class="description">%4$s</p></td></tr>',
-			esc_attr( self::META_CAPACITY ),
-			esc_html__( 'Default capacity', 'wormiss' ),
-			esc_attr( $capacity > 0 ? (string) $capacity : '' ),
-			esc_html( self::capacity_help() )
-		);
+		foreach ( self::number_fields() as $key => [ $label, $help ] ) {
+			$number = (int) get_term_meta( $term->term_id, $key, true );
+			printf(
+				'<tr class="form-field"><th scope="row"><label for="%1$s">%2$s</label></th><td>'
+					. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="%3$s" />'
+					. '<p class="description">%4$s</p></td></tr>',
+				esc_attr( $key ),
+				esc_html( $label ),
+				esc_attr( $number > 0 ? (string) $number : '' ),
+				esc_html( $help )
+			);
+		}
+		foreach ( self::select_fields() as $key => [ $label, $options ] ) {
+			printf(
+				'<tr class="form-field"><th scope="row"><label for="%1$s">%2$s</label></th><td>%3$s</td></tr>',
+				esc_attr( $key ),
+				esc_html( $label ),
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in select().
+				self::select( $key, $options, (string) get_term_meta( $term->term_id, $key, true ) )
+			);
+		}
 		$status = (string) get_term_meta( $term->term_id, self::META_CATEGORY_STATUS, true );
 		printf(
 			'<tr class="form-field"><th scope="row">%1$s</th><td><label><input type="checkbox" name="%2$s" value="1" /> %3$s</label>'
@@ -242,12 +362,54 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * Help for the default capacity.
+	 * The number fields: meta key => [label, help].
 	 *
-	 * @return string
+	 * @return array
 	 */
-	private static function capacity_help(): string {
-		return __( 'Places for events of this type when an event leaves its own Capacity at 0. Blank keeps the template\'s.', 'wormiss' );
+	private static function number_fields(): array {
+		return [
+			self::META_CAPACITY => [
+				__( 'Default capacity', 'wormiss' ),
+				__( 'Places for events of this type when an event leaves its own Capacity at 0. Blank keeps the template\'s.', 'wormiss' ),
+			],
+			self::META_MINIMUM  => [
+				__( 'Default minimum attendance', 'wormiss' ),
+				__( 'The fewest people needed for the event to go ahead, when an event leaves its own at 0.', 'wormiss' ),
+			],
+			self::META_EXPECTED => [
+				__( 'Default expected attendance', 'wormiss' ),
+				__( 'How many people are expected, for planning, when an event leaves its own at 0.', 'wormiss' ),
+			],
+		];
+	}
+
+	/**
+	 * The drop-down fields: meta key => [label, options].
+	 *
+	 * @return array
+	 */
+	private static function select_fields(): array {
+		return [
+			self::META_WAITLIST     => [ __( 'Default waitlist', 'wormiss' ), self::waitlist_options() ],
+			self::META_AUTO_RELEASE => [ __( 'Default waitlist release', 'wormiss' ), self::release_options() ],
+		];
+	}
+
+	/**
+	 * A drop-down list.
+	 *
+	 * @param string   $key     Field name.
+	 * @param string[] $options Value => label.
+	 * @param string   $current Current value.
+	 * @return string HTML.
+	 */
+	private static function select( string $key, array $options, string $current ): string {
+		$html = '<select id="' . esc_attr( $key ) . '" name="' . esc_attr( $key ) . '">';
+		foreach ( $options as $value => $label ) {
+			$html .= '<option value="' . esc_attr( (string) $value ) . '"' . selected( $current, (string) $value, false ) . '>'
+				. esc_html( $label ) . '</option>';
+		}
+		return $html . '</select>';
 	}
 
 	/**
@@ -292,14 +454,21 @@ class Wormiss_Event_Types {
 		if ( ! wp_verify_nonce( $nonce, self::NONCE ) || ! current_user_can( 'edit_term', (int) $term_id ) ) {
 			return;
 		}
-		foreach ( array_keys( self::fields() ) as $key ) {
+		$cleaners = [
+			self::META_TEMPLATE     => [ __CLASS__, 'clean_id' ],
+			self::META_CATEGORY     => [ __CLASS__, 'clean_category' ],
+			self::META_WAITLIST     => [ __CLASS__, 'clean_waitlist' ],
+			self::META_AUTO_RELEASE => [ __CLASS__, 'clean_yes_no' ],
+		];
+		foreach ( $cleaners as $key => $clean ) {
 			if ( isset( $_POST[ $key ] ) ) {
-				$value = self::clean_id( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) );
-				update_term_meta( (int) $term_id, $key, $value );
+				update_term_meta( (int) $term_id, $key, $clean( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
 			}
 		}
-		if ( isset( $_POST[ self::META_CAPACITY ] ) ) {
-			update_term_meta( (int) $term_id, self::META_CAPACITY, min( 100000, absint( wp_unslash( $_POST[ self::META_CAPACITY ] ) ) ) );
+		foreach ( array_keys( self::number_fields() ) as $key ) {
+			if ( isset( $_POST[ $key ] ) ) {
+				update_term_meta( (int) $term_id, $key, self::clean_number( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
+			}
 		}
 		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) ) {
 			self::create_category( (int) $term_id );
@@ -339,7 +508,7 @@ class Wormiss_Event_Types {
 	 */
 	private static function send_category( string $category, WP_Term $term ): array {
 		if ( '' === $category ) {
-			return [ 'invalid', __( 'Add an iMIS event category ID (letters, digits, _ and -).', 'wormiss' ) ];
+			return [ 'invalid', __( 'Add an iMIS event category ID (letters, digits, _, - and /).', 'wormiss' ) ];
 		}
 		if ( ! Wormiss_Settings::get( 'event_sync_enabled' ) || ! Wormiss_Settings::is_configured() ) {
 			return [ 'off', __( 'Sending events to iMIS is off (Wormiss > Settings), so nothing was created.', 'wormiss' ) ];

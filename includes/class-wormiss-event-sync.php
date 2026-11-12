@@ -61,6 +61,21 @@ class Wormiss_Event_Sync {
 	/** Capacity (0 keeps the template's). */
 	const META_CAPACITY = '_wormiss_event_capacity';
 
+	/** Minimum attendance (0 uses the type's, if any). */
+	const META_MINIMUM = '_wormiss_event_minimum';
+
+	/** Expected attendance (0 uses the type's, if any). */
+	const META_EXPECTED = '_wormiss_event_expected';
+
+	/** Who may join the waitlist: None, OnlyStaff or StaffAndPublicUsers ('' uses the type's, else iMIS's). */
+	const META_WAITLIST = '_wormiss_event_waitlist';
+
+	/** Release freed places to the waitlist automatically: yes or no ('' uses the type's, else iMIS's). */
+	const META_AUTO_RELEASE = '_wormiss_event_auto_release';
+
+	/** Longest event code: iMIS event IDs are up to 10 characters. */
+	const CODE_LENGTH = 10;
+
 	/** The event's ID in iMIS, once created (set by the sync only). */
 	const META_IMIS_ID = '_wormiss_imis_event_id';
 
@@ -89,6 +104,8 @@ class Wormiss_Event_Sync {
 		add_action( self::CANCEL_HOOK, [ __CLASS__, 'cancel' ], 10, 2 );
 		add_action( 'enqueue_block_editor_assets', [ __CLASS__, 'editor_panel' ] );
 		add_filter( 'the_content', [ __CLASS__, 'details_box' ], 20 );
+		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', [ __CLASS__, 'columns' ] );
+		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', [ __CLASS__, 'column' ], 10, 2 );
 	}
 
 	/**
@@ -124,11 +141,13 @@ class Wormiss_Event_Sync {
 
 		$auth    = static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id );
 		$strings = [
-			self::META_CODE     => [ __CLASS__, 'clean_code' ],
-			self::META_START    => [ __CLASS__, 'clean_datetime' ],
-			self::META_END      => [ __CLASS__, 'clean_datetime' ],
-			self::META_LOCATION => 'sanitize_text_field',
-			self::META_ONLINE   => static fn( $value ) => (string) esc_url_raw( (string) $value, [ 'https', 'http' ] ),
+			self::META_CODE         => [ __CLASS__, 'clean_code' ],
+			self::META_START        => [ __CLASS__, 'clean_datetime' ],
+			self::META_END          => [ __CLASS__, 'clean_datetime' ],
+			self::META_LOCATION     => 'sanitize_text_field',
+			self::META_ONLINE       => static fn( $value ) => (string) esc_url_raw( (string) $value, [ 'https', 'http' ] ),
+			self::META_WAITLIST     => [ 'Wormiss_Event_Types', 'clean_waitlist' ],
+			self::META_AUTO_RELEASE => [ 'Wormiss_Event_Types', 'clean_yes_no' ],
 		];
 		foreach ( $strings as $key => $sanitize ) {
 			register_post_meta(
@@ -144,18 +163,20 @@ class Wormiss_Event_Sync {
 				]
 			);
 		}
-		register_post_meta(
-			self::POST_TYPE,
-			self::META_CAPACITY,
-			[
-				'type'              => 'integer',
-				'single'            => true,
-				'default'           => 0,
-				'show_in_rest'      => true,
-				'sanitize_callback' => static fn( $value ) => min( 100000, absint( $value ) ),
-				'auth_callback'     => $auth,
-			]
-		);
+		foreach ( [ self::META_CAPACITY, self::META_MINIMUM, self::META_EXPECTED ] as $key ) {
+			register_post_meta(
+				self::POST_TYPE,
+				$key,
+				[
+					'type'              => 'integer',
+					'single'            => true,
+					'default'           => 0,
+					'show_in_rest'      => true,
+					'sanitize_callback' => [ 'Wormiss_Event_Types', 'clean_number' ],
+					'auth_callback'     => $auth,
+				]
+			);
+		}
 		// Set by the sync, so not editable meta (the editor sends all of its meta back on every save):
 		// the editor reads them from a separate read-only field.
 		register_rest_field(
@@ -193,18 +214,36 @@ class Wormiss_Event_Sync {
 			'message'  => (string) get_post_meta( $post_id, self::META_MESSAGE, true ),
 			// The template a new event would be copied from, as saved (type or default).
 			'template' => $post_id ? Wormiss_Event_Types::for_event( $post_id )['template'] : '',
+			// Places left in iMIS, in words ('' if not known).
+			'places'   => $post_id ? self::places_text( $post_id ) : '',
 		];
 	}
 
 	/**
-	 * An event code: letters, digits, _ and - only (as an iMIS event ID), upper case.
+	 * Places left on a sent event, in words, or ''.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return string
+	 */
+	private static function places_text( int $post_id ): string {
+		$imis_id = (string) get_post_meta( $post_id, self::META_IMIS_ID, true );
+		if ( '' === $imis_id || '' === (string) Wormiss_Settings::get( 'event_places_query' ) ) {
+			return '';
+		}
+		$listed = self::listed_event( $imis_id );
+		$places = null !== $listed ? Wormiss_Events::places( $listed ) : null;
+		return null !== $places ? Wormiss_Events::places_text( $places ) : '';
+	}
+
+	/**
+	 * An event code: letters, digits, _ and - only (as an iMIS event ID), up to 10, upper case.
 	 *
 	 * @param mixed $value Raw value.
 	 * @return string '' if it is not usable.
 	 */
 	public static function clean_code( $value ): string {
 		$code = strtoupper( trim( (string) $value ) );
-		return Wormiss_Rest_Client::is_event_id( $code ) ? $code : '';
+		return ( strlen( $code ) <= self::CODE_LENGTH && Wormiss_Rest_Client::is_event_id( $code ) ) ? $code : '';
 	}
 
 	/**
@@ -371,9 +410,25 @@ class Wormiss_Event_Sync {
 			'end'          => (string) $meta( self::META_END ),
 			'location'     => (string) $meta( self::META_LOCATION ),
 			'online'       => (string) $meta( self::META_ONLINE ),
-			// The event's own capacity, else its type's default (0 keeps the template's).
+			// The event's own numbers, else its type's defaults (0 keeps what iMIS has).
 			'capacity'     => (int) $meta( self::META_CAPACITY ) > 0 ? (int) $meta( self::META_CAPACITY ) : $type['capacity'],
+			'minimum'      => (int) $meta( self::META_MINIMUM ) > 0 ? (int) $meta( self::META_MINIMUM ) : $type['minimum'],
+			'expected'     => (int) $meta( self::META_EXPECTED ) > 0 ? (int) $meta( self::META_EXPECTED ) : $type['expected'],
+			// The event's own waitlist settings, else its type's ('' keeps what iMIS has).
+			'waitlist'     => self::own_or( (string) $meta( self::META_WAITLIST ), $type['waitlist'] ),
+			'release'      => self::own_or( (string) $meta( self::META_AUTO_RELEASE ), $type['release'] ),
 		];
+	}
+
+	/**
+	 * The event's own setting, or the fallback when it has none.
+	 *
+	 * @param string $own      The event's value.
+	 * @param string $fallback The type's value.
+	 * @return string
+	 */
+	private static function own_or( string $own, string $fallback ): string {
+		return '' !== $own ? $own : $fallback;
 	}
 
 	/**
@@ -391,7 +446,16 @@ class Wormiss_Event_Sync {
 			return __( 'No iMIS template event: give this event type one, or set the default in Wormiss > Settings.', 'wormiss' );
 		}
 		if ( '' === $details['code'] ) {
-			return __( 'Add an event code (letters, digits, _ and - only).', 'wormiss' );
+			return __( 'Add an event code (letters, digits, _ and - only, up to 10 characters).', 'wormiss' );
+		}
+		$minimum  = (int) ( $details['minimum'] ?? 0 );
+		$expected = (int) ( $details['expected'] ?? 0 );
+		$capacity = (int) ( $details['capacity'] ?? 0 );
+		if ( $capacity > 0 && max( $minimum, $expected ) > $capacity ) {
+			return __( 'The minimum and expected attendance cannot be more than the capacity.', 'wormiss' );
+		}
+		if ( $minimum > 0 && $expected > 0 && $minimum > $expected ) {
+			return __( 'The minimum attendance is more than the expected attendance.', 'wormiss' );
 		}
 		if ( '' === trim( $details['name'] ) ) {
 			return __( 'Add a title.', 'wormiss' );
@@ -425,6 +489,25 @@ class Wormiss_Event_Sync {
 		if ( $details['capacity'] > 0 ) {
 			$event->Capacity = $details['capacity'];
 		}
+		if ( '' !== ( $details['waitlist'] ?? '' ) ) {
+			$event->WaitlistPermissions = self::enum_value( $event->WaitlistPermissions ?? null, $details['waitlist'] );
+		}
+		if ( '' !== ( $details['release'] ?? '' ) ) {
+			$event->AutomaticallyReleaseFromWaitlist = 'yes' === $details['release'];
+		}
+		// Minimum and expected attendance belong to the event's main registration option.
+		$minimum  = (int) ( $details['minimum'] ?? 0 );
+		$expected = (int) ( $details['expected'] ?? 0 );
+		$options  = $event->RegistrationOptions->{'$values'} ?? null;
+		$option   = is_array( $options ) ? reset( $options ) : null;
+		if ( is_object( $option ) ) {
+			if ( $minimum > 0 ) {
+				$option->MinimumAttendance = $minimum;
+			}
+			if ( $expected > 0 ) {
+				$option->ExpectedAttendance = $expected;
+			}
+		}
 		if ( '' !== ( $details['category'] ?? '' ) ) {
 			// The type's category replaces whatever the event had (its name comes from iMIS).
 			$event->Category = (object) [
@@ -444,6 +527,21 @@ class Wormiss_Event_Sync {
 		}
 		// phpcs:enable
 		return $event;
+	}
+
+	/**
+	 * An iMIS enum value in the same shape iMIS sent it: plain, or wrapped in {"$type","$value"}.
+	 *
+	 * @param mixed  $current The value iMIS sent.
+	 * @param string $value   The new value.
+	 * @return mixed
+	 */
+	private static function enum_value( $current, string $value ) {
+		if ( is_object( $current ) && property_exists( $current, '$value' ) && is_string( $current->{'$value'} ) ) {
+			$current->{'$value'} = $value;
+			return $current;
+		}
+		return $value;
 	}
 
 	/**
@@ -563,17 +661,26 @@ class Wormiss_Event_Sync {
 		if ( '' !== $where ) {
 			$rows .= '<dt>' . esc_html__( 'Where', 'wormiss' ) . '</dt><dd>' . esc_html( $where ) . '</dd>';
 		}
+		if ( '' !== $details['code'] ) {
+			$rows .= '<dt>' . esc_html__( 'Event code', 'wormiss' ) . '</dt><dd>' . esc_html( $details['code'] ) . '</dd>';
+		}
 		$imis_id = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
-		$url     = '' !== $imis_id ? Wormiss_Events::event_url(
+		// The event as iMIS lists it (cached), for places left and the Register button.
+		$wanted = Wormiss_Event_Registration::is_on() || '' !== (string) Wormiss_Settings::get( 'event_places_query' );
+		$listed = ( '' !== $imis_id && $wanted ) ? self::listed_event( $imis_id ) : null;
+		$places = null !== $listed ? Wormiss_Events::places( $listed ) : null;
+		if ( null !== $places ) {
+			$rows .= '<dt>' . esc_html__( 'Places', 'wormiss' ) . '</dt><dd>' . esc_html( Wormiss_Events::places_text( $places ) ) . '</dd>';
+		}
+		$url = '' !== $imis_id ? Wormiss_Events::event_url(
 			[
 				'id'   => $imis_id,
 				'code' => $details['code'],
 			]
 		) : '';
-		$box     = '' !== $rows ? '<dl class="wormiss-event-details">' . $rows . '</dl>' : '';
+		$box = '' !== $rows ? '<dl class="wormiss-event-details">' . $rows . '</dl>' : '';
 		// A free event: register (or cancel) here instead of linking to iMIS.
-		$listed = ( '' !== $imis_id && Wormiss_Event_Registration::is_on() ) ? self::listed_event( $imis_id ) : null;
-		$button = null !== $listed ? Wormiss_Event_Registration::button( $listed, true ) : '';
+		$button = ( null !== $listed && Wormiss_Event_Registration::is_on() ) ? Wormiss_Event_Registration::button( $listed, true ) : '';
 		if ( '' !== $button ) {
 			return $box . $button . $content;
 		}
@@ -582,5 +689,52 @@ class Wormiss_Event_Sync {
 				. esc_html__( 'Register', 'wormiss' ) . '</a></p>';
 		}
 		return $box . $content;
+	}
+
+	/**
+	 * Add the event code and iMIS columns to the Events list.
+	 *
+	 * @param string[] $columns Columns.
+	 * @return string[]
+	 */
+	public static function columns( array $columns ): array {
+		$out = [];
+		foreach ( $columns as $key => $label ) {
+			$out[ $key ] = $label;
+			if ( 'title' === $key ) {
+				$out['wormiss_code'] = __( 'Event code', 'wormiss' );
+				$out['wormiss_imis'] = __( 'iMIS', 'wormiss' );
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The event code and iMIS column values.
+	 *
+	 * @param string $column  Column name.
+	 * @param int    $post_id Post ID.
+	 * @return void
+	 */
+	public static function column( $column, $post_id ): void {
+		if ( 'wormiss_code' === $column ) {
+			echo esc_html( (string) get_post_meta( (int) $post_id, self::META_CODE, true ) );
+		} elseif ( 'wormiss_imis' === $column ) {
+			$imis_id = (string) get_post_meta( (int) $post_id, self::META_IMIS_ID, true );
+			$status  = (string) get_post_meta( (int) $post_id, self::META_STATUS, true );
+			$labels  = [
+				'queued'    => __( 'Waiting to be sent', 'wormiss' ),
+				'dry_run'   => __( 'Dry run', 'wormiss' ),
+				'synced'    => __( 'Saved', 'wormiss' ),
+				'error'     => __( 'Problem', 'wormiss' ),
+				'cancelled' => __( 'Cancelled', 'wormiss' ),
+			];
+			$text    = $labels[ $status ] ?? '';
+			if ( '' !== $imis_id ) {
+				/* translators: %s: iMIS event ID. */
+				$text = trim( $text . ' ' . sprintf( __( '(%s)', 'wormiss' ), $imis_id ) );
+			}
+			echo esc_html( '' !== $text ? $text : '—' );
+		}
 	}
 }

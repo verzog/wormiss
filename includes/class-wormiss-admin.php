@@ -284,6 +284,8 @@ class Wormiss_Admin {
 		add_settings_section( 'wormiss_events', __( 'iMIS events', 'wormiss' ), [ __CLASS__, 'events_intro' ], self::PAGE );
 		self::field( 'event_statuses', __( 'Event statuses to show', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_places_query', __( 'Places count IQA', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_publish_dates', __( 'Follow iMIS publish dates', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_registration_enabled', __( 'Members register for free events here', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_registration_dry_run', __( 'Registration dry run (log only)', 'wormiss' ), 'wormiss_events' );
 
@@ -581,6 +583,20 @@ class Wormiss_Admin {
 					. esc_html__( 'iMIS event status codes, comma-separated (default A, for active). Blank shows any status.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'event_places_query':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'Shows "12 of 30 places left" or "Full" on event pages.', 'wormiss' )
+					. ' ' . esc_html__( 'An IQA path with one prompt, the event ID, returning one row per place taken', 'wormiss' )
+					. ' ' . esc_html__( '(or a Registered column). Leave out cancelled and waitlisted registrations.', 'wormiss' )
+					. ' ' . esc_html__( 'A capacity of 1000 or more shows "Places available". Blank shows no places.', 'wormiss' )
+					. '</p>';
+				return;
 			case 'user_sync_query':
 				printf(
 					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
@@ -659,6 +675,7 @@ class Wormiss_Admin {
 			case 'user_sync_dry_run':
 			case 'event_registration_enabled':
 			case 'event_registration_dry_run':
+			case 'event_publish_dates':
 			case 'event_sync_enabled':
 			case 'event_sync_dry_run':
 			case 'event_cancel_on_trash':
@@ -672,6 +689,11 @@ class Wormiss_Admin {
 					echo ' <span class="description">'
 						. esc_html__( 'Free events (registration required, no fee) get Register and Cancel buttons for', 'wormiss' )
 						. ' ' . esc_html__( 'signed-in members. Paid events still link to iMIS.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'event_publish_dates' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Only list events between their publish date and expiry date in iMIS.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'record_purchases' === $key ) {
