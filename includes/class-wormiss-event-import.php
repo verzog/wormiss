@@ -52,6 +52,9 @@ class Wormiss_Event_Import {
 	/** Post meta: the iMIS image address last used for the featured image. */
 	const META_IMAGE = '_wormiss_event_import_image';
 
+	/** Post meta: the attachment the import made the featured image. */
+	const META_IMAGE_ID = '_wormiss_event_import_image_id';
+
 	/** Most pages made in one run (the rest come on the next run). */
 	const MAX_CREATE = 100;
 
@@ -76,6 +79,24 @@ class Wormiss_Event_Import {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
 		add_action( 'init', [ __CLASS__, 'maybe_schedule' ] );
 		add_action( 'admin_post_wormiss_event_import_now', [ __CLASS__, 'handle_run_now' ] );
+		add_action( 'transition_post_status', [ __CLASS__, 'note_published' ], 10, 3 );
+	}
+
+	/**
+	 * Remember that an imported page has been live, whoever published it, so that once an
+	 * editor takes it down the import never publishes it again.
+	 *
+	 * @param string  $new_status New status.
+	 * @param string  $old_status Old status.
+	 * @param WP_Post $post       Post.
+	 * @return void
+	 */
+	public static function note_published( $new_status, $old_status, $post ): void {
+		unset( $old_status ); // Only where the page is going matters.
+		if ( 'publish' === $new_status && $post instanceof WP_Post && Wormiss_Event_Sync::POST_TYPE === $post->post_type
+			&& get_post_meta( $post->ID, self::META_IMPORTED, true ) ) {
+			update_post_meta( $post->ID, self::META_PUBLISHED, 1 );
+		}
 	}
 
 	/**
@@ -412,7 +433,11 @@ class Wormiss_Event_Import {
 				$update['post_content'] = $extra['html'];
 				update_post_meta( $post_id, self::META_SOURCE, $hash );
 			}
-			// Published once by the import; a draft now means an editor unpublished it.
+			// Live now (pages published by hand before this was tracked included): remember it.
+			if ( 'publish' === $status ) {
+				update_post_meta( $post_id, self::META_PUBLISHED, 1 );
+			}
+			// Once live, a draft means an editor took it down: it stays down.
 			if ( 'draft' === $status && Wormiss_Settings::get( 'event_import_publish' ) && ! get_post_meta( $post_id, self::META_PUBLISHED, true ) ) {
 				$update['post_status'] = 'publish';
 				update_post_meta( $post_id, self::META_PUBLISHED, 1 );
@@ -478,6 +503,17 @@ class Wormiss_Event_Import {
 		 */
 		$download = (bool) apply_filters( 'wormiss_event_import_images', true );
 		$image    = Wormiss_Events::absolute_url( (string) $event['image'] );
+		if ( '' === $image && '' !== (string) get_post_meta( $post_id, self::META_IMAGE, true ) ) {
+			// The image was taken off the event in iMIS: take the imported one off the page too,
+			// unless an editor has chosen a different one since.
+			$imported = (int) get_post_meta( $post_id, self::META_IMAGE_ID, true );
+			if ( $imported && get_post_thumbnail_id( $post_id ) === $imported ) {
+				delete_post_thumbnail( $post_id );
+				$changed = true;
+			}
+			delete_post_meta( $post_id, self::META_IMAGE );
+			delete_post_meta( $post_id, self::META_IMAGE_ID );
+		}
 		if ( $download && '' !== $image && get_post_meta( $post_id, self::META_IMAGE, true ) !== $image
 			&& self::set_image( $post_id, $image, $event, $report ) ) {
 			$changed = true;
@@ -519,6 +555,7 @@ class Wormiss_Event_Import {
 			return false;
 		}
 		set_post_thumbnail( $post_id, (int) $attachment );
+		update_post_meta( $post_id, self::META_IMAGE_ID, (int) $attachment );
 		return true;
 	}
 

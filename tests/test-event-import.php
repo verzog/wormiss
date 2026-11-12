@@ -539,6 +539,51 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		Wormiss_Event_Import::run();
 		$this->assertSame( 1, $downloads );
 		remove_filter( 'pre_http_request', $image, 20 );
+
+		// Taken off the event in iMIS: taken off the page.
+		$this->serve( [ self::imis_event( 'IMG26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertFalse( has_post_thumbnail( $post_id ) );
+	}
+
+	/**
+	 * An image an editor chose instead is kept when iMIS drops the event's image.
+	 *
+	 * @return void
+	 */
+	public function test_editors_image_kept(): void {
+		$this->serve( [ self::imis_event( 'OWN26' ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'OWN26' )[0];
+		$own     = self::factory()->attachment->create_object( 'own.jpg', $post_id, [ 'post_mime_type' => 'image/jpeg' ] );
+		set_post_thumbnail( $post_id, $own );
+		update_post_meta( $post_id, Wormiss_Event_Import::META_IMAGE, 'https://imis.example.org/images/old.png' );
+		update_post_meta( $post_id, Wormiss_Event_Import::META_IMAGE_ID, $own + 1000 );
+		$this->serve( [ self::imis_event( 'OWN26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( $own, get_post_thumbnail_id( $post_id ) );
+	}
+
+	/**
+	 * A page an editor published by hand and later took down is not published again.
+	 *
+	 * @return void
+	 */
+	public function test_hand_published_page_stays_down(): void {
+		$this->serve( [ self::imis_event( 'HAND26' ) ] );
+		Wormiss_Event_Import::run();
+		$post_id = self::pages( 'HAND26' )[0];
+		wp_publish_post( $post_id );
+		wp_update_post(
+			[
+				'ID'          => $post_id,
+				'post_status' => 'draft',
+			]
+		);
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_publish' => true ] ) );
+		$this->serve( [ self::imis_event( 'HAND26' ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( 'draft', get_post_status( $post_id ) );
 	}
 
 	/**
