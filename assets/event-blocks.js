@@ -322,18 +322,25 @@
 		save: () => null,
 	});
 
-	// Events open inside their page template, also before WordPress 6.8 (which does it itself).
+	// Events open inside their page template on any WordPress version: once the editor is
+	// ready (switching earlier is undone as it finishes loading), unless this editor chose
+	// otherwise ("Show template" off, which WordPress remembers).
 	const unsubscribe = wp.data.subscribe(() => {
 		const editor = wp.data.select('core/editor');
-		if (!editor || !editor.getCurrentPostType || !editor.getCurrentPostType()) {
+		const ready = editor && (editor.__unstableIsEditorReady ? editor.__unstableIsEditorReady() : !!editor.getCurrentPostType());
+		if (!ready || !editor.getCurrentPostType()) {
 			return;
 		}
 		unsubscribe();
+		if (POST_TYPE !== editor.getCurrentPostType() || !editor.getRenderingMode || 'post-only' !== editor.getRenderingMode()) {
+			return;
+		}
+		const theme = (wp.data.select('core').getCurrentTheme() || {}).stylesheet;
+		const preferences = wp.data.select('core/preferences');
+		const chosen = preferences && ((preferences.get('core', 'renderingModes') || {})[theme] || {})[POST_TYPE];
 		const settings = editor.getEditorSettings ? editor.getEditorSettings() : {};
-		const actions = wp.data.dispatch('core/editor');
-		if (POST_TYPE === editor.getCurrentPostType() && settings.supportsTemplateMode && actions.setRenderingMode
-			&& editor.getRenderingMode && 'post-only' === editor.getRenderingMode()) {
-			actions.setRenderingMode('template-locked');
+		if (!chosen && settings.supportsTemplateMode) {
+			wp.data.dispatch('core/editor').setRenderingMode('template-locked');
 		}
 	});
 })(window.wp);
