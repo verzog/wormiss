@@ -58,11 +58,23 @@ class Wormiss_Event_Import {
 	/** Cron hook that carries on an import with more changes than one batch. */
 	const MORE_HOOK = 'wormiss_event_import_more';
 
-	/** Most pages made or changed in one run (each can mean an image download), so it never times out. */
-	const BATCH = 20;
+	/**
+	 * Most pages made or changed in one run. Kept small: runs happen in the background during
+	 * visits to the site, so each must be light.
+	 */
+	const BATCH = 5;
+
+	/** Most images downloaded in one run (each is saved in several sizes, which is heavy). */
+	const MAX_IMAGES = 2;
 
 	/** Seconds before the next batch runs. */
-	const BATCH_GAP = MINUTE_IN_SECONDS;
+	const BATCH_GAP = 2 * MINUTE_IN_SECONDS;
+
+	/** Option: the events read at the start of an import, kept for its later batches. */
+	const LIST_OPTION = 'wormiss_event_import_list';
+
+	/** Seconds the kept list is used for; an older one is read again from iMIS. */
+	const LIST_MAX_AGE = 30 * MINUTE_IN_SECONDS;
 
 	/** Option: the iMIS event IDs this import has already dealt with (event ID => true). */
 	const DONE_OPTION = 'wormiss_event_import_done';
@@ -78,6 +90,13 @@ class Wormiss_Event_Import {
 
 	/** Most notes kept in a report. */
 	const MAX_NOTES = 20;
+
+	/**
+	 * Images downloaded so far in this run.
+	 *
+	 * @var int
+	 */
+	private static $images = 0;
 
 	/**
 	 * Hook in.
@@ -176,7 +195,7 @@ class Wormiss_Event_Import {
 			return $report;
 		}
 		try {
-			return self::import( $report, $done );
+			return self::import( $report, $done, true === $carry_on );
 		} finally {
 			delete_option( self::LOCK_OPTION );
 		}
@@ -229,12 +248,21 @@ class Wormiss_Event_Import {
 	/**
 	 * Read the events and make or update their pages.
 	 *
-	 * @param array $report Report so far.
-	 * @param array $done   iMIS event IDs earlier batches of this import dealt with (ID => true).
+	 * @param array $report   Report so far.
+	 * @param array $done     iMIS event IDs earlier batches of this import dealt with (ID => true).
+	 * @param bool  $carry_on A later batch, which uses the list the import read at its start.
 	 * @return array The report.
 	 */
-	private static function import( array $report, array $done ): array {
-		$since = (string) Wormiss_Settings::get( 'event_import_since' );
+	private static function import( array $report, array $done, bool $carry_on = false ): array {
+		self::$images = 0;
+		$since        = (string) Wormiss_Settings::get( 'event_import_since' );
+		// A later batch uses the list read at the start, rather than reading every event from
+		// iMIS again for each batch of a few pages (the heaviest part of a run).
+		$kept = $carry_on ? get_option( self::LIST_OPTION ) : false;
+		if ( is_array( $kept ) && (int) ( $kept['time'] ?? 0 ) > time() - self::LIST_MAX_AGE
+			&& is_array( $kept['events'] ?? null ) && is_array( $kept['extras'] ?? null ) ) {
+			return self::write( $report, $done, $kept['events'], $kept['extras'], (int) $kept['time'] );
+		}
 		// The read starts at the earlier of the past-events date and the usual lookback, so events
 		// under way are never missed; the date only limits finished events (with_past()).
 		$lookback = (string) wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
@@ -270,9 +298,23 @@ class Wormiss_Event_Import {
 		}
 		// The events the events block shows (real, public, listed statuses, not finished), plus
 		// finished ones since the past-events date when one is set.
-		$events         = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
+		$events = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
+		return self::write( $report, $done, $events, $extras, time() );
+	}
+
+	/**
+	 * Make or update one batch of pages from the events read.
+	 *
+	 * @param array   $report Report so far.
+	 * @param array   $done   iMIS event IDs earlier batches dealt with (ID => true).
+	 * @param array[] $events Events to import (normalised).
+	 * @param array   $extras Each event's extras (ID => extras()).
+	 * @param int     $read   When the events were read from iMIS.
+	 * @return array The report.
+	 */
+	private static function write( array $report, array $done, array $events, array $extras, int $read ): array {
 		$report['read'] = count( $events );
-		// At most BATCH page changes per run; the rest carry on in the background a minute later.
+		// At most BATCH page changes per run; the rest carry on in the background BATCH_GAP later.
 		// Batches remember the events they dealt with by ID (not by place in the list, which
 		// shifts as events finish or change), so none is skipped and none holds others back.
 		$writes = 0;
@@ -281,7 +323,7 @@ class Wormiss_Event_Import {
 			if ( isset( $done[ $event['id'] ] ) ) {
 				continue;
 			}
-			if ( $writes >= self::BATCH ) {
+			if ( $writes >= self::BATCH || self::$images >= self::MAX_IMAGES ) {
 				++$todo;
 				continue;
 			}
@@ -306,6 +348,15 @@ class Wormiss_Event_Import {
 		$report['remaining'] = $todo;
 		if ( $todo > 0 ) {
 			update_option( self::DONE_OPTION, $done, false );
+			update_option(
+				self::LIST_OPTION,
+				[
+					'time'   => $read,
+					'events' => $events,
+					'extras' => $extras,
+				],
+				false
+			);
 			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
 				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
 			}
@@ -320,6 +371,7 @@ class Wormiss_Event_Import {
 			);
 		} else {
 			delete_option( self::DONE_OPTION );
+			delete_option( self::LIST_OPTION );
 		}
 		return self::save( $report );
 	}
@@ -595,6 +647,7 @@ class Wormiss_Event_Import {
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 		// Remembered whatever happens, so a broken image is not downloaded again every day.
 		update_post_meta( $post_id, self::META_IMAGE, $url );
+		++self::$images;
 		$tmp = download_url( $url, 30 );
 		if ( is_wp_error( $tmp ) ) {
 			/* translators: 1: iMIS event ID, 2: reason. */
