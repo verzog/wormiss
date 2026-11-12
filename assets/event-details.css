@@ -1,0 +1,57 @@
+/* "Event details" box under an Event's content. */
+.wormiss-tabs__list {
+	border-bottom: 1px solid #c3c4c7;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 0 0 16px;
+}
+
+.wormiss-tabs__tab {
+	background: none;
+	border: 0;
+	border-bottom: 3px solid transparent;
+	color: #1e1e1e;
+	cursor: pointer;
+	font-size: 13px;
+	padding: 10px 14px;
+}
+
+.wormiss-tabs__tab[aria-selected="true"] {
+	border-bottom-color: var(--wp-admin-theme-color, #2271b1);
+	font-weight: 600;
+}
+
+.wormiss-tabs__tab:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+	outline-offset: -2px;
+}
+
+.wormiss-tabs--ready .wormiss-tabs__heading {
+	display: none;
+}
+
+.wormiss-fields {
+	display: grid;
+	gap: 12px 24px;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.wormiss-field {
+	margin: 0;
+}
+
+.wormiss-field label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.wormiss-field select {
+	width: 100%;
+}
+
+.wormiss-field .description {
+	display: block;
+	margin-top: 4px;
+}
