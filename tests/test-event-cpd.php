@@ -27,6 +27,7 @@
  *
  * @covers Wormiss_Event_Cpd
  * @covers Wormiss_Rest_Client::get_entities
+ * @covers Wormiss_Rest_Client::entity_path
  */
 class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 
@@ -232,5 +233,214 @@ class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 		$this->assertStringContainsString( '>CPD hours</button>', $html );
 		$this->assertStringContainsString( '<td>1.5</td><td>2</td><td>0</td><td>Addressing health inequities</td>', $html );
 		$this->assertStringContainsString( '<td>(None)</td>', $html );
+	}
+
+	/**
+	 * A WordPress event whose CPD is set here, already in iMIS as CSCM_JUL26.
+	 *
+	 * @param array[] $rows Rows set here.
+	 * @return int Post ID.
+	 */
+	private function own_event( array $rows ): int {
+		$post_id = self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Event_Sync::POST_TYPE,
+				'post_title'  => 'Certificate July 2026',
+				'post_status' => 'draft',
+			]
+		);
+		update_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, 'CSCM_JUL26' );
+		update_post_meta( $post_id, Wormiss_Event_Cpd::META, $rows );
+		return $post_id;
+	}
+
+	/**
+	 * Two lines in iMIS: 28 (20.5 / 14.25 / 0, no requirement) and 30.
+	 *
+	 * @return array
+	 */
+	private static function imis_lines(): array {
+		return Wormiss_Fake_Imis::page(
+			[
+				[
+					'EventKey'                   => 'CSCM_JUL26',
+					'Ordinal'                    => 28,
+					'EducationPoints'            => 20.5,
+					'ReviewingPerformancePoints' => 14.25,
+					'MeasuringOutcomesPoints'    => 0,
+					'ProgramLevelRequirements'   => '',
+				],
+				[
+					'EventKey'                   => 'CSCM_JUL26',
+					'Ordinal'                    => 30,
+					'EducationPoints'            => 1,
+					'ReviewingPerformancePoints' => 0,
+					'MeasuringOutcomesPoints'    => 0,
+					'ProgramLevelRequirements'   => 'Culturally safe practice',
+				],
+			]
+		);
+	}
+
+	/**
+	 * Lines from the tab are cleaned: hours from 0 to 1000 to two places, a requirement only
+	 * from iMIS's list, blank new lines and lines marked Remove left out.
+	 *
+	 * @return void
+	 */
+	public function test_clean_rows(): void {
+		$rows = Wormiss_Event_Cpd::clean_rows(
+			[
+				[
+					'education'   => '1,5',
+					'reviewing'   => '-3',
+					'outcomes'    => '5000',
+					'requirement' => 'Addressing health inequities',
+					'ordinal'     => '28',
+				],
+				[
+					'education'   => '2.125',
+					'requirement' => 'Something else',
+				],
+				[ 'education' => '' ],
+				[
+					'education' => '4',
+					'remove'    => '1',
+				],
+			]
+		);
+		$this->assertCount( 2, $rows );
+		$this->assertSame( 1.5, $rows[0]['education'] );
+		$this->assertSame( 0.0, $rows[0]['reviewing'] );
+		$this->assertSame( 1000.0, $rows[0]['outcomes'] );
+		$this->assertSame( 28, $rows[0]['ordinal'] );
+		$this->assertSame( 2.13, $rows[1]['education'] );
+		$this->assertSame( '', $rows[1]['requirement'] );
+	}
+
+	/**
+	 * Editors and administrators set CPD on WordPress events; authors cannot, and the first
+	 * form starts from iMIS's lines so a save keeps them.
+	 *
+	 * @return void
+	 */
+	public function test_tab_and_save(): void {
+		$post_id = $this->own_event( [] );
+		delete_post_meta( $post_id, Wormiss_Event_Cpd::META );
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		$this->assertTrue( Wormiss_Event_Cpd::editable( $post_id ) );
+		$this->imis->token()->reply( '/api/EventCPD?EventKey=CSCM_JUL26', 200, self::imis_lines() );
+		$html = Wormiss_Event_Cpd::form_html( $post_id );
+		$this->assertStringContainsString( 'name="wormiss_cpd[0][education]" value="20.5"', $html );
+		$this->assertStringContainsString( 'name="wormiss_cpd[0][ordinal]" value="28"', $html );
+		$this->assertStringContainsString( 'value="Culturally safe practice" selected=\'selected\'', $html );
+		$this->assertFalse( Wormiss_Event_Cpd::owned( $post_id ) );
+
+		$_POST = [
+			Wormiss_Event_Cpd::FIELD_SENT => '1',
+			Wormiss_Event_Cpd::FIELD_ROWS => [
+				[
+					'education' => '21',
+					'ordinal'   => '28',
+				],
+			],
+		];
+		Wormiss_Event_Cpd::save( $post_id );
+		$this->assertTrue( Wormiss_Event_Cpd::owned( $post_id ) );
+		$this->assertSame( 21.0, Wormiss_Event_Cpd::saved_rows( $post_id )[0]['education'] );
+
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'author' ] ) );
+		$this->assertFalse( Wormiss_Event_Cpd::editable( $post_id ) );
+		$_POST[ Wormiss_Event_Cpd::FIELD_ROWS ] = [];
+		Wormiss_Event_Cpd::save( $post_id );
+		$this->assertCount( 1, Wormiss_Event_Cpd::saved_rows( $post_id ) );
+		$_POST = [];
+	}
+
+	/**
+	 * The iMIS lines are made to match: line 28 changed, a new line added (its row number kept), line 30
+	 * removed; then nothing more to do.
+	 *
+	 * @return void
+	 */
+	public function test_push(): void {
+		$post_id = $this->own_event(
+			[
+				[
+					'education'   => 21.0,
+					'reviewing'   => 14.25,
+					'outcomes'    => 0.0,
+					'requirement' => '',
+					'ordinal'     => 28,
+				],
+				[
+					'education'   => 2.5,
+					'reviewing'   => 0.0,
+					'outcomes'    => 1.0,
+					'requirement' => 'Addressing health inequities',
+					'ordinal'     => 0,
+				],
+			]
+		);
+		$saved   = [
+			'Identity'   => [ 'IdentityElements' => [ '$values' => [ 'CSCM_JUL26', '31' ] ] ],
+			'Properties' => [ '$values' => [] ],
+		];
+		$this->imis->token()
+			->reply( '/api/EventCPD?EventKey=CSCM_JUL26', 200, self::imis_lines() )
+			->reply( '/api/EventCPD/~CSCM_JUL26|28', 200, '{}' )
+			->reply( '/api/EventCPD', 201, $saved )
+			->reply( '/api/EventCPD/~CSCM_JUL26|30', 200, '{}' );
+		$message = Wormiss_Event_Cpd::push( $post_id, 'CSCM_JUL26', false, new Wormiss_Rest_Client() );
+		$this->assertSame( 'CPD hours: 3 changes saved.', $message );
+		$methods = array_column( array_slice( $this->imis->requests, 2 ), 'method' );
+		$this->assertSame( [ 'PUT', 'POST', 'DELETE' ], $methods );
+		$put = json_decode( (string) $this->imis->requests[2]['body'], true );
+		$this->assertSame( 'EventCPD', $put['EntityTypeName'] );
+		$this->assertSame( [ 'CSCM_JUL26', '28' ], $put['Identity']['IdentityElements']['$values'] );
+		$this->assertSame( 21, (int) $put['Properties']['$values'][2]['Value']['$value'] );
+		$post = json_decode( (string) $this->imis->requests[3]['body'], true );
+		$this->assertSame( [ 'CSCM_JUL26' ], $post['Identity']['IdentityElements']['$values'] );
+		$this->assertSame( 'Addressing health inequities', $post['Properties']['$values'][4]['Value'] );
+		$this->assertSame( 31, Wormiss_Event_Cpd::saved_rows( $post_id )[1]['ordinal'] );
+
+		// iMIS now matches: nothing to change.
+		$this->imis->requests = [];
+		$now                  = Wormiss_Fake_Imis::page(
+			[
+				[
+					'Ordinal'                    => 28,
+					'EducationPoints'            => 21,
+					'ReviewingPerformancePoints' => 14.25,
+					'MeasuringOutcomesPoints'    => 0,
+					'ProgramLevelRequirements'   => '',
+				],
+				[
+					'Ordinal'                    => 31,
+					'EducationPoints'            => 2.5,
+					'ReviewingPerformancePoints' => 0,
+					'MeasuringOutcomesPoints'    => 1,
+					'ProgramLevelRequirements'   => 'Addressing health inequities',
+				],
+			]
+		);
+		$this->imis->token()->reply( '/api/EventCPD?EventKey=CSCM_JUL26', 200, $now );
+		$this->assertSame( '', Wormiss_Event_Cpd::push( $post_id, 'CSCM_JUL26', false, new Wormiss_Rest_Client() ) );
+		$this->assertSame( 2, count( $this->imis->requests ) );
+	}
+
+	/**
+	 * A dry run sends nothing and logs what would change.
+	 *
+	 * @return void
+	 */
+	public function test_push_dry_run(): void {
+		$post_id = $this->own_event( [] );
+		$this->imis->token()->reply( '/api/EventCPD?EventKey=CSCM_JUL26', 200, self::imis_lines() );
+		$message = Wormiss_Event_Cpd::push( $post_id, 'CSCM_JUL26', true, new Wormiss_Rest_Client() );
+		$this->assertSame( 'CPD hours: 2 changes would be made.', $message );
+		$this->assertSame( 2, count( $this->imis->requests ) );
+		$logged = array_column( Wormiss_Logger::recent( 5 ), 'endpoint' );
+		$this->assertContains( 'DRY RUN DELETE /api/EventCPD/~CSCM_JUL26|28', $logged );
 	}
 }

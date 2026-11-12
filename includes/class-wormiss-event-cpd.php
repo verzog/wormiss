@@ -28,7 +28,7 @@ defined( 'ABSPATH' ) || exit;
  * Reads the CPD rows iMIS keeps for an event (GET /api/EventCPD?EventKey=), each with hours in
  * three categories and a program level requirement, and shows them: a table on the event page
  * (hours added up per category, with the Australian and New Zealand names) and a tab in the
- * "Event details" box. Read only; off until an administrator turns it on.
+ * "Event details" box. Events made in WordPress have their CPD set there and saved in iMIS.
  */
 class Wormiss_Event_Cpd {
 
@@ -47,6 +47,36 @@ class Wormiss_Event_Cpd {
 
 	/** Transient prefix for an event's rows. */
 	const CACHE_PREFIX = 'wormiss_cpd_';
+
+	/**
+	 * Post meta: the CPD rows set in WordPress for an event made in WordPress, each with its iMIS
+	 * row number once saved there. Absent until someone saves the CPD hours tab, and only then
+	 * does WordPress change the event's CPD in iMIS.
+	 */
+	const META = '_wormiss_event_cpd';
+
+	/** Form field marking that the CPD hours tab was sent. */
+	const FIELD_SENT = 'wormiss_cpd_sent';
+
+	/** Form field holding the rows. */
+	const FIELD_ROWS = 'wormiss_cpd';
+
+	/** Most hours in one category of one row. */
+	const MAX_HOURS = 1000;
+
+	/** Most rows an event can have. */
+	const MAX_ROWS = 20;
+
+	/**
+	 * The program level requirements iMIS offers (its CPD Hours panel's list), as iMIS stores them.
+	 * Blank is "(None)".
+	 */
+	const REQUIREMENTS = [
+		'Addressing health inequities',
+		'Culturally safe practice',
+		'Maintaining and developing ethical practice',
+		'Maintaining and developing professionalism',
+	];
 
 	/**
 	 * Hook in.
@@ -90,8 +120,7 @@ class Wormiss_Event_Cpd {
 		if ( ! Wormiss_Rest_Client::is_event_id( $event_id ) ) {
 			return null;
 		}
-		// Per connection too, so a changed iMIS address or account never shows the old one's rows.
-		$key    = self::CACHE_PREFIX . md5( Wormiss_Settings::base_url() . "\0" . Wormiss_Settings::username() . "\0" . strtoupper( $event_id ) );
+		$key    = self::cache_key( $event_id );
 		$cached = get_transient( $key );
 		if ( is_array( $cached ) ) {
 			return $cached['rows'];
@@ -109,6 +138,17 @@ class Wormiss_Event_Cpd {
 	}
 
 	/**
+	 * The cache key for an event's rows, per iMIS connection (so a changed iMIS address or account
+	 * never shows the old one's rows).
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @return string
+	 */
+	private static function cache_key( string $event_id ): string {
+		return self::CACHE_PREFIX . md5( Wormiss_Settings::base_url() . "\0" . Wormiss_Settings::username() . "\0" . strtoupper( $event_id ) );
+	}
+
+	/**
 	 * One row in WordPress terms.
 	 *
 	 * @param array $properties The row's properties (name => value).
@@ -122,6 +162,7 @@ class Wormiss_Event_Cpd {
 		}
 		$requirement        = trim( (string) ( $properties[ self::REQUIREMENT ] ?? '' ) );
 		$row['requirement'] = '(None)' === $requirement ? '' : $requirement;
+		$row['ordinal']     = (int) ( $properties['Ordinal'] ?? 0 );
 		return $row;
 	}
 
@@ -239,7 +280,7 @@ class Wormiss_Event_Cpd {
 			. esc_html(
 				sprintf(
 					/* translators: %s: iMIS event ID. */
-					__( 'From the CPD Hours panel of iMIS event %s. Change them there for now; the event page shows them within the cache time.', 'wormiss' ),
+					__( 'From the CPD Hours panel of iMIS event %s. This event\'s CPD comes from iMIS: change it there. The event page shows changes within the cache time.', 'wormiss' ),
 					$event_id
 				)
 			) . '</p>';
@@ -261,5 +302,327 @@ class Wormiss_Event_Cpd {
 		return '<table class="widefat striped"><thead><tr>' . $head . '<th scope="col">'
 			. esc_html__( 'Program level requirement', 'wormiss' ) . '</th></tr></thead><tbody>' . $list . '</tbody></table>'
 			. '<h4>' . esc_html__( 'On the event page', 'wormiss' ) . '</h4>' . self::table( $rows ) . $note;
+	}
+
+	/**
+	 * Whether this user may set an event's CPD hours here: editors and administrators, on events
+	 * made in WordPress (a linked or imported event's CPD is iMIS's).
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool
+	 */
+	public static function editable( int $post_id ): bool {
+		return current_user_can( 'edit_others_posts' ) && ! Wormiss_Event_Sync::is_linked( $post_id );
+	}
+
+	/**
+	 * Whether WordPress sets this event's CPD (someone has saved its CPD hours tab).
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool
+	 */
+	public static function owned( int $post_id ): bool {
+		return metadata_exists( 'post', $post_id, self::META );
+	}
+
+	/**
+	 * The rows set in WordPress.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return array[]
+	 */
+	public static function saved_rows( int $post_id ): array {
+		$rows = get_post_meta( $post_id, self::META, true );
+		return is_array( $rows ) ? array_values( array_filter( $rows, 'is_array' ) ) : [];
+	}
+
+	/**
+	 * Hours as typed: a number from 0 to MAX_HOURS, to two decimal places.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return float
+	 */
+	public static function clean_hours( $value ): float {
+		$value = str_replace( ',', '.', trim( (string) $value ) );
+		return is_numeric( $value ) ? round( min( (float) self::MAX_HOURS, max( 0.0, (float) $value ) ), 2 ) : 0.0;
+	}
+
+	/**
+	 * Rows as sent from the tab: cleaned, without rows marked for removal or left empty.
+	 *
+	 * @param mixed $input Rows from the form.
+	 * @return array[]
+	 */
+	public static function clean_rows( $input ): array {
+		$rows = [];
+		foreach ( is_array( $input ) ? $input : [] as $row ) {
+			if ( ! is_array( $row ) || ! empty( $row['remove'] ) ) {
+				continue;
+			}
+			$clean = [];
+			foreach ( array_keys( self::FIELDS ) as $key ) {
+				$clean[ $key ] = self::clean_hours( $row[ $key ] ?? '' );
+			}
+			$requirement          = (string) ( $row['requirement'] ?? '' );
+			$clean['requirement'] = in_array( $requirement, self::REQUIREMENTS, true ) ? $requirement : '';
+			$clean['ordinal']     = absint( $row['ordinal'] ?? 0 );
+			if ( 0 === $clean['ordinal'] && '' === $clean['requirement'] && 0.0 === array_sum( array_intersect_key( $clean, self::FIELDS ) ) ) {
+				continue; // A blank new row.
+			}
+			$rows[] = $clean;
+		}
+		return array_slice( $rows, 0, self::MAX_ROWS );
+	}
+
+	/**
+	 * Save the CPD hours tab (from the Event details box's save, after its nonce check).
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
+	 */
+	public static function save( int $post_id ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Checked by Wormiss_Event_Editor::save().
+		if ( empty( $_POST[ self::FIELD_SENT ] ) || ! self::editable( $post_id ) ) {
+			return;
+		}
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Cleaned by clean_rows().
+		$input = isset( $_POST[ self::FIELD_ROWS ] ) ? wp_unslash( $_POST[ self::FIELD_ROWS ] ) : [];
+		// phpcs:enable
+		update_post_meta( $post_id, self::META, self::clean_rows( $input ) );
+	}
+
+	/**
+	 * Make the event's CPD in iMIS match the rows set in WordPress: rows changed (by their iMIS row
+	 * number), added (keeping the number iMIS gives them) and removed. Read fresh, never from the
+	 * cache. In a dry run nothing is sent; what would be is logged.
+	 *
+	 * @param int                 $post_id  Post ID.
+	 * @param string              $event_id iMIS event ID.
+	 * @param bool                $dry_run  Only log.
+	 * @param Wormiss_Rest_Client $client   Client.
+	 * @return string What happened, for the event's message ('' for nothing).
+	 * @throws Wormiss_Exception On an iMIS failure (rows done so far keep their numbers).
+	 */
+	public static function push( int $post_id, string $event_id, bool $dry_run, Wormiss_Rest_Client $client ): string {
+		$wanted  = self::saved_rows( $post_id );
+		$current = [];
+		foreach ( $client->get_entities( self::ENTITY, [ 'EventKey' => $event_id ] ) as $properties ) {
+			$row = self::row( $properties );
+			if ( $row['ordinal'] > 0 ) {
+				$current[ $row['ordinal'] ] = $row;
+			}
+		}
+		$plan = [];
+		$kept = [];
+		foreach ( $wanted as $i => $row ) {
+			$ordinal = (int) ( $row['ordinal'] ?? 0 );
+			if ( $ordinal > 0 && isset( $current[ $ordinal ] ) ) {
+				$kept[ $ordinal ] = true;
+				if ( self::same( $row, $current[ $ordinal ] ) ) {
+					continue;
+				}
+				$plan[] = [ 'PUT', $i, $ordinal ];
+				continue;
+			}
+			// New here, or its iMIS row was removed in iMIS: added (again).
+			$plan[] = [ 'POST', $i, 0 ];
+		}
+		foreach ( array_keys( $current ) as $ordinal ) {
+			if ( ! isset( $kept[ $ordinal ] ) ) {
+				$plan[] = [ 'DELETE', -1, $ordinal ];
+			}
+		}
+		if ( ! $plan ) {
+			return '';
+		}
+		$done = 0;
+		try {
+			foreach ( $plan as [ $method, $i, $ordinal ] ) {
+				$keys = $ordinal > 0 ? [ $event_id, (string) $ordinal ] : [];
+				$body = $i >= 0 ? self::entity_body( $event_id, $wanted[ $i ], $ordinal ) : null;
+				if ( $dry_run ) {
+					Wormiss_Logger::record_call(
+						'DRY RUN ' . $method . ' ' . Wormiss_Rest_Client::entity_path( self::ENTITY, $keys ),
+						Wormiss_Logger::STATUS_SUCCESS,
+						null,
+						null !== $body ? (string) wp_json_encode( $body ) : null
+					);
+				} elseif ( 'PUT' === $method ) {
+					$client->update_entity( self::ENTITY, $keys, (array) $body );
+				} elseif ( 'DELETE' === $method ) {
+					$client->delete_entity( self::ENTITY, $keys );
+				} else {
+					$wanted[ $i ]['ordinal'] = self::new_ordinal( $client->create_entity( self::ENTITY, (array) $body ) );
+					// Kept straight away, so a failure later never adds this row a second time.
+					update_post_meta( $post_id, self::META, $wanted );
+				}
+				++$done;
+			}
+		} finally {
+			if ( ! $dry_run ) {
+				delete_transient( self::cache_key( $event_id ) );
+			}
+		}
+		return $dry_run
+			? sprintf(
+				/* translators: %d: number of changes. */
+				_n( 'CPD hours: %d change would be made.', 'CPD hours: %d changes would be made.', $done, 'wormiss' ),
+				$done
+			)
+			: sprintf(
+				/* translators: %d: number of changes. */
+				_n( 'CPD hours: %d change saved.', 'CPD hours: %d changes saved.', $done, 'wormiss' ),
+				$done
+			);
+	}
+
+	/**
+	 * The row number iMIS gave a new row: from its Ordinal, else the last part of its identity.
+	 *
+	 * @param object $saved The row as iMIS saved it.
+	 * @return int
+	 * @throws Wormiss_Exception When there is none (the row would be added again next time).
+	 */
+	private static function new_ordinal( object $saved ): int {
+		$ordinal = (int) ( Wormiss_Rest_Client::properties( $saved )['Ordinal'] ?? 0 );
+		if ( $ordinal < 1 ) {
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+			$keys    = $saved->Identity->IdentityElements->{'$values'} ?? [];
+			$ordinal = is_array( $keys ) && count( $keys ) > 1 ? (int) end( $keys ) : 0;
+		}
+		if ( $ordinal < 1 ) {
+			throw new Wormiss_Exception( __( 'iMIS saved a CPD line but did not say its row number. Check the event\'s CPD Hours panel in iMIS.', 'wormiss' ) );
+		}
+		return $ordinal;
+	}
+
+	/**
+	 * Whether a WordPress row and an iMIS row hold the same hours and requirement.
+	 *
+	 * @param array $a Row.
+	 * @param array $b Row.
+	 * @return bool
+	 */
+	private static function same( array $a, array $b ): bool {
+		foreach ( array_keys( self::FIELDS ) as $key ) {
+			if ( abs( (float) ( $a[ $key ] ?? 0 ) - (float) ( $b[ $key ] ?? 0 ) ) > 0.001 ) {
+				return false;
+			}
+		}
+		return (string) ( $a['requirement'] ?? '' ) === (string) ( $b['requirement'] ?? '' );
+	}
+
+	/**
+	 * An EventCPD row for iMIS (GenericEntityData), as iMIS sends them.
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @param array  $row      Row.
+	 * @param int    $ordinal  Its iMIS row number (0 for a new row: iMIS gives it one).
+	 * @return array
+	 */
+	public static function entity_body( string $event_id, array $row, int $ordinal ): array {
+		$identity   = static fn( string $type, array $keys ) => [
+			'$type'            => 'Asi.Soa.Core.DataContracts.IdentityData, Asi.Contracts',
+			'EntityTypeName'   => $type,
+			'IdentityElements' => [
+				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
+				'$values' => $keys,
+			],
+		];
+		$property   = static fn( string $name, $value ) => [
+			'$type' => 'Asi.Soa.Core.DataContracts.GenericPropertyData, Asi.Contracts',
+			'Name'  => $name,
+			'Value' => $value,
+		];
+		$decimal    = static fn( $value ) => [
+			'$type'  => 'System.Decimal',
+			'$value' => round( (float) $value, 2 ),
+		];
+		$properties = [ $property( 'EventKey', $event_id ) ];
+		if ( $ordinal > 0 ) {
+			$properties[] = $property(
+				'Ordinal',
+				[
+					'$type'  => 'System.Int32',
+					'$value' => $ordinal,
+				]
+			);
+		}
+		foreach ( self::FIELDS as $key => $name ) {
+			$properties[] = $property( $name, $decimal( $row[ $key ] ?? 0 ) );
+		}
+		$properties[] = $property( self::REQUIREMENT, (string) ( $row['requirement'] ?? '' ) );
+		return [
+			'$type'                       => 'Asi.Soa.Core.DataContracts.GenericEntityData, Asi.Contracts',
+			'EntityTypeName'              => self::ENTITY,
+			'PrimaryParentEntityTypeName' => 'Event',
+			'Identity'                    => $identity( self::ENTITY, $ordinal > 0 ? [ $event_id, (string) $ordinal ] : [ $event_id ] ),
+			'PrimaryParentIdentity'       => $identity( 'Event', [ $event_id ] ),
+			'Properties'                  => [
+				'$type'   => 'Asi.Soa.Core.DataContracts.GenericPropertyDataCollection, Asi.Contracts',
+				'$values' => $properties,
+			],
+		];
+	}
+
+	/**
+	 * The editable CPD hours tab: one row per line, with Remove, and an Add row button. Starts
+	 * from the rows set here, else (an event already in iMIS) from iMIS's, so a first save keeps
+	 * them.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return string HTML.
+	 */
+	public static function form_html( int $post_id ): string {
+		$rows = self::saved_rows( $post_id );
+		if ( ! self::owned( $post_id ) && '' !== self::event_id( $post_id ) ) {
+			$rows = self::rows( self::event_id( $post_id ) ) ?? [];
+		}
+		$head = '';
+		foreach ( self::categories() as [ $australia, $new_zealand ] ) {
+			$head .= '<th scope="col">' . esc_html( $australia . ' – ' . $new_zealand ) . '</th>';
+		}
+		$html  = '<input type="hidden" name="' . esc_attr( self::FIELD_SENT ) . '" value="1" />'
+			. '<p class="description">' . esc_html__( 'Hours in each category (decimals allowed, e.g. 1.5), one line per program level requirement.', 'wormiss' )
+			. ' ' . esc_html__( 'On update they are saved in the event\'s CPD Hours panel in iMIS: lines added, changed and removed to match.', 'wormiss' ) . '</p>'
+			. '<table class="widefat wormiss-cpd-rows"><thead><tr>' . $head . '<th scope="col">' . esc_html__( 'Program level requirement', 'wormiss' )
+			. '</th><th scope="col">' . esc_html__( 'Remove', 'wormiss' ) . '</th></tr></thead><tbody>';
+		$index = 0;
+		foreach ( $rows as $row ) {
+			$html .= self::form_row( (string) $index++, $row );
+		}
+		$html .= '</tbody></table>';
+		// A blank line to copy for "Add line" (the first one shows without JavaScript).
+		$html .= '<template class="wormiss-cpd-template">' . self::form_row( '__i__', [] ) . '</template>'
+			. '<p><button type="button" class="button wormiss-cpd-add" data-next="' . esc_attr( (string) $index ) . '">'
+			. esc_html__( 'Add line', 'wormiss' ) . '</button></p>';
+		$html .= '<noscript><table class="widefat"><tbody>' . self::form_row( (string) $index, [] ) . '</tbody></table></noscript>';
+		return $html;
+	}
+
+	/**
+	 * One editable line.
+	 *
+	 * @param string $index Field index.
+	 * @param array  $row   Row ([] for blank).
+	 * @return string HTML.
+	 */
+	private static function form_row( string $index, array $row ): string {
+		$name = static fn( string $field ) => self::FIELD_ROWS . '[' . $index . '][' . $field . ']';
+		$html = '<tr>';
+		foreach ( self::categories() as $key => [ $australia, $new_zealand ] ) {
+			$value = isset( $row[ $key ] ) ? self::hours( (float) $row[ $key ] ) : '';
+			$html .= '<td><input type="number" min="0" max="' . esc_attr( (string) self::MAX_HOURS ) . '" step="0.01" class="small-text" name="'
+				. esc_attr( $name( $key ) ) . '" value="' . esc_attr( $value ) . '" aria-label="' . esc_attr( $australia . ' – ' . $new_zealand ) . '" /></td>';
+		}
+		$html .= '<td><select name="' . esc_attr( $name( 'requirement' ) ) . '" aria-label="' . esc_attr__( 'Program level requirement', 'wormiss' ) . '">'
+			. '<option value="">' . esc_html__( '(None)', 'wormiss' ) . '</option>';
+		foreach ( self::REQUIREMENTS as $requirement ) {
+			$html .= '<option value="' . esc_attr( $requirement ) . '"' . selected( (string) ( $row['requirement'] ?? '' ), $requirement, false ) . '>'
+				. esc_html( $requirement ) . '</option>';
+		}
+		$html .= '</select><input type="hidden" name="' . esc_attr( $name( 'ordinal' ) ) . '" value="' . esc_attr( (string) (int) ( $row['ordinal'] ?? 0 ) ) . '" /></td>'
+			. '<td><input type="checkbox" value="1" name="' . esc_attr( $name( 'remove' ) ) . '" aria-label="' . esc_attr__( 'Remove this line', 'wormiss' ) . '" /></td></tr>';
+		return $html;
 	}
 }
