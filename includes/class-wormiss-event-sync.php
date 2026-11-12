@@ -73,6 +73,15 @@ class Wormiss_Event_Sync {
 	/** Release freed places to the waitlist automatically: yes or no ('' uses the type's, else iMIS's). */
 	const META_AUTO_RELEASE = '_wormiss_event_auto_release';
 
+	/** An event already in iMIS to link to, instead of creating one. */
+	const META_EXISTING = '_wormiss_event_existing';
+
+	/** Set when the event is linked to an existing iMIS event (set by the link only). */
+	const META_LINKED = '_wormiss_event_linked';
+
+	/** A linked event's details as iMIS had them when linked (set by the link only). */
+	const META_LINKED_DETAILS = '_wormiss_event_linked_details';
+
 	/** Longest event code: iMIS event IDs are up to 10 characters. */
 	const CODE_LENGTH = 10;
 
@@ -99,6 +108,8 @@ class Wormiss_Event_Sync {
 	public static function init(): void {
 		add_action( 'init', [ __CLASS__, 'register' ] );
 		add_action( 'save_post_' . self::POST_TYPE, [ __CLASS__, 'maybe_queue' ], 20, 2 );
+		// After the editor's meta is saved (the block editor saves it after save_post).
+		add_action( 'wp_after_insert_post', [ __CLASS__, 'maybe_link' ], 10, 2 );
 		add_action( 'wp_trash_post', [ __CLASS__, 'maybe_queue_cancel' ] );
 		add_action( self::SYNC_HOOK, [ __CLASS__, 'sync' ] );
 		add_action( self::CANCEL_HOOK, [ __CLASS__, 'cancel' ], 10, 2 );
@@ -142,6 +153,7 @@ class Wormiss_Event_Sync {
 		$auth    = static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id );
 		$strings = [
 			self::META_CODE         => [ __CLASS__, 'clean_code' ],
+			self::META_EXISTING     => [ __CLASS__, 'clean_existing' ],
 			self::META_START        => [ __CLASS__, 'clean_datetime' ],
 			self::META_END          => [ __CLASS__, 'clean_datetime' ],
 			self::META_LOCATION     => 'sanitize_text_field',
@@ -214,6 +226,8 @@ class Wormiss_Event_Sync {
 			'message'  => (string) get_post_meta( $post_id, self::META_MESSAGE, true ),
 			// The template a new event would be copied from, as saved (type or default).
 			'template' => $post_id ? Wormiss_Event_Types::for_event( $post_id )['template'] : '',
+			// Linked to an existing iMIS event (never changed or cancelled from WordPress).
+			'linked'   => (bool) get_post_meta( $post_id, self::META_LINKED, true ),
 			// Places left in iMIS, in words ('' if not known).
 			'places'   => $post_id ? self::places_text( $post_id ) : '',
 		];
@@ -247,6 +261,17 @@ class Wormiss_Event_Sync {
 	}
 
 	/**
+	 * An existing iMIS event ID as typed, upper case. Not cleaned to '' when it is not a usable
+	 * ID, so a typo is reported rather than taken as a request to unlink.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function clean_existing( $value ): string {
+		return substr( strtoupper( trim( sanitize_text_field( (string) $value ) ) ), 0, 64 );
+	}
+
+	/**
 	 * A date and time from the editor, as YYYY-MM-DDTHH:MM.
 	 *
 	 * @param mixed $value Raw value.
@@ -267,6 +292,10 @@ class Wormiss_Event_Sync {
 	 */
 	public static function maybe_queue( $post_id, $post ): void {
 		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+		// A linked event is only read from iMIS, never sent (maybe_link() handles it).
+		if ( self::is_linked( (int) $post_id ) ) {
 			return;
 		}
 		// Creating events in iMIS is for editors and administrators, not every author. An editor's
@@ -303,7 +332,7 @@ class Wormiss_Event_Sync {
 		$post_id = (int) $post_id;
 		$post    = get_post( $post_id );
 		if ( ! $post || self::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status
-			|| ! Wormiss_Settings::get( 'event_sync_enabled' ) ) {
+			|| ! Wormiss_Settings::get( 'event_sync_enabled' ) || self::is_linked( $post_id ) ) {
 			return '';
 		}
 		$lock = 'wormiss_event_lock_' . $post_id;
@@ -552,7 +581,7 @@ class Wormiss_Event_Sync {
 	 */
 	public static function maybe_queue_cancel( $post_id ): void {
 		$imis_id = (string) get_post_meta( (int) $post_id, self::META_IMIS_ID, true );
-		if ( '' === $imis_id || self::POST_TYPE !== get_post_type( (int) $post_id )
+		if ( '' === $imis_id || self::POST_TYPE !== get_post_type( (int) $post_id ) || self::is_linked( (int) $post_id )
 			|| ! Wormiss_Settings::get( 'event_sync_enabled' ) || ! Wormiss_Settings::get( 'event_cancel_on_trash' )
 			|| ! current_user_can( 'edit_others_posts' ) ) {
 			return;
@@ -652,7 +681,23 @@ class Wormiss_Event_Sync {
 			return $content;
 		}
 		$details = self::details( $post );
-		$rows    = '';
+		$imis_id = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
+		$linked  = (bool) get_post_meta( $post->ID, self::META_LINKED, true );
+		// The event as iMIS lists it (cached): for a linked event's details, places left and Register.
+		$wanted = $linked || Wormiss_Event_Registration::is_on() || '' !== (string) Wormiss_Settings::get( 'event_places_query' );
+		$listed = ( '' !== $imis_id && $wanted ) ? self::listed_event( $imis_id ) : null;
+		if ( $linked && null === $listed ) {
+			// Not in the events list (e.g. it started long ago): the details kept when it was linked.
+			$kept   = get_post_meta( $post->ID, self::META_LINKED_DETAILS, true );
+			$listed = is_array( $kept ) && ! empty( $kept['id'] ) ? $kept : null;
+		}
+		if ( $linked && null !== $listed ) {
+			// A linked event's details live in iMIS; anything filled in here still comes first.
+			foreach ( [ 'start', 'end', 'location', 'online', 'code' ] as $key ) {
+				$details[ $key ] = '' !== $details[ $key ] ? $details[ $key ] : (string) $listed[ $key ];
+			}
+		}
+		$rows = '';
 		if ( '' !== $details['start'] ) {
 			$when  = Wormiss_Events::when( $details['start'], $details['end'] );
 			$rows .= '<dt>' . esc_html__( 'When', 'wormiss' ) . '</dt><dd>' . esc_html( $when ) . '</dd>';
@@ -664,10 +709,6 @@ class Wormiss_Event_Sync {
 		if ( '' !== $details['code'] ) {
 			$rows .= '<dt>' . esc_html__( 'Event code', 'wormiss' ) . '</dt><dd>' . esc_html( $details['code'] ) . '</dd>';
 		}
-		$imis_id = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
-		// The event as iMIS lists it (cached), for places left and the Register button.
-		$wanted = Wormiss_Event_Registration::is_on() || '' !== (string) Wormiss_Settings::get( 'event_places_query' );
-		$listed = ( '' !== $imis_id && $wanted ) ? self::listed_event( $imis_id ) : null;
 		$places = null !== $listed ? Wormiss_Events::places( $listed ) : null;
 		if ( null !== $places ) {
 			$rows .= '<dt>' . esc_html__( 'Places', 'wormiss' ) . '</dt><dd>' . esc_html( Wormiss_Events::places_text( $places ) ) . '</dd>';
@@ -727,6 +768,7 @@ class Wormiss_Event_Sync {
 				'dry_run'   => __( 'Dry run', 'wormiss' ),
 				'synced'    => __( 'Saved', 'wormiss' ),
 				'error'     => __( 'Problem', 'wormiss' ),
+				'linked'    => __( 'Linked', 'wormiss' ),
 				'cancelled' => __( 'Cancelled', 'wormiss' ),
 			];
 			$text    = $labels[ $status ] ?? '';
@@ -736,5 +778,100 @@ class Wormiss_Event_Sync {
 			}
 			echo esc_html( '' !== $text ? $text : '—' );
 		}
+	}
+
+	/**
+	 * Whether an event is linked to an existing iMIS event, or about to be.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool
+	 */
+	public static function is_linked( int $post_id ): bool {
+		return (bool) get_post_meta( $post_id, self::META_LINKED, true )
+			|| '' !== (string) get_post_meta( $post_id, self::META_EXISTING, true );
+	}
+
+	/**
+	 * After an editor saves an event, link it to (or unlink it from) the existing iMIS event
+	 * entered in its panel. Linking only reads iMIS: the event there is never changed.
+	 *
+	 * @param int     $post_id Post ID.
+	 * @param WP_Post $post    Post.
+	 * @return string Result: linked, unlinked, error, or '' when nothing was to be done.
+	 */
+	public static function maybe_link( $post_id, $post ): string {
+		$post_id = (int) $post_id;
+		if ( ! $post instanceof WP_Post || self::POST_TYPE !== $post->post_type
+			|| wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id )
+			|| in_array( $post->post_status, [ 'auto-draft', 'trash' ], true ) || ! current_user_can( 'edit_others_posts' ) ) {
+			return '';
+		}
+		$existing = (string) get_post_meta( $post_id, self::META_EXISTING, true );
+		$linked   = (bool) get_post_meta( $post_id, self::META_LINKED, true );
+		$imis_id  = (string) get_post_meta( $post_id, self::META_IMIS_ID, true );
+		if ( '' === $existing && ! $linked ) {
+			return '';
+		}
+		// Whatever happens, an event to link is never copied from the template.
+		wp_clear_scheduled_hook( self::SYNC_HOOK, [ $post_id ] );
+		if ( '' === $existing ) {
+			delete_post_meta( $post_id, self::META_LINKED );
+			delete_post_meta( $post_id, self::META_IMIS_ID );
+			delete_post_meta( $post_id, self::META_LINKED_DETAILS );
+			return self::link_result( $post_id, 'unlinked', __( 'No longer linked to an iMIS event.', 'wormiss' ) );
+		}
+		if ( '' === self::clean_code( $existing ) ) {
+			// A typo: keep any link there is, and say what is wrong.
+			/* translators: %s: what was typed. */
+			$message = __( '"%s" is not an iMIS event ID (up to 10 letters, digits, _ and -). Nothing was changed.', 'wormiss' );
+			return self::link_result( $post_id, 'error', sprintf( $message, $existing ) );
+		}
+		if ( '' !== $imis_id && ! $linked ) {
+			/* translators: %s: iMIS event ID. */
+			$message = __( 'This event is already in iMIS as %s, so it cannot be linked to another one.', 'wormiss' );
+			return self::link_result( $post_id, 'error', sprintf( $message, $imis_id ) );
+		}
+		if ( $linked && $imis_id === $existing ) {
+			return '';
+		}
+		if ( ! Wormiss_Settings::is_configured() ) {
+			return self::link_result( $post_id, 'error', __( 'The iMIS connection is not set up yet (Wormiss > Settings).', 'wormiss' ) );
+		}
+		/* translators: %s: iMIS event ID. */
+		$reason = sprintf( __( 'iMIS event %s was not found.', 'wormiss' ), $existing );
+		try {
+			$event = Wormiss_Events::normalise( ( new Wormiss_Rest_Client() )->get_event( $existing ) );
+		} catch ( Wormiss_Exception $e ) {
+			$event = null;
+			/* translators: 1: iMIS event ID, 2: reason. */
+			$reason = sprintf( __( 'iMIS event %1$s could not be read (%2$s).', 'wormiss' ), $existing, $e->getMessage() );
+		}
+		if ( null === $event ) {
+			delete_post_meta( $post_id, self::META_LINKED );
+			delete_post_meta( $post_id, self::META_IMIS_ID );
+			delete_post_meta( $post_id, self::META_LINKED_DETAILS );
+			return self::link_result( $post_id, 'error', $reason );
+		}
+		update_post_meta( $post_id, self::META_IMIS_ID, $event['id'] );
+		update_post_meta( $post_id, self::META_LINKED, 1 );
+		// Kept for the page, as the events list only reaches back LOOKBACK_DAYS.
+		update_post_meta( $post_id, self::META_LINKED_DETAILS, $event );
+		/* translators: 1: iMIS event ID, 2: event name in iMIS. */
+		$message = __( 'Linked to iMIS event %1$s (%2$s). Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' );
+		return self::link_result( $post_id, 'linked', sprintf( $message, $event['id'], $event['name'] ) );
+	}
+
+	/**
+	 * Keep a link result on the event for the editor to see.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $status  Result.
+	 * @param string $message Message.
+	 * @return string The result.
+	 */
+	private static function link_result( int $post_id, string $status, string $message ): string {
+		update_post_meta( $post_id, self::META_STATUS, 'unlinked' === $status ? '' : $status );
+		update_post_meta( $post_id, self::META_MESSAGE, $message );
+		return $status;
 	}
 }

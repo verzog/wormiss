@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.15.1
+Stable tag: 0.16.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -155,6 +155,10 @@ For free events, yes. Under Wormiss > Settings > iMIS events, tick "Members regi
 
 Yes. Build an iMIS IQA with no prompts that returns ID, Email, FirstName, LastName and Status for the members who should have website accounts (tick "Available via REST API"). Under Wormiss > Settings > Sync members into WordPress, enter its path, choose the role for new members (only roles without editing rights are offered), and tick "Sync members daily" with the dry run still ticked. Press "Run the member sync now" and read the report. When it looks right, untick the dry run. Members are matched by iMIS ID, then email; new ones get the iMIS ID as their username and no email. Members whose Status is not in the Current statuses (Members-only content) are blocked from signing in until it is current again. Staff accounts are never changed.
 
+= Can I make a page for an event that is already in iMIS? =
+
+Yes. Add an Event (Wormiss > Add New Event), give it a title and any text you like, enter the iMIS event's ID (e.g. CONGRESS26) in "Existing iMIS event ID" in the iMIS event panel, and save. The page then takes its dates, place, places left and Register button from iMIS. WordPress never changes or cancels a linked event in iMIS. Clear the box and save to unlink it.
+
 = Can members join a waitlist on the website? =
 
 Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
@@ -185,6 +189,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.16.0 =
+* Link to an existing iMIS event: enter its ID (e.g. CONGRESS26) in the Event's "Existing iMIS event ID" box and save. Wormiss checks it is in iMIS and links the page, which then shows its dates, place, event code, places left and Register button from iMIS. A linked event is only read: WordPress never sends, changes or cancels it (trashing the page leaves it alone). Clear the box to unlink. Editors and administrators only.
 
 = 0.15.1 =
 * Member sync works in batches: each run creates or changes at most 50 accounts, then carries on in the background a minute later until every member is done, so a large membership no longer stops the page with a "critical error" (time limit). Runs never overlap, and the settings page shows how many members are still to check. A dry run still counts everything at once.
