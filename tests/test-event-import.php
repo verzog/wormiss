@@ -530,9 +530,9 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		};
 		add_filter( 'pre_http_request', $image, 5, 3 );
 		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
-		Wormiss_Event_Import::run();
+		$report  = Wormiss_Event_Import::run();
 		$post_id = self::pages( 'IMG26' )[0];
-		$this->assertTrue( has_post_thumbnail( $post_id ) );
+		$this->assertTrue( has_post_thumbnail( $post_id ), implode( ' ', $report['notes'] ) );
 
 		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
 		Wormiss_Event_Import::run();
