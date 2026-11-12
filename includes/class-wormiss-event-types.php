@@ -258,7 +258,7 @@ class Wormiss_Event_Types {
 	private static function create_help(): string {
 		return __( 'Makes the iMIS event category if it does not exist yet, named after this type.', 'wormiss' )
 			. ' ' . __( 'With no category ID, one is made from the name (e.g. WORKSHOP).', 'wormiss' )
-			. ' ' . __( 'Uses the event sending switch and dry run in Settings > iMIS Bridge.', 'wormiss' );
+			. ' ' . __( 'Uses the event sending switch and dry run in Wormiss > Settings.', 'wormiss' );
 	}
 
 	/**
@@ -342,7 +342,7 @@ class Wormiss_Event_Types {
 			return [ 'invalid', __( 'Add an iMIS event category ID (letters, digits, _ and -).', 'wormiss' ) ];
 		}
 		if ( ! Wormiss_Settings::get( 'event_sync_enabled' ) || ! Wormiss_Settings::is_configured() ) {
-			return [ 'off', __( 'Sending events to iMIS is off (Settings > iMIS Bridge), so nothing was created.', 'wormiss' ) ];
+			return [ 'off', __( 'Sending events to iMIS is off (Wormiss > Settings), so nothing was created.', 'wormiss' ) ];
 		}
 		$client = new Wormiss_Rest_Client();
 		try {

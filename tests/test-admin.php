@@ -82,4 +82,85 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( 's3cret', $member );
 		$this->assertStringNotContainsString( 'imis.example.org', $member );
 	}
+
+	/**
+	 * Everything Wormiss adds sits under one Wormiss menu: Overview, Events, Add New Event,
+	 * Event types, Settings and the audit log.
+	 *
+	 * @return void
+	 */
+	public function test_wormiss_menu(): void {
+		global $menu, $submenu, $_wp_submenu_nopriv;
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+		Wormiss_Event_Types::register();
+		Wormiss_Event_Sync::register();
+		$menu               = []; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test set-up.
+		$submenu            = []; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test set-up.
+		$_wp_submenu_nopriv = []; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test set-up.
+
+		Wormiss_Admin::menus();
+		Wormiss_Admin::more_menus();
+		$slugs = array_column( $submenu[ Wormiss_Admin::MENU ] ?? [], 2 );
+		$this->assertSame( Wormiss_Admin::MENU, $slugs[0] );
+		$this->assertContains( 'post-new.php?post_type=wormiss_event', $slugs );
+		$this->assertContains( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event', $slugs );
+		$this->assertContains( Wormiss_Admin::SETTINGS_PAGE, $slugs );
+		$this->assertContains( Wormiss_Admin::LOG_PAGE, $slugs );
+		$this->assertSame( 'wormiss', get_post_type_object( Wormiss_Event_Sync::POST_TYPE )->show_in_menu );
+	}
+
+	/**
+	 * The old Settings and Tools addresses lead to the new pages, and the Plugins page links there.
+	 *
+	 * @return void
+	 */
+	public function test_old_addresses(): void {
+		$settings = Wormiss_Admin::old_page_target( 'options-general.php', 'wormiss' );
+		$this->assertSame( admin_url( 'admin.php?page=wormiss-settings' ), $settings );
+		$this->assertSame( admin_url( 'admin.php?page=wormiss-log' ), Wormiss_Admin::old_page_target( 'tools.php', 'wormiss-log' ) );
+		$this->assertSame( '', Wormiss_Admin::old_page_target( 'admin.php', 'wormiss-settings' ) );
+		$this->assertStringContainsString( 'admin.php?page=wormiss-settings', implode( '', Wormiss_Admin::action_links( [] ) ) );
+	}
+
+	/**
+	 * The Overview shows what is switched on; editors get the Events links, not Settings.
+	 *
+	 * @return void
+	 */
+	public function test_overview(): void {
+		update_option(
+			Wormiss_Settings::OPTION,
+			array_merge(
+				Wormiss_Settings::all(),
+				[
+					'activity_enabled' => true,
+					'activity_dry_run' => true,
+				]
+			)
+		);
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		ob_start();
+		Wormiss_Admin::render_overview();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'On (dry run: nothing is sent)', $html );
+		$this->assertStringContainsString( 'edit.php?post_type=wormiss_event', $html );
+		$this->assertStringContainsString( 'edit-tags.php?taxonomy=wormiss_event_type', $html );
+		$this->assertStringNotContainsString( 'page=wormiss-settings', $html );
+	}
+
+	/**
+	 * The settings page, now outside the Settings menu, shows WordPress's "Settings saved".
+	 *
+	 * @return void
+	 */
+	public function test_settings_saved_notice(): void {
+		require_once ABSPATH . 'wp-admin/includes/template.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+		add_settings_error( 'general', 'settings_updated', 'Settings saved.', 'success' );
+		ob_start();
+		Wormiss_Admin::render_settings();
+		$this->assertStringContainsString( 'Settings saved.', (string) ob_get_clean() );
+	}
 }

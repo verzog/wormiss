@@ -79,7 +79,7 @@ class Wormiss_Iqa_Display {
 		}
 		if ( ! Wormiss_Settings::is_allowed_query( $query ) ) {
 			// Only queries an administrator has approved may be shown, whatever a page asks for.
-			return self::editor_notice( __( 'This iMIS query is not on the approved list (Settings > iMIS Bridge).', 'wormiss' ) );
+			return self::editor_notice( __( 'This iMIS query is not on the approved list (Wormiss > Settings).', 'wormiss' ) );
 		}
 
 		try {

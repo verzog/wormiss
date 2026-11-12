@@ -385,7 +385,7 @@ class Wormiss_Event_Registration {
 			'already'        => __( "You're already registered for this event.", 'wormiss' ),
 			'cancelled'      => __( 'Your registration has been cancelled.', 'wormiss' ),
 			'not_registered' => __( "You're not registered for this event.", 'wormiss' ),
-			'dry_run'        => __( 'Test mode: nothing was sent to iMIS. The request is in the iMIS Bridge log.', 'wormiss' ),
+			'dry_run'        => __( 'Test mode: nothing was sent to iMIS. The request is in the Wormiss audit log.', 'wormiss' ),
 			'closed'         => __( 'Registration for this event is closed.', 'wormiss' ),
 			'cannot_cancel'  => __( "This registration can't be cancelled here. Please contact us.", 'wormiss' ),
 			'not_member'     => __( 'Only signed-in members can register here.', 'wormiss' ),

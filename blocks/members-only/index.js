@@ -47,7 +47,7 @@
 						}),
 						el(TextControl, {
 							label: __('Membership statuses (optional)', 'wormiss'),
-							help: __('Comma-separated, e.g. "Active". Blank for the statuses set in Settings > iMIS Bridge.', 'wormiss'),
+							help: __('Comma-separated, e.g. "Active". Blank for the statuses set in Wormiss > Settings.', 'wormiss'),
 							value: a.statuses,
 							onChange: (v) => set({statuses: v}),
 							__nextHasNoMarginBottom: true,

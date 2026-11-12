@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.11.0)
+## What it does (0.12.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -15,7 +15,7 @@ whose iMIS REST client and audit log it reuses.
 * **Caching with a fallback:** results are kept for a set time (default 15 minutes);
   if iMIS fails, the last good copy (up to a week old) is shown.
 * **Connection test** on the settings page, and an **audit log** of every call
-  (Tools > iMIS Bridge log) with credentials always redacted.
+  (Wormiss > Audit log) with credentials always redacted.
 
 * **My iMIS data block and shortcode:** show a signed-in member their own iMIS data
   (membership status, CPD, results) from an approved member query. The member's
@@ -65,6 +65,11 @@ whose iMIS REST client and audit log it reuses.
 * **Free event registration:** signed-in members register for (and cancel) free iMIS
   events from the events block and Event pages, through iMIS's RegisterEvent without
   payment. Off and a dry run by default; paid events still link to iMIS.
+
+* **One Wormiss admin menu:** Overview, Events, Add New Event, Event types,
+  Settings and the audit log in one place (the old Settings and Tools addresses
+  redirect). Editors see the Overview and events; Settings and the log are for
+  administrators.
 
 ## Requirements
 

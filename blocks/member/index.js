@@ -36,7 +36,7 @@
 					PanelBody,
 					{title: __('Member query', 'wormiss')},
 					!data.configured && el(Notice, {status: 'warning', isDismissible: false},
-						__('The iMIS connection is not set up yet (Settings > iMIS Bridge).', 'wormiss')),
+						__('The iMIS connection is not set up yet (Wormiss > Settings).', 'wormiss')),
 					el(SelectControl, {
 						label: __('Query', 'wormiss'),
 						help: __('Only member queries approved by an administrator are listed. '
@@ -115,7 +115,7 @@
 					label: __('My iMIS data', 'wormiss'),
 					instructions: data.queries.length
 						? __('Choose a member query in the block settings.', 'wormiss')
-						: __('No member queries are approved yet. An administrator can add them in Settings > iMIS Bridge.',
+						: __('No member queries are approved yet. An administrator can add them in Wormiss > Settings.',
 							'wormiss'),
 				});
 
