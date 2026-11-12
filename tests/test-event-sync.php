@@ -301,6 +301,91 @@ class Test_Wormiss_Event_Sync extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The sync results are a read-only REST field, not editable meta, so an editor's save that
+	 * sends all of the event's meta back cannot be refused because the sync changed them.
+	 *
+	 * @return void
+	 */
+	public function test_sync_results_are_read_only_field(): void {
+		$this->turn_on();
+		$post_id = $this->event( [ Wormiss_Event_Sync::META_IMIS_ID => 'CONF27' ] );
+		$request = new WP_REST_Request( 'POST', '/wp/v2/' . Wormiss_Event_Sync::POST_TYPE . '/' . $post_id );
+		$request->set_body_params(
+			[
+				'title' => 'Annual Conference 2027',
+				'meta'  => [ Wormiss_Event_Sync::META_LOCATION => 'Sydney' ],
+			]
+		);
+		// A fresh REST server, so its routes include the Events post type registered in set_up().
+		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test set-up.
+		$response                  = rest_get_server()->dispatch( $request );
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertArrayNotHasKey( Wormiss_Event_Sync::META_STATUS, $data['meta'] );
+		$this->assertSame( 'CONF27', $data['wormiss_sync']['imis_id'] );
+		$this->assertSame( 'queued', $data['wormiss_sync']['status'] );
+	}
+
+	/**
+	 * An event an editor scheduled is sent when WordPress publishes it later in the background;
+	 * one last saved by an author is not.
+	 *
+	 * @return void
+	 */
+	public function test_scheduled_publication(): void {
+		$this->turn_on();
+		$post_id = self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Event_Sync::POST_TYPE,
+				'post_status' => 'future',
+				'post_date'   => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+			]
+		);
+		$this->assertFalse( wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] ) );
+
+		wp_set_current_user( 0 );
+		wp_publish_post( $post_id );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] ) );
+
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'author' ] ) );
+		$by_author = self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Event_Sync::POST_TYPE,
+				'post_status' => 'future',
+				'post_date'   => gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ),
+			]
+		);
+		wp_set_current_user( 0 );
+		wp_publish_post( $by_author );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $by_author ] ) );
+	}
+
+	/**
+	 * An event trashed while iMIS was copying the template is cancelled there afterwards.
+	 *
+	 * @return void
+	 */
+	public function test_trashed_during_copy(): void {
+		$this->turn_on( false, [ 'event_cancel_on_trash' => true ] );
+		$post_id = $this->event();
+		// Trash the event at the moment iMIS answers the copy request.
+		$trash = static function ( $pre, $args, $url ) use ( $post_id ) {
+			if ( false !== strpos( $url, '/_execute' ) ) {
+				wp_trash_post( $post_id );
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $trash, 5, 3 );
+		$this->imis->token()->reply( '/api/Event/_execute', 200, [ 'EventId' => 'CONF27' ] );
+		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $post_id ) );
+		remove_filter( 'pre_http_request', $trash, 5 );
+
+		$this->assertSame( 0, $this->imis->count( '/api/Event/CONF27' ) );
+		$this->assertSame( 'CONF27', get_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, true ) );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Event_Sync::CANCEL_HOOK, [ $post_id, 'CONF27' ] ) );
+	}
+
+	/**
 	 * Trashing a sent event cancels it in iMIS only when that is switched on; restoring it
 	 * first leaves iMIS alone.
 	 *

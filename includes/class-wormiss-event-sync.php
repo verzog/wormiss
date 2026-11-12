@@ -70,6 +70,9 @@ class Wormiss_Event_Sync {
 	/** Last sync message (set by the sync only). */
 	const META_MESSAGE = '_wormiss_event_sync_message';
 
+	/** Set when an editor saves the event, so its scheduled publication may be sent too. */
+	const META_APPROVED = '_wormiss_event_sync_approved';
+
 	/** Seconds one event's sync holds its lock. */
 	const LOCK_SECONDS = 300;
 
@@ -118,9 +121,8 @@ class Wormiss_Event_Sync {
 			]
 		);
 
-		$auth     = static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id );
-		$readonly = static fn() => false;
-		$strings  = [
+		$auth    = static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id );
+		$strings = [
 			self::META_CODE     => [ __CLASS__, 'clean_code' ],
 			self::META_START    => [ __CLASS__, 'clean_datetime' ],
 			self::META_END      => [ __CLASS__, 'clean_datetime' ],
@@ -153,26 +155,42 @@ class Wormiss_Event_Sync {
 				'auth_callback'     => $auth,
 			]
 		);
-		// Set by the sync; the editor shows them but cannot change them.
-		foreach ( [ self::META_IMIS_ID, self::META_STATUS, self::META_MESSAGE ] as $key ) {
-			register_post_meta(
-				self::POST_TYPE,
-				$key,
-				[
-					'type'          => 'string',
-					'single'        => true,
-					'default'       => '',
-					'show_in_rest'  => true,
-					'auth_callback' => $readonly,
-				]
-			);
-		}
+		// Set by the sync, so not editable meta (the editor sends all of its meta back on every save):
+		// the editor reads them from a separate read-only field.
+		register_rest_field(
+			self::POST_TYPE,
+			'wormiss_sync',
+			[
+				'get_callback' => [ __CLASS__, 'rest_sync_field' ],
+				'schema'       => [
+					'description' => __( 'What happened the last time this event was sent to iMIS.', 'wormiss' ),
+					'type'        => 'object',
+					'context'     => [ 'edit' ],
+					'readonly'    => true,
+				],
+			]
+		);
 
 		// New permalinks need the rewrite rules rebuilt once after an update.
 		if ( get_option( 'wormiss_rewrite_version' ) !== WORMISS_VERSION ) {
 			flush_rewrite_rules( false );
 			update_option( 'wormiss_rewrite_version', WORMISS_VERSION );
 		}
+	}
+
+	/**
+	 * The read-only wormiss_sync REST field: iMIS event ID, last status and message.
+	 *
+	 * @param array $post Post data from the REST controller.
+	 * @return array
+	 */
+	public static function rest_sync_field( array $post ): array {
+		$post_id = (int) ( $post['id'] ?? 0 );
+		return [
+			'imis_id' => (string) get_post_meta( $post_id, self::META_IMIS_ID, true ),
+			'status'  => (string) get_post_meta( $post_id, self::META_STATUS, true ),
+			'message' => (string) get_post_meta( $post_id, self::META_MESSAGE, true ),
+		];
 	}
 
 	/**
@@ -206,14 +224,24 @@ class Wormiss_Event_Sync {
 	 * @return void
 	 */
 	public static function maybe_queue( $post_id, $post ): void {
-		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) || 'publish' !== $post->post_status ) {
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 			return;
 		}
-		if ( ! Wormiss_Settings::get( 'event_sync_enabled' ) ) {
+		// Creating events in iMIS is for editors and administrators, not every author. An editor's
+		// save is remembered, so the event can still be sent when a scheduled publication happens
+		// later in the background (no one is signed in then); anyone else's save needs an editor again.
+		$user_id = get_current_user_id();
+		if ( $user_id ) {
+			if ( current_user_can( 'edit_others_posts' ) ) {
+				update_post_meta( $post_id, self::META_APPROVED, $user_id );
+			} else {
+				delete_post_meta( $post_id, self::META_APPROVED );
+				return;
+			}
+		} elseif ( ! get_post_meta( $post_id, self::META_APPROVED, true ) ) {
 			return;
 		}
-		// Creating events in iMIS is for editors and administrators, not every author.
-		if ( ! current_user_can( 'edit_others_posts' ) ) {
+		if ( 'publish' !== $post->post_status || ! Wormiss_Settings::get( 'event_sync_enabled' ) ) {
 			return;
 		}
 		update_post_meta( $post_id, self::META_STATUS, 'queued' );
@@ -298,6 +326,20 @@ class Wormiss_Event_Sync {
 			$imis_id = $client->clone_event( $template, $details['code'], $details['name'] );
 			// Kept straight away, so a failure below never copies the template a second time.
 			update_post_meta( $post->ID, self::META_IMIS_ID, $imis_id );
+			// Trashed (or unpublished) while iMIS was copying: the cancel at trash time found no
+			// iMIS event yet, so arrange it now rather than leave an orphan, and save nothing more.
+			if ( 'publish' !== get_post_status( $post->ID ) ) {
+				$cancel = 'trash' === get_post_status( $post->ID ) && Wormiss_Settings::get( 'event_cancel_on_trash' );
+				if ( $cancel ) {
+					wp_schedule_single_event( time(), self::CANCEL_HOOK, [ $post->ID, $imis_id ] );
+				}
+				$message = $cancel
+					/* translators: %s: iMIS event ID. */
+					? __( 'Created in iMIS as event %s, but the event was trashed meanwhile, so it is being cancelled there.', 'wormiss' )
+					/* translators: %s: iMIS event ID. */
+					: __( 'Created in iMIS as event %s, but the event was unpublished meanwhile. Check it in iMIS.', 'wormiss' );
+				return [ 'error', sprintf( $message, $imis_id ) ];
+			}
 		}
 		$client->update_event( $imis_id, self::apply( $client->get_event( $imis_id ), $details ) );
 		/* translators: %s: iMIS event ID. */

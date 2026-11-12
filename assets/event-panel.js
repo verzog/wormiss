@@ -26,17 +26,17 @@
 	/**
 	 * The last sync result as a notice, or nothing.
 	 *
-	 * @param {Object} meta Post meta.
+	 * @param {Object} sync The read-only wormiss_sync field.
 	 * @returns {Object|null} Element.
 	 */
-	function syncNotice(meta) {
-		const status = meta._wormiss_event_sync_status || '';
+	function syncNotice(sync) {
+		const status = sync.status || '';
 		if (!status) {
 			return null;
 		}
 		const kinds = {synced: 'success', cancelled: 'warning', error: 'error'};
 		return el(Notice, {status: kinds[status] || 'info', isDismissible: false},
-			meta._wormiss_event_sync_message || status);
+			sync.message || status);
 	}
 
 	/**
@@ -46,9 +46,10 @@
 	 */
 	function EventPanel() {
 		const meta = useSelect((select) => select('core/editor').getEditedPostAttribute('meta') || {}, []);
+		const sync = useSelect((select) => select('core/editor').getCurrentPostAttribute('wormiss_sync') || {}, []);
 		const {editPost} = useDispatch('core/editor');
 		const set = (key, value) => editPost({meta: {[key]: value}});
-		const imisId = meta._wormiss_imis_event_id || '';
+		const imisId = sync.imis_id || '';
 
 		/**
 		 * A text field for one meta key.
@@ -78,7 +79,7 @@
 			Panel,
 			{name: 'wormiss-event', title: __('iMIS event', 'wormiss')},
 			el('p', {className: 'description'}, state),
-			syncNotice(meta),
+			syncNotice(sync),
 			field('_wormiss_event_code', __('Event code', 'wormiss'), {
 				help: imisId
 					? sprintf(__('In iMIS as %s. The code cannot change now.', 'wormiss'), imisId)
