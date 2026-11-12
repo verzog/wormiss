@@ -44,6 +44,9 @@ class Wormiss_Events {
 	/** Publishing states that mean an event is not for the public. */
 	const HIDDEN_STATES = [ 'archived', 'declined', 'deleted', 'expired', 'waitingforapproval', 'working' ];
 
+	/** A capacity this large means no real limit (as iMIS events often use 1000 or more). */
+	const UNLIMITED = 1000;
+
 	/** Template states that mark an iMIS event template rather than a real event. */
 	const TEMPLATE_STATES = [ 'standardtemplate', 'defaulttemplate' ];
 
@@ -228,24 +231,34 @@ class Wormiss_Events {
 		}
 		$description = self::text( wp_strip_all_tags( (string) self::scalar( $data->Description ?? '' ) ) );
 		$event       = [
-			'id'          => $id,
-			'code'        => self::text( $data->EventCode ?? '' ),
-			'name'        => $name,
-			'description' => mb_substr( $description, 0, self::DESCRIPTION_LENGTH ),
-			'start'       => self::text( $data->StartDateTime ?? '' ),
-			'end'         => self::text( $data->EndDateTime ?? '' ),
-			'status'      => self::text( $data->Status ?? '' ),
-			'location'    => $place,
-			'online'      => self::text( $data->VirtualMeetingUrl ?? '' ),
-			'image'       => self::text( $data->ImageUrl ?? '' ),
-			'category'    => is_object( $data->Category ?? null ) ? self::text( $data->Category->Name ?? '' ) : '',
-			'template'    => self::text( $data->TemplateState ?? '' ),
+			'id'            => $id,
+			'code'          => self::text( $data->EventCode ?? '' ),
+			'name'          => $name,
+			'description'   => mb_substr( $description, 0, self::DESCRIPTION_LENGTH ),
+			'start'         => self::text( $data->StartDateTime ?? '' ),
+			'end'           => self::text( $data->EndDateTime ?? '' ),
+			'status'        => self::text( $data->Status ?? '' ),
+			'location'      => $place,
+			'online'        => self::text( $data->VirtualMeetingUrl ?? '' ),
+			'image'         => self::text( $data->ImageUrl ?? '' ),
+			'category'      => is_object( $data->Category ?? null ) ? self::text( $data->Category->Name ?? '' ) : '',
+			'template'      => self::text( $data->TemplateState ?? '' ),
 			// Registration: the type (RegistrationRequired is free), when it closes, and the first option.
-			'reg_type'    => self::text( $data->RegistrationType ?? '' ),
-			'reg_end'     => self::text( $data->RegistrationEndDate ?? '' ),
-			'reg_option'  => self::first_option( $data->RegistrationOptions ?? null ),
-			'publishing'  => is_object( $data->PublishingInformation ?? null )
+			'reg_type'      => self::text( $data->RegistrationType ?? '' ),
+			'reg_end'       => self::text( $data->RegistrationEndDate ?? '' ),
+			'reg_option'    => self::first_option( $data->RegistrationOptions ?? null ),
+			'publishing'    => is_object( $data->PublishingInformation ?? null )
 				? self::text( $data->PublishingInformation->PublishingState ?? '' ) : '',
+			// When iMIS shows the event: from (StartDate) and until (ExpirationDate).
+			'publish_from'  => is_object( $data->PublishingInformation ?? null )
+				? self::text( $data->PublishingInformation->StartDate ?? '' ) : '',
+			'publish_until' => is_object( $data->PublishingInformation ?? null )
+				? self::text( $data->PublishingInformation->ExpirationDate ?? '' ) : '',
+			// Numbers and waitlist: places (0 for no limit), who may join the waitlist, and
+			// whether places are offered to the waitlist automatically.
+			'capacity'      => max( 0, (int) self::text( $data->Capacity ?? 0 ) ),
+			'waitlist'      => self::text( $data->WaitlistPermissions ?? '' ),
+			'auto_release'  => true === self::scalar( $data->AutomaticallyReleaseFromWaitlist ?? false ),
 		];
 		// phpcs:enable
 		return $event;
@@ -299,11 +312,116 @@ class Wormiss_Events {
 			if ( $categories && ! in_array( strtolower( $event['category'] ), $categories, true ) ) {
 				continue;
 			}
+			if ( ! self::is_published( $event, $now ) ) {
+				continue;
+			}
 			$event['_start'] = $start;
 			$out[]           = $event;
 		}
 		usort( $out, static fn( $a, $b ) => $a['_start'] <=> $b['_start'] );
 		return $out;
+	}
+
+	/**
+	 * Whether an event is inside its iMIS publish dates (always true unless Settings says to
+	 * follow them).
+	 *
+	 * @param array $event Event from normalise().
+	 * @param int   $now   Current Unix time.
+	 * @return bool
+	 */
+	public static function is_published( array $event, int $now ): bool {
+		if ( ! Wormiss_Settings::get( 'event_publish_dates' ) ) {
+			return true;
+		}
+		$from  = self::timestamp( (string) ( $event['publish_from'] ?? '' ) );
+		$until = self::timestamp( (string) ( $event['publish_until'] ?? '' ) );
+		return ( null === $from || $from <= $now ) && ( null === $until || $until >= $now );
+	}
+
+	/**
+	 * Places on an event: capacity, places taken and places left, from iMIS (cached).
+	 * Null when not shown: no places IQA set, no capacity, or iMIS cannot be read.
+	 *
+	 * @param array $event Event from normalise().
+	 * @return array|null {capacity: int, taken: int, left: int, unlimited: bool}
+	 */
+	public static function places( array $event ): ?array {
+		$capacity = (int) ( $event['capacity'] ?? 0 );
+		$query    = (string) Wormiss_Settings::get( 'event_places_query' );
+		if ( '' === $query || $capacity <= 0 || '' === (string) ( $event['id'] ?? '' ) ) {
+			return null;
+		}
+		if ( $capacity >= self::UNLIMITED ) {
+			// A capacity this large is how iMIS events say "no real limit": no need to count.
+			return [
+				'capacity'  => $capacity,
+				'taken'     => 0,
+				'left'      => $capacity,
+				'unlimited' => true,
+			];
+		}
+		$key   = self::places_key( (string) $event['id'] );
+		$taken = get_transient( $key );
+		if ( ! is_int( $taken ) ) {
+			try {
+				$taken = ( new Wormiss_Rest_Client() )->count_registrations( $query, (string) $event['id'] );
+			} catch ( Wormiss_Exception $e ) {
+				unset( $e ); // iMIS unavailable: say nothing about places rather than something wrong.
+				return null;
+			}
+			$minutes = max( 1, (int) Wormiss_Settings::get( 'cache_minutes' ) );
+			set_transient( $key, $taken, $minutes * MINUTE_IN_SECONDS );
+		}
+		return [
+			'capacity'  => $capacity,
+			'taken'     => $taken,
+			'left'      => max( 0, $capacity - $taken ),
+			'unlimited' => false,
+		];
+	}
+
+	/**
+	 * Places in words: "12 of 30 places left", "Full" or "Places available".
+	 *
+	 * @param array $places From places().
+	 * @return string
+	 */
+	public static function places_text( array $places ): string {
+		if ( $places['unlimited'] ) {
+			return __( 'Places available', 'wormiss' );
+		}
+		if ( $places['left'] <= 0 ) {
+			return __( 'Full', 'wormiss' );
+		}
+		return sprintf(
+			/* translators: 1: places left, 2: capacity. */
+			_n( '%1$d of %2$d place left', '%1$d of %2$d places left', $places['left'], 'wormiss' ),
+			$places['left'],
+			$places['capacity']
+		);
+	}
+
+	/**
+	 * Forget an event's cached places count (after a registration or cancellation).
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @return void
+	 */
+	public static function forget_places( string $event_id ): void {
+		delete_transient( self::places_key( $event_id ) );
+	}
+
+	/**
+	 * Cache key for an event's places count on the current iMIS connection and places IQA.
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @return string
+	 */
+	private static function places_key( string $event_id ): string {
+		// The query is part of the key, so changing the places IQA never shows the old one's counts.
+		$query = (string) Wormiss_Settings::get( 'event_places_query' );
+		return 'wormiss_places_' . md5( Wormiss_Settings::base_url() . "\0" . $query . "\0" . $event_id );
 	}
 
 	/**

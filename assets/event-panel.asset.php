@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Script dependencies and version for editor-panel.js.
+ * Script dependencies and version for event-panel.js.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -26,5 +26,5 @@ defined( 'ABSPATH' ) || exit;
 
 return [
 	'dependencies' => [ 'wp-components', 'wp-data', 'wp-editor', 'wp-element', 'wp-i18n', 'wp-plugins' ],
-	'version'      => '0.7.0',
+	'version'      => '0.14.0',
 ];

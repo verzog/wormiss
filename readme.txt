@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.13.0
+Stable tag: 0.14.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -155,6 +155,10 @@ For free events, yes. Under Wormiss > Settings > iMIS events, tick "Members regi
 
 Yes. Build an iMIS IQA with no prompts that returns ID, Email, FirstName, LastName and Status for the members who should have website accounts (tick "Available via REST API"). Under Wormiss > Settings > Sync members into WordPress, enter its path, choose the role for new members (only roles without editing rights are offered), and tick "Sync members daily" with the dry run still ticked. Press "Run the member sync now" and read the report. When it looks right, untick the dry run. Members are matched by iMIS ID, then email; new ones get the iMIS ID as their username and no email. Members whose Status is not in the Current statuses (Members-only content) are blocked from signing in until it is current again. Staff accounts are never changed.
 
+= How do I show places left on an event? =
+
+The iMIS Events API reads registrations one member at a time, so the count comes from an IQA. Build one with a single prompt, the event ID, that returns one row per place taken (leave out cancelled and waitlisted registrations), or one row with a numeric Registered column. Tick "Available via REST API". Enter its path under Wormiss > Settings > iMIS events > Places count IQA. Event pages then show places left; the capacity comes from the iMIS event, and 1000 or more shows as "Places available".
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -177,6 +181,14 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.14.0 =
+* Event numbers: each event (or its event type, as a default) can set minimum and expected attendance, written to the event's main registration option in iMIS. Attendance that cannot fit the capacity is flagged before sending.
+* Waitlist: each event (or its type) can choose who may join the iMIS waitlist (no one, staff only, or anyone) and whether freed places go to the waitlist automatically. Blank keeps the setting in iMIS.
+* Places left: with a places-count IQA set in Wormiss > Settings > iMIS events, Event pages show "12 of 30 places left", "Full" or (capacity 1000 or more) "Places available", and the editor panel shows the same. A full free event shows "This event is full." instead of Register, and registering checks again. Counts are cached like the events list.
+* Event pages show the event code; the Events list has Event code and iMIS columns. Event codes are limited to 10 characters, as in iMIS.
+* Event type category IDs can have / between parts (e.g. M/L).
+* Optional: list only events inside their iMIS publish dates ("Follow iMIS publish dates", off by default).
 
 = 0.13.0 =
 * Member sync: once a day (or on "Run the member sync now"), members from an iMIS IQA are created or updated as WordPress users (login = iMIS ID, a chosen non-staff role, no emails), matched by iMIS ID then email. Members whose status is not current are blocked from signing in (password and single sign-on) until it is current again. Staff are never changed; a run that would block an unusually large share blocks no one. Off and a dry run by default; each run's report shows in Settings and the audit log.

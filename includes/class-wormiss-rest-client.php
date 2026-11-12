@@ -441,8 +441,19 @@ class Wormiss_Rest_Client {
 	 * @throws Wormiss_Exception On a failure other than "not found".
 	 */
 	public function event_category_exists( string $category_id ): bool {
-		if ( ! self::is_event_id( $category_id ) ) {
+		if ( ! self::is_category_id( $category_id ) ) {
 			throw new Wormiss_Exception( __( 'That is not a valid iMIS event category ID.', 'wormiss' ) );
+		}
+		if ( false !== strpos( $category_id, '/' ) ) {
+			// A / cannot go in the address (web servers refuse an encoded one), so look through the list.
+			foreach ( $this->read_events( '/api/EventCategory?' ) as $category ) {
+				// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+				$id = $category->EventCategoryId ?? '';
+				if ( is_string( $id ) && 0 === strcasecmp( $id, $category_id ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 		try {
 			$result = $this->request( 'GET', '/api/EventCategory/' . rawurlencode( $category_id ) );
@@ -516,6 +527,47 @@ class Wormiss_Rest_Client {
 			'status' => is_scalar( $body->Status ?? null ) ? (string) $body->Status : '',
 		];
 		// phpcs:enable
+	}
+
+	/**
+	 * How many places an event has taken, from an IQA given the event ID as its first prompt.
+	 *
+	 * The Events API reads registrations one member at a time only (GET EventRegistration needs
+	 * both EventId and PartyId), so the count comes from an IQA set up in iMIS. It returns one row
+	 * per place taken, or a numeric Registered (or Quantity) column, which is added up instead.
+	 *
+	 * @param string $query    IQA document path.
+	 * @param string $event_id iMIS event ID.
+	 * @return int
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function count_registrations( string $query, string $event_id ): int {
+		if ( ! self::is_event_id( $event_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		$rows = $this->run_iqa( $query, [ $event_id ] );
+		return self::places_taken( $rows );
+	}
+
+	/**
+	 * Places taken from IQA rows: the Registered or Quantity column added up, else the rows counted.
+	 *
+	 * @param array[] $rows Rows from run_iqa().
+	 * @return int
+	 */
+	public static function places_taken( array $rows ): int {
+		$total  = 0.0;
+		$summed = false;
+		foreach ( $rows as $row ) {
+			foreach ( (array) $row as $name => $value ) {
+				if ( in_array( strtolower( (string) $name ), [ 'registered', 'quantity' ], true ) && is_numeric( $value ) ) {
+					$total += (float) $value;
+					$summed = true;
+					break;
+				}
+			}
+		}
+		return $summed ? max( 0, (int) round( $total ) ) : count( $rows );
 	}
 
 	/**
@@ -627,6 +679,17 @@ class Wormiss_Rest_Client {
 	 */
 	public static function is_event_id( string $event_id ): bool {
 		return 1 === preg_match( '/^[A-Za-z0-9_-]{1,64}$/', $event_id );
+	}
+
+	/**
+	 * Whether a string is a usable iMIS event category ID: letters, digits, _ and -, with
+	 * single / between parts (e.g. M/L).
+	 *
+	 * @param string $category_id Category ID.
+	 * @return bool
+	 */
+	public static function is_category_id( string $category_id ): bool {
+		return strlen( $category_id ) <= 64 && 1 === preg_match( '#^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$#', $category_id );
 	}
 
 	/**

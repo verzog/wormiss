@@ -92,6 +92,9 @@ class Wormiss_Settings {
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
 			'event_statuses'             => [ 'A' ],
 			'event_url'                  => self::DEFAULT_EVENT_URL,
+			// The IQA that counts an event's places taken ('' shows no places), and iMIS publish dates.
+			'event_places_query'         => '',
+			'event_publish_dates'        => false,
 			// Members registering for free events here: off, and a dry run, until turned on.
 			'event_registration_enabled' => false,
 			'event_registration_dry_run' => true,
@@ -386,7 +389,7 @@ class Wormiss_Settings {
 				add_settings_error( self::OPTION, 'event_template_id', $message );
 			}
 		}
-		foreach ( [ 'event_registration_enabled', 'event_registration_dry_run' ] as $box ) {
+		foreach ( [ 'event_registration_enabled', 'event_registration_dry_run', 'event_publish_dates' ] as $box ) {
 			if ( isset( $input['events_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {
@@ -399,6 +402,10 @@ class Wormiss_Settings {
 			} elseif ( array_key_exists( $box, $input ) ) {
 				$clean[ $box ] = (bool) $input[ $box ];
 			}
+		}
+		if ( isset( $input['event_places_query'] ) ) {
+			$query                       = self::parse_queries( (string) $input['event_places_query'] );
+			$clean['event_places_query'] = $query ? $query[0] : '';
 		}
 		if ( isset( $input['user_sync_query'] ) ) {
 			$query                    = self::parse_queries( (string) $input['user_sync_query'] );

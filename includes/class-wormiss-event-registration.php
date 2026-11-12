@@ -115,6 +115,10 @@ class Wormiss_Event_Registration {
 				. self::form( 'wormiss_cancel_registration', $id, __( 'Cancel my registration', 'wormiss' ), 'is-style-outline' )
 				. '</div>';
 		}
+		$places = $show_status ? Wormiss_Events::places( $event ) : null;
+		if ( null !== $places && ! $places['unlimited'] && $places['left'] <= 0 ) {
+			return $html . '<p class="wormiss-register wormiss-register--full">' . esc_html__( 'This event is full.', 'wormiss' ) . '</p>';
+		}
 		return $html . self::form( 'wormiss_register', $id, __( 'Register', 'wormiss' ), '' );
 	}
 
@@ -172,7 +176,7 @@ class Wormiss_Event_Registration {
 	 * Register the current member for a free event.
 	 *
 	 * @param string $event_id iMIS event ID.
-	 * @return string Result: registered, already, dry_run, closed, not_member, off or error.
+	 * @return string Result: registered, already, full, dry_run, closed, not_member, off or error.
 	 */
 	public static function register( string $event_id ): string {
 		$imis_id = Wormiss_Member::imis_id();
@@ -191,6 +195,13 @@ class Wormiss_Event_Registration {
 				self::forget_status( $event_id, $imis_id );
 				return 'already';
 			}
+			$capacity = (int) $event['capacity'];
+			$query    = (string) Wormiss_Settings::get( 'event_places_query' );
+			if ( '' !== $query && $capacity > 0 && $capacity < Wormiss_Events::UNLIMITED
+				&& $client->count_registrations( $query, $event_id ) >= $capacity ) {
+				Wormiss_Events::forget_places( $event_id );
+				return 'full';
+			}
 			if ( Wormiss_Settings::get( 'event_registration_dry_run' ) ) {
 				Wormiss_Logger::record_call(
 					'DRY RUN POST /api/EventRegistration/_execute (RegisterEvent ' . $event_id . ')',
@@ -208,6 +219,7 @@ class Wormiss_Event_Registration {
 			return 'error';
 		}
 		self::forget_status( $event_id, $imis_id );
+		Wormiss_Events::forget_places( $event_id );
 		return 'registered';
 	}
 
@@ -251,6 +263,7 @@ class Wormiss_Event_Registration {
 			return 'error';
 		}
 		self::forget_status( $event_id, $imis_id );
+		Wormiss_Events::forget_places( $event_id );
 		return 'cancelled';
 	}
 
@@ -387,6 +400,7 @@ class Wormiss_Event_Registration {
 			'not_registered' => __( "You're not registered for this event.", 'wormiss' ),
 			'dry_run'        => __( 'Test mode: nothing was sent to iMIS. The request is in the Wormiss audit log.', 'wormiss' ),
 			'closed'         => __( 'Registration for this event is closed.', 'wormiss' ),
+			'full'           => __( 'Sorry, this event is full.', 'wormiss' ),
 			'cannot_cancel'  => __( "This registration can't be cancelled here. Please contact us.", 'wormiss' ),
 			'not_member'     => __( 'Only signed-in members can register here.', 'wormiss' ),
 			'off'            => __( 'Registering here is not available at the moment.', 'wormiss' ),
