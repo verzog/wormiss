@@ -64,8 +64,8 @@ class Wormiss_Event_Import {
 	/** Seconds before the next batch runs. */
 	const BATCH_GAP = MINUTE_IN_SECONDS;
 
-	/** Option: where the next batch carries on in the list of events. */
-	const OFFSET_OPTION = 'wormiss_event_import_offset';
+	/** Option: the iMIS event IDs this import has already dealt with (event ID => true). */
+	const DONE_OPTION = 'wormiss_event_import_done';
 
 	/** Option used as the one-run-at-a-time lock (its value is when it was taken). */
 	const LOCK_OPTION = 'wormiss_event_import_lock';
@@ -155,7 +155,8 @@ class Wormiss_Event_Import {
 	 * @return array The report (also saved for the settings page).
 	 */
 	public static function run( $carry_on = false ): array {
-		$start  = true === $carry_on ? max( 0, (int) get_option( self::OFFSET_OPTION, 0 ) ) : 0;
+		$done   = true === $carry_on ? get_option( self::DONE_OPTION, [] ) : [];
+		$done   = is_array( $done ) ? $done : [];
 		$report = [
 			'time'      => time(),
 			'status'    => 'ok',
@@ -175,7 +176,7 @@ class Wormiss_Event_Import {
 			return $report;
 		}
 		try {
-			return self::import( $report, $start );
+			return self::import( $report, $done );
 		} finally {
 			delete_option( self::LOCK_OPTION );
 		}
@@ -217,10 +218,10 @@ class Wormiss_Event_Import {
 	 * Read the events and make or update their pages.
 	 *
 	 * @param array $report Report so far.
-	 * @param int   $start  Index of the first event this batch may change.
+	 * @param array $done   iMIS event IDs earlier batches of this import dealt with (ID => true).
 	 * @return array The report.
 	 */
-	private static function import( array $report, int $start ): array {
+	private static function import( array $report, array $done ): array {
 		$since = (string) Wormiss_Settings::get( 'event_import_since' );
 		// The read starts at the earlier of the past-events date and the usual lookback, so events
 		// under way are never missed; the date only limits finished events (with_past()).
@@ -259,20 +260,20 @@ class Wormiss_Event_Import {
 		// finished ones since the past-events date when one is set.
 		$events         = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
 		$report['read'] = count( $events );
-		// At most BATCH page changes per run; the rest carry on in the background a minute later,
-		// from where this run stopped (so events that cannot be imported never hold others back).
-		$events = array_values( $events );
-		$start  = $start < count( $events ) ? $start : 0;
+		// At most BATCH page changes per run; the rest carry on in the background a minute later.
+		// Batches remember the events they dealt with by ID (not by place in the list, which
+		// shifts as events finish or change), so none is skipped and none holds others back.
 		$writes = 0;
-		foreach ( $events as $index => $event ) {
-			if ( $index < $start ) {
+		$todo   = 0;
+		foreach ( $events as $event ) {
+			if ( isset( $done[ $event['id'] ] ) ) {
 				continue;
 			}
 			if ( $writes >= self::BATCH ) {
-				$report['remaining'] = count( $events ) - $index;
-				update_option( self::OFFSET_OPTION, $index, false );
-				break;
+				++$todo;
+				continue;
 			}
+			$done[ $event['id'] ] = true;
 			unset( $event['_start'] );
 			$extra   = $extras[ $event['id'] ] ?? self::extras( null );
 			$post_id = self::page_for( (string) $event['id'] );
@@ -290,7 +291,9 @@ class Wormiss_Event_Import {
 				++$report['skipped'];
 			}
 		}
-		if ( $report['remaining'] > 0 ) {
+		$report['remaining'] = $todo;
+		if ( $todo > 0 ) {
+			update_option( self::DONE_OPTION, $done, false );
 			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
 				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
 			}
@@ -304,7 +307,7 @@ class Wormiss_Event_Import {
 				)
 			);
 		} else {
-			delete_option( self::OFFSET_OPTION );
+			delete_option( self::DONE_OPTION );
 		}
 		return self::save( $report );
 	}
