@@ -130,14 +130,14 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_template_for_event(): void {
-		$workshop = $this->type( 'Workshop', 'WKSHPTPL', 'WORKSHOP' );
+		$workshop = $this->type( 'Workshop', 'WKSHPTPL', 'WKSHP' );
 		$plain    = $this->type( 'Meeting' );
 
 		$this->assertSame( 'DEFAULTTPL', Wormiss_Event_Types::for_event( $this->event() )['template'] );
 
 		$typed = Wormiss_Event_Types::for_event( $this->event( [ $workshop ] ) );
 		$this->assertSame( 'WKSHPTPL', $typed['template'] );
-		$this->assertSame( 'WORKSHOP', $typed['category'] );
+		$this->assertSame( 'WKSHP', $typed['category'] );
 		$this->assertSame( 'Workshop', $typed['type'] );
 
 		$this->assertSame( 'DEFAULTTPL', Wormiss_Event_Types::for_event( $this->event( [ $plain ] ) )['template'] );
@@ -155,8 +155,9 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_new_event_uses_type_template_and_category(): void {
-		$post_id = $this->event( [ $this->type( 'Workshop', 'WKSHPTPL', 'WORKSHOP' ) ] );
+		$post_id = $this->event( [ $this->type( 'Workshop', 'WKSHPTPL', 'WKSHP' ) ] );
 		$this->imis->token()
+			->reply( '/api/EventCategory/WKSHP', 200, [ 'EventCategoryId' => 'WKSHP' ] )
 			->reply( '/api/Event/_execute', 200, [ 'EventId' => 'DERM27' ] )
 			->reply(
 				'/api/Event/DERM27',
@@ -172,10 +173,10 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 			->reply( '/api/Event/DERM27', 200, '{}' );
 
 		$this->assertSame( 'synced', Wormiss_Event_Sync::sync( $post_id ) );
-		$clone = json_decode( (string) $this->imis->requests[1]['body'], true );
+		$clone = json_decode( (string) $this->imis->requests[2]['body'], true );
 		$this->assertSame( 'WKSHPTPL', $clone['EventId'] );
-		$saved = json_decode( (string) $this->imis->requests[3]['body'], true );
-		$this->assertSame( 'WORKSHOP', $saved['Category']['EventCategoryId'] );
+		$saved = json_decode( (string) $this->imis->requests[4]['body'], true );
+		$this->assertSame( 'WKSHP', $saved['Category']['EventCategoryId'] );
 		$this->assertArrayNotHasKey( 'Name', $saved['Category'] );
 	}
 
@@ -186,13 +187,14 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 */
 	public function test_dry_run_uses_type_template(): void {
 		$this->turn_on( true );
-		$post_id = $this->event( [ $this->type( 'Webinar', 'WEBTPL', 'ONLINE' ) ] );
+		$post_id = $this->event( [ $this->type( 'Webinar', 'WEBTPL', 'ONLN' ) ] );
 		$this->imis->token()
+			->reply( '/api/EventCategory/ONLN', 200, [ 'EventCategoryId' => 'ONLN' ] )
 			->reply( '/api/Event/WEBTPL', 200, [ 'EventId' => 'WEBTPL' ] )
 			->reply( '/api/Event/_validate', 200, '{}' );
 		$this->assertSame( 'dry_run', Wormiss_Event_Sync::sync( $post_id ) );
-		$checked = json_decode( (string) $this->imis->requests[2]['body'], true );
-		$this->assertSame( 'ONLINE', $checked['Category']['EventCategoryId'] );
+		$checked = json_decode( (string) $this->imis->requests[3]['body'], true );
+		$this->assertSame( 'ONLN', $checked['Category']['EventCategoryId'] );
 		$this->assertSame( 'DERM27', $checked['EventCode'] );
 	}
 
@@ -204,17 +206,18 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 */
 	public function test_update_needs_no_template(): void {
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_template_id' => '' ] ) );
-		$post_id = $this->event( [ $this->type( 'Category only', '', 'SEMINAR' ) ] );
+		$post_id = $this->event( [ $this->type( 'Category only', '', 'SEMNR' ) ] );
 		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $post_id ) );
 		$this->assertSame( [], $this->imis->requests );
 
 		update_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, 'DERM27' );
 		$this->imis->token()
+			->reply( '/api/EventCategory/SEMNR', 200, [ 'EventCategoryId' => 'SEMNR' ] )
 			->reply( '/api/Event/DERM27', 200, [ 'EventId' => 'DERM27' ] )
 			->reply( '/api/Event/DERM27', 200, '{}' );
 		$this->assertSame( 'synced', Wormiss_Event_Sync::sync( $post_id ) );
-		$saved = json_decode( (string) $this->imis->requests[2]['body'], true );
-		$this->assertSame( 'SEMINAR', $saved['Category']['EventCategoryId'] );
+		$saved = json_decode( (string) $this->imis->requests[3]['body'], true );
+		$this->assertSame( 'SEMNR', $saved['Category']['EventCategoryId'] );
 		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
 	}
 
@@ -242,21 +245,21 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_create_category(): void {
-		$this->assertSame( 'SKINCANCER', Wormiss_Event_Types::category_id_from_name( 'Skin cancer workshops' ) );
+		$this->assertSame( 'SKINC', Wormiss_Event_Types::category_id_from_name( 'Skin cancer workshops' ) );
 		$term_id = $this->type( 'Skin cancer workshops' );
 		$this->imis->token()
-			->reply( '/api/EventCategory/SKINCANCER', 404, '{"Message":"Not found"}' )
+			->reply( '/api/EventCategory/SKINC', 404, '{"Message":"Not found"}' )
 			->reply( '/api/EventCategory', 200, '{}' );
 		$this->assertSame( 'created', Wormiss_Event_Types::create_category( $term_id ) );
-		$this->assertSame( 'SKINCANCER', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		$this->assertSame( 'SKINC', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
 		$body = json_decode( (string) $this->imis->requests[2]['body'], true );
 		$this->assertSame( 'POST', $this->imis->requests[2]['method'] );
-		$this->assertSame( 'SKINCANCER', $body['EventCategoryId'] );
+		$this->assertSame( 'SKINC', $body['EventCategoryId'] );
 		$this->assertSame( 'Skin cancer workshops', $body['Name'] );
 		$this->assertStringContainsString( 'was created', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
 
 		$this->imis->requests = [];
-		$this->imis->token()->reply( '/api/EventCategory/SKINCANCER', 200, '{"EventCategoryId":"SKINCANCER"}' );
+		$this->imis->token()->reply( '/api/EventCategory/SKINC', 200, '{"EventCategoryId":"SKINC"}' );
 		$this->assertSame( 'exists', Wormiss_Event_Types::create_category( $term_id ) );
 		$this->assertSame( 2, count( $this->imis->requests ) );
 	}
@@ -268,8 +271,8 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 */
 	public function test_create_category_dry_run_and_off(): void {
 		$this->turn_on( true );
-		$term_id = $this->type( 'Webinar', '', 'WEBINAR' );
-		$this->imis->token()->reply( '/api/EventCategory/WEBINAR', 404, '{}' );
+		$term_id = $this->type( 'Webinar', '', 'WEBNR' );
+		$this->imis->token()->reply( '/api/EventCategory/WEBNR', 404, '{}' );
 		$this->assertSame( 'dry_run', Wormiss_Event_Types::create_category( $term_id ) );
 		$this->assertSame( 2, count( $this->imis->requests ) );
 
@@ -285,20 +288,20 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_form_capacity_and_create(): void {
-		$term_id = $this->type( 'Seminar', '', 'SEMINAR' );
+		$term_id = $this->type( 'Seminar', '', 'SEMNR' );
 		$this->imis->token()
-			->reply( '/api/EventCategory/SEMINAR', 404, '{}' )
+			->reply( '/api/EventCategory/SEMNR', 404, '{}' )
 			->reply( '/api/EventCategory', 200, '{}' );
 		$_POST = [
 			'wormiss_event_type_nonce'         => wp_create_nonce( Wormiss_Event_Types::NONCE ),
 			Wormiss_Event_Types::META_CAPACITY => '60',
 			Wormiss_Event_Types::FIELD_CREATE  => '1',
-			Wormiss_Event_Types::META_CATEGORY => 'seminar',
+			Wormiss_Event_Types::META_CATEGORY => 'semnr',
 		];
 		Wormiss_Event_Types::save_fields( $term_id );
 		$_POST = [];
 		$this->assertSame( 60, (int) get_term_meta( $term_id, Wormiss_Event_Types::META_CAPACITY, true ) );
-		$this->assertSame( 1, $this->imis->count( '/api/EventCategory/SEMINAR' ) );
+		$this->assertSame( 1, $this->imis->count( '/api/EventCategory/SEMNR' ) );
 		$this->assertStringContainsString( 'was created', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
 	}
 
@@ -320,9 +323,77 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 		Wormiss_Event_Types::save_fields( $term_id );
 		$this->assertSame( 'CONFTPL', get_term_meta( $term_id, Wormiss_Event_Types::META_TEMPLATE, true ) );
 		$this->assertSame( '', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		$this->assertStringContainsString( 'was not kept', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
 		$_POST = [];
 
 		$this->assertSame( 'CONFTPL', Wormiss_Event_Types::column( '', Wormiss_Event_Types::META_TEMPLATE, $term_id ) );
 		$this->assertSame( 'Default', Wormiss_Event_Types::column( '', Wormiss_Event_Types::META_TEMPLATE, $this->type( 'Other' ) ) );
+	}
+
+	/**
+	 * The iMIS category IDs are at most 5 characters: a longer one (iMIS fails the whole save with
+	 * "HTTP 500") is not kept, and one saved before the limit stops the send with a clear reason.
+	 *
+	 * @return void
+	 */
+	public function test_category_limit(): void {
+		$this->assertSame( 'COUR', Wormiss_Event_Types::clean_category( 'cour' ) );
+		$this->assertSame( '', Wormiss_Event_Types::clean_category( 'COURSE' ) );
+		$this->assertSame( 'SKINC', Wormiss_Event_Types::category_id_from_name( 'Skin cancer' ) );
+
+		$term_id = $this->type( 'Course', 'CERTTPL' );
+		$_POST   = [
+			'wormiss_event_type_nonce'         => wp_create_nonce( Wormiss_Event_Types::NONCE ),
+			Wormiss_Event_Types::META_CATEGORY => 'COURSE',
+		];
+		Wormiss_Event_Types::save_fields( $term_id );
+		$_POST = [];
+		$this->assertSame( '', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		$this->assertStringContainsString( 'up to 5', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
+
+		// Saved before the limit was checked: stopped before anything is sent.
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Store an old value past the sanitizer.
+		$wpdb->update(
+			$wpdb->termmeta,
+			[ 'meta_value' => 'COURSE' ], // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Test.
+			[
+				'term_id'  => $term_id,
+				'meta_key' => Wormiss_Event_Types::META_CATEGORY, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Test.
+			]
+		);
+		wp_cache_delete( $term_id, 'term_meta' );
+		$post_id = $this->event( [ $term_id ] );
+		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $post_id ) );
+		$this->assertStringContainsString( 'up to 5 characters', get_post_meta( $post_id, Wormiss_Event_Sync::META_MESSAGE, true ) );
+		$this->assertSame( [], $this->imis->requests );
+	}
+
+	/**
+	 * A category iMIS does not have stops the send before the template is copied.
+	 *
+	 * @return void
+	 */
+	public function test_missing_category(): void {
+		$post_id = $this->event( [ $this->type( 'Course', 'CERTTPL', 'COUR5' ) ] );
+		$this->imis->token()->reply( '/api/EventCategory/COUR5', 404, 'NotFound' );
+		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $post_id ) );
+		$this->assertStringContainsString( 'iMIS has no event category COUR5', get_post_meta( $post_id, Wormiss_Event_Sync::META_MESSAGE, true ) );
+		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
+		$this->assertSame( '', get_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, true ) );
+	}
+
+	/**
+	 * When iMIS will not let the API create categories (HTTP 501), the type says what to do.
+	 *
+	 * @return void
+	 */
+	public function test_create_category_not_allowed(): void {
+		$term_id = $this->type( 'Course', '', 'COUR5' );
+		$this->imis->token()
+			->reply( '/api/EventCategory/COUR5', 404, 'NotFound' )
+			->reply( '/api/EventCategory', 501, 'OperationNotAvailable' );
+		$this->assertSame( 'error', Wormiss_Event_Types::create_category( $term_id ) );
+		$this->assertStringContainsString( 'Create COUR5 in iMIS', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
 	}
 }

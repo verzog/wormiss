@@ -754,14 +754,21 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
-	 * Whether a string is a usable iMIS event category ID: letters, digits, _ and -, with
-	 * single / between parts (e.g. M/L).
+	 * Longest iMIS event category ID. iMIS keeps an event's category in a 5-character field:
+	 * a longer ID (e.g. COURSE) makes it fail the whole event save with "HTTP 500".
+	 */
+	const CATEGORY_ID_MAX = 5;
+
+	/**
+	 * Whether a string is a usable iMIS event category ID: up to CATEGORY_ID_MAX letters,
+	 * digits, _ and -, with single / between parts (e.g. M/L).
 	 *
 	 * @param string $category_id Category ID.
 	 * @return bool
 	 */
 	public static function is_category_id( string $category_id ): bool {
-		return strlen( $category_id ) <= 64 && 1 === preg_match( '#^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$#', $category_id );
+		return strlen( $category_id ) <= self::CATEGORY_ID_MAX
+			&& 1 === preg_match( '#^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$#', $category_id );
 	}
 
 	/**

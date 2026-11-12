@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.22.1
+Stable tag: 0.22.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -197,6 +197,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.22.2 =
+* iMIS event category IDs are up to 5 characters (iMIS's own limit; a longer one, e.g. COURSE, made iMIS fail the whole event save with "HTTP 500"). The event type screen says why a longer ID was not kept, and a type saved earlier with one stops the send with a clear reason.
+* Before an event is sent, Wormiss checks that iMIS has its type's category, and says so when it does not, instead of saving the event under a category iMIS lacks.
+* When iMIS does not let Wormiss create an event category (HTTP 501), the type screen says to create it in iMIS.
 
 = 0.22.1 =
 * The audit log shows what was sent to iMIS and what iMIS replied ("Show" on each line), when "Keep full request and response bodies" is on, so a rejected call can be checked. Passwords and tokens are removed before anything is saved.
