@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.20.0
+Stable tag: 0.21.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -193,6 +193,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.21.0 =
+* "Send events to iMIS now" (Wormiss > Settings), also run once a day: every published Event made in WordPress that iMIS does not have up to date (never sent, edited since it was last saved there, last sent with a problem, or only checked in a dry run) is sent, 10 a minute in the background, through the usual sync, so the sending switch and dry run apply. Events linked to or imported from iMIS are never sent. Each run is in the audit log.
 
 = 0.20.0 =
 * The iMIS event import works in batches: each run makes or changes at most 20 pages (each may download an image), then carries on in the background a minute later from where it stopped, until every event is done, so a large import never stops the page with a time limit. Unchanged pages cost nothing. The settings page shows how many events are still to check. Replaces the old 100-pages-per-run limit.

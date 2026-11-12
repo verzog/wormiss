@@ -94,6 +94,9 @@ class Wormiss_Event_Sync {
 	/** Last sync message (set by the sync only). */
 	const META_MESSAGE = '_wormiss_event_sync_message';
 
+	/** When the event was last saved in iMIS (Unix time; set by the sync only). */
+	const META_SYNCED_AT = '_wormiss_event_synced_at';
+
 	/** Set when an editor saves the event, so its scheduled publication may be sent too. */
 	const META_APPROVED = '_wormiss_event_sync_approved';
 
@@ -351,6 +354,10 @@ class Wormiss_Event_Sync {
 		}
 		update_post_meta( $post_id, self::META_STATUS, $status );
 		update_post_meta( $post_id, self::META_MESSAGE, $message );
+		if ( 'synced' === $status ) {
+			// When it was last saved in iMIS, so "Send events now" can tell edits made since.
+			update_post_meta( $post_id, self::META_SYNCED_AT, time() );
+		}
 		return $status;
 	}
 
