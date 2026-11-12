@@ -52,46 +52,49 @@ class Wormiss_Settings {
 	 */
 	public static function defaults(): array {
 		return [
-			'base_url'              => '',
-			'username'              => '',
-			'timeout'               => 15,
-			'cache_minutes'         => 15,
-			'allowed_queries'       => [],
-			'log_enabled'           => true,
-			'log_capture'           => false,
-			'log_retention_days'    => 30,
+			'base_url'                   => '',
+			'username'                   => '',
+			'timeout'                    => 15,
+			'cache_minutes'              => 15,
+			'allowed_queries'            => [],
+			'log_enabled'                => true,
+			'log_capture'                => false,
+			'log_retention_days'         => 30,
 			// Members' own data: where each WordPress user's iMIS ID is kept, and the queries
 			// that may be run for the signed-in member.
-			'member_id_source'      => 'meta',
-			'member_id_meta'        => 'imis_id',
-			'member_queries'        => [],
-			'member_cache_minutes'  => 5,
+			'member_id_source'           => 'meta',
+			'member_id_meta'             => 'imis_id',
+			'member_queries'             => [],
+			'member_cache_minutes'       => 5,
 			// Members-only content: the query that reads a member's own membership record
 			// (run with their iMIS ID as the first prompt), its type and status columns, and
 			// the statuses that count as current when a post or block names none.
-			'access_query'          => '',
-			'access_type_column'    => 'MemberType',
-			'access_status_column'  => 'Status',
-			'access_statuses'       => [],
+			'access_query'               => '',
+			'access_type_column'         => 'MemberType',
+			'access_status_column'       => 'Status',
+			'access_statuses'            => [],
 			// Recording activity in iMIS: off, and a dry run, until an administrator turns it on.
-			'activity_enabled'      => false,
-			'activity_dry_run'      => true,
-			'activity_type'         => '',
+			'activity_enabled'           => false,
+			'activity_dry_run'           => true,
+			'activity_type'              => '',
 			// The iMIS CEU type given to activities that carry CPD points ('' to leave it empty).
-			'cpd_ceu_type'          => '',
-			'record_reads'          => true,
-			'record_downloads'      => true,
-			'record_forms'          => false,
-			'record_purchases'      => false,
+			'cpd_ceu_type'               => '',
+			'record_reads'               => true,
+			'record_downloads'           => true,
+			'record_forms'               => false,
+			'record_purchases'           => false,
 			// iMIS events on pages: the statuses that count as open, and each event's public page
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
-			'event_statuses'        => [ 'A' ],
-			'event_url'             => self::DEFAULT_EVENT_URL,
+			'event_statuses'             => [ 'A' ],
+			'event_url'                  => self::DEFAULT_EVENT_URL,
+			// Members registering for free events here: off, and a dry run, until turned on.
+			'event_registration_enabled' => false,
+			'event_registration_dry_run' => true,
 			// Sending WordPress events to iMIS: off, and a dry run, until an administrator turns it on.
-			'event_sync_enabled'    => false,
-			'event_sync_dry_run'    => true,
-			'event_template_id'     => '',
-			'event_cancel_on_trash' => false,
+			'event_sync_enabled'         => false,
+			'event_sync_dry_run'         => true,
+			'event_template_id'          => '',
+			'event_cancel_on_trash'      => false,
 		];
 	}
 
@@ -365,6 +368,13 @@ class Wormiss_Settings {
 			} else {
 				$message = __( 'The template event ID can only use letters, digits, _ and -.', 'wormiss' );
 				add_settings_error( self::OPTION, 'event_template_id', $message );
+			}
+		}
+		foreach ( [ 'event_registration_enabled', 'event_registration_dry_run' ] as $box ) {
+			if ( isset( $input['events_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
 			}
 		}
 		foreach ( [ 'event_sync_enabled', 'event_sync_dry_run', 'event_cancel_on_trash' ] as $box ) {

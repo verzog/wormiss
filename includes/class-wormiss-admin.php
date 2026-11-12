@@ -114,6 +114,8 @@ class Wormiss_Admin {
 		add_settings_section( 'wormiss_events', __( 'iMIS events', 'wormiss' ), [ __CLASS__, 'events_intro' ], self::PAGE );
 		self::field( 'event_statuses', __( 'Event statuses to show', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_registration_enabled', __( 'Members register for free events here', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_registration_dry_run', __( 'Registration dry run (log only)', 'wormiss' ), 'wormiss_events' );
 
 		$title = __( 'Send WordPress events to iMIS', 'wormiss' );
 		add_settings_section( 'wormiss_event_sync', $title, [ __CLASS__, 'event_sync_intro' ], self::PAGE );
@@ -235,6 +237,7 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function events_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[events_section]" value="1" />';
 		echo '<p>'
 			. esc_html__( 'The Upcoming iMIS events block lists events from the iMIS Events API, soonest first.', 'wormiss' )
 			. ' ' . esc_html__( 'The service account needs read access to events.', 'wormiss' )
@@ -436,6 +439,8 @@ class Wormiss_Admin {
 			case 'record_downloads':
 			case 'record_forms':
 			case 'record_purchases':
+			case 'event_registration_enabled':
+			case 'event_registration_dry_run':
 			case 'event_sync_enabled':
 			case 'event_sync_dry_run':
 			case 'event_cancel_on_trash':
@@ -445,6 +450,12 @@ class Wormiss_Admin {
 					esc_attr( $name ),
 					checked( (bool) $value, true, false )
 				);
+				if ( 'event_registration_enabled' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Free events (registration required, no fee) get Register and Cancel buttons for', 'wormiss' )
+						. ' ' . esc_html__( 'signed-in members. Paid events still link to iMIS.', 'wormiss' )
+						. '</span>';
+				}
 				if ( 'record_purchases' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'One activity per paid order, with its total in Amount. Orders are not created in iMIS.', 'wormiss' )

@@ -159,6 +159,8 @@ class Wormiss_Events {
 			$html .= '<p class="wormiss-events__action"><a class="wp-element-button" href="' . esc_url( $url )
 				. '" aria-label="' . esc_attr( $label ) . '">' . esc_html( $text ) . '</a></p>';
 		}
+		// Free events: a Register button for signed-in members (no per-event lookups in a list).
+		$html .= Wormiss_Event_Registration::button( $event );
 		return $html . '</div></li>';
 	}
 
@@ -238,11 +240,34 @@ class Wormiss_Events {
 			'image'       => self::text( $data->ImageUrl ?? '' ),
 			'category'    => is_object( $data->Category ?? null ) ? self::text( $data->Category->Name ?? '' ) : '',
 			'template'    => self::text( $data->TemplateState ?? '' ),
+			// Registration: the type (RegistrationRequired is free), when it closes, and the first option.
+			'reg_type'    => self::text( $data->RegistrationType ?? '' ),
+			'reg_end'     => self::text( $data->RegistrationEndDate ?? '' ),
+			'reg_option'  => self::first_option( $data->RegistrationOptions ?? null ),
 			'publishing'  => is_object( $data->PublishingInformation ?? null )
 				? self::text( $data->PublishingInformation->PublishingState ?? '' ) : '',
 		];
 		// phpcs:enable
 		return $event;
+	}
+
+	/**
+	 * The EventFunctionId of an event's first registration option, or ''.
+	 *
+	 * @param mixed $options RegistrationOptions collection.
+	 * @return string
+	 */
+	private static function first_option( $options ): string {
+		$values = is_object( $options ) && isset( $options->{'$values'} ) && is_array( $options->{'$values'} )
+			? $options->{'$values'} : [];
+		foreach ( $values as $option ) {
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+			$id = is_object( $option ) ? self::text( $option->EventFunctionId ?? '' ) : '';
+			if ( '' !== $id ) {
+				return $id;
+			}
+		}
+		return '';
 	}
 
 	/**
