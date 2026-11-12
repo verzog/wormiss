@@ -34,6 +34,13 @@ defined( 'ABSPATH' ) || exit;
  */
 class Wormiss_User_Sync {
 
+	/**
+	 * True while the sync is changing users from iMIS, so those changes are not sent back.
+	 *
+	 * @var bool
+	 */
+	public static bool $applying = false;
+
 	/** Cron hook for the daily sync. */
 	const HOOK = 'wormiss_user_sync';
 
@@ -277,6 +284,7 @@ class Wormiss_User_Sync {
 		// Changing a member's email must not email them (or anyone) about it.
 		add_filter( 'send_email_change_email', '__return_false' );
 		add_filter( 'send_password_change_email', '__return_false' );
+		self::$applying = true;
 		// At most one batch of changes per run; the rest carry on in the background, as
 		// creating an account takes a moment and a whole membership at once would time out.
 		// Each batch carries on after the members the last one reached, so members that cannot be
@@ -294,6 +302,7 @@ class Wormiss_User_Sync {
 			}
 			$writes += self::apply( $plan, $report, $hold ) ? 1 : 0;
 		}
+		self::$applying = false;
 		remove_filter( 'send_email_change_email', '__return_false' );
 		remove_filter( 'send_password_change_email', '__return_false' );
 

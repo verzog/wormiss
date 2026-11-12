@@ -311,6 +311,39 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * Read one contact (GET /api/Party/{id}).
+	 *
+	 * @param string $party_id iMIS ID.
+	 * @return object PartyData as iMIS sent it.
+	 * @throws Wormiss_Exception If it cannot be read, or the ID is not a plausible iMIS ID.
+	 */
+	public function get_party( string $party_id ): object {
+		if ( '' === Wormiss_Member::clean_id( $party_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS ID.', 'wormiss' ) );
+		}
+		$result = $this->request( 'GET', '/api/Party/' . rawurlencode( $party_id ), null, $party_id );
+		if ( ! is_object( $result->body ) ) {
+			throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
+		}
+		return $result->body;
+	}
+
+	/**
+	 * Save one contact (PUT /api/Party/{id}).
+	 *
+	 * @param string $party_id iMIS ID.
+	 * @param object $party    PartyData, as read and changed.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function update_party( string $party_id, object $party ): object {
+		if ( '' === Wormiss_Member::clean_id( $party_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS ID.', 'wormiss' ) );
+		}
+		return $this->request( 'PUT', '/api/Party/' . rawurlencode( $party_id ), $party, $party_id );
+	}
+
+	/**
 	 * Read one event by its iMIS event ID (GET /api/Event/{EventId}).
 	 *
 	 * @param string $event_id iMIS event ID (EventId), e.g. CONF2026.

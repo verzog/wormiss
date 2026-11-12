@@ -31,6 +31,7 @@ delete_option( 'wormiss_password' );
 delete_option( 'wormiss_db_version' );
 delete_option( 'wormiss_rewrite_version' );
 delete_option( 'wormiss_user_sync_report' );
+delete_metadata( 'user', 0, '_wormiss_member_pushed', '', true );
 delete_option( 'wormiss_user_sync_offset' );
 delete_option( 'wormiss_event_import_report' );
 delete_option( 'wormiss_event_import_lock' );
