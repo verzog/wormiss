@@ -45,6 +45,12 @@ class Wormiss_Event_Import {
 	/** Most pages made in one run (the rest come on the next run). */
 	const MAX_CREATE = 100;
 
+	/** Option used as the one-run-at-a-time lock (its value is when it was taken). */
+	const LOCK_OPTION = 'wormiss_event_import_lock';
+
+	/** Seconds after which a lock left by a run that died is taken over. */
+	const LOCK_SECONDS = 600;
+
 	/** Most notes kept in a report. */
 	const MAX_NOTES = 20;
 
@@ -107,16 +113,47 @@ class Wormiss_Event_Import {
 			$report['status'] = 'off';
 			return self::save( $report );
 		}
-		if ( get_transient( 'wormiss_event_import_lock' ) ) {
+		if ( ! self::lock() ) {
 			$report['status'] = 'busy';
 			return $report;
 		}
-		set_transient( 'wormiss_event_import_lock', 1, 10 * MINUTE_IN_SECONDS );
 		try {
 			return self::import( $report );
 		} finally {
-			delete_transient( 'wormiss_event_import_lock' );
+			delete_option( self::LOCK_OPTION );
 		}
+	}
+
+	/**
+	 * Take the lock in one database step, so two runs started together cannot both go ahead
+	 * (and make two pages for one event). A lock older than LOCK_SECONDS is taken over.
+	 *
+	 * @return bool Whether this run holds the lock.
+	 */
+	private static function lock(): bool {
+		global $wpdb;
+		for ( $try = 0; $try < 2; $try++ ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- INSERT IGNORE is the atomic part; options have no such API.
+			$taken = $wpdb->query(
+				$wpdb->prepare(
+					"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+					self::LOCK_OPTION,
+					(string) time()
+				)
+			);
+			wp_cache_delete( self::LOCK_OPTION, 'options' );
+			wp_cache_delete( 'notoptions', 'options' );
+			if ( 1 === (int) $taken ) {
+				return true;
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Read past the options cache.
+			$since = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::LOCK_OPTION ) );
+			if ( $since > time() - self::LOCK_SECONDS ) {
+				return false;
+			}
+			delete_option( self::LOCK_OPTION ); // Left by a run that died: take it over.
+		}
+		return false;
 	}
 
 	/**
@@ -126,10 +163,9 @@ class Wormiss_Event_Import {
 	 * @return array The report.
 	 */
 	private static function import( array $report ): array {
-		// A fresh read, so new events come in today rather than after the cache expires.
-		delete_transient( Wormiss_Events::cache_key() );
+		// A fresh read: new events come in today, and an earlier copy is never imported.
 		try {
-			$events = Wormiss_Events::get_events();
+			$events = Wormiss_Events::get_events_fresh();
 		} catch ( Wormiss_Exception $e ) {
 			$report['status']  = 'error';
 			$report['notes'][] = $e->getMessage();
@@ -202,27 +238,30 @@ class Wormiss_Event_Import {
 		$content = '' !== $event['description']
 			? '<!-- wp:paragraph --><p>' . esc_html( $event['description'] ) . '</p><!-- /wp:paragraph -->'
 			: '';
-		// The link is saved with the page, so it is never queued to be sent to iMIS.
+		// The link is saved with the page, so it is never queued to be sent to iMIS. Slashed, as
+		// WordPress strips one level of backslashes from what it saves.
 		$post_id = wp_insert_post(
-			[
-				'post_type'    => Wormiss_Event_Sync::POST_TYPE,
-				'post_status'  => 'draft',
-				'post_title'   => $event['name'],
-				'post_content' => $content,
-				'meta_input'   => [
-					Wormiss_Event_Sync::META_EXISTING => $event['id'],
-					Wormiss_Event_Sync::META_IMIS_ID  => $event['id'],
-					Wormiss_Event_Sync::META_LINKED   => 1,
-					Wormiss_Event_Sync::META_LINKED_DETAILS => $event,
-					Wormiss_Event_Sync::META_STATUS   => 'linked',
-					Wormiss_Event_Sync::META_MESSAGE  => sprintf(
-						/* translators: %s: iMIS event ID. */
-						__( 'Imported from iMIS event %s. Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' ),
-						$event['id']
-					),
-					self::META_IMPORTED               => 1,
-				],
-			],
+			wp_slash(
+				[
+					'post_type'    => Wormiss_Event_Sync::POST_TYPE,
+					'post_status'  => 'draft',
+					'post_title'   => $event['name'],
+					'post_content' => $content,
+					'meta_input'   => [
+						Wormiss_Event_Sync::META_EXISTING => $event['id'],
+						Wormiss_Event_Sync::META_IMIS_ID  => $event['id'],
+						Wormiss_Event_Sync::META_LINKED   => 1,
+						Wormiss_Event_Sync::META_LINKED_DETAILS => $event,
+						Wormiss_Event_Sync::META_STATUS   => 'linked',
+						Wormiss_Event_Sync::META_MESSAGE  => sprintf(
+							/* translators: %s: iMIS event ID. */
+							__( 'Imported from iMIS event %s. Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' ),
+							$event['id']
+						),
+						self::META_IMPORTED               => 1,
+					],
+				]
+			),
 			true
 		);
 		if ( is_wp_error( $post_id ) ) {
@@ -247,14 +286,16 @@ class Wormiss_Event_Import {
 		}
 		$changed = get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, true ) !== $event;
 		if ( $changed ) {
-			update_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, $event );
+			update_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, wp_slash( $event ) );
 		}
 		if ( '' !== $event['name'] && get_post_field( 'post_title', $post_id, 'raw' ) !== $event['name'] ) {
 			wp_update_post(
-				[
-					'ID'         => $post_id,
-					'post_title' => $event['name'],
-				]
+				wp_slash(
+					[
+						'ID'         => $post_id,
+						'post_title' => $event['name'],
+					]
+				)
 			);
 			$changed = true;
 		}

@@ -180,9 +180,7 @@ class Wormiss_Events {
 			return $cached;
 		}
 		try {
-			// Events that started up to LOOKBACK_DAYS ago are read too; upcoming() drops the finished ones.
-			$from = wp_date( 'Y-m-d', time() - self::LOOKBACK_DAYS * DAY_IN_SECONDS );
-			$raw  = ( new Wormiss_Rest_Client() )->get_events( (string) $from );
+			return self::get_events_fresh();
 		} catch ( Wormiss_Exception $e ) {
 			$stale = get_transient( $key . '_stale' );
 			if ( is_array( $stale ) ) {
@@ -190,6 +188,19 @@ class Wormiss_Events {
 			}
 			throw $e;
 		}
+	}
+
+	/**
+	 * Events read from iMIS now (never an earlier copy), kept in the cache for the pages.
+	 *
+	 * @return array[] Events from normalise().
+	 * @throws Wormiss_Exception If iMIS cannot be read.
+	 */
+	public static function get_events_fresh(): array {
+		$key = self::cache_key();
+		// Events that started up to LOOKBACK_DAYS ago are read too; upcoming() drops the finished ones.
+		$from    = wp_date( 'Y-m-d', time() - self::LOOKBACK_DAYS * DAY_IN_SECONDS );
+		$raw     = ( new Wormiss_Rest_Client() )->get_events( (string) $from );
 		$events  = array_values( array_filter( array_map( [ __CLASS__, 'normalise' ], $raw ) ) );
 		$minutes = max( 1, (int) Wormiss_Settings::get( 'cache_minutes' ) );
 		set_transient( $key, $events, $minutes * MINUTE_IN_SECONDS );

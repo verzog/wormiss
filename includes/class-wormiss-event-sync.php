@@ -856,7 +856,7 @@ class Wormiss_Event_Sync {
 		update_post_meta( $post_id, self::META_IMIS_ID, $event['id'] );
 		update_post_meta( $post_id, self::META_LINKED, 1 );
 		// Kept for the page, as the events list only reaches back LOOKBACK_DAYS.
-		update_post_meta( $post_id, self::META_LINKED_DETAILS, $event );
+		update_post_meta( $post_id, self::META_LINKED_DETAILS, wp_slash( $event ) );
 		/* translators: 1: iMIS event ID, 2: event name in iMIS. */
 		$message = __( 'Linked to iMIS event %1$s (%2$s). Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' );
 		return self::link_result( $post_id, 'linked', sprintf( $message, $event['id'], $event['name'] ) );

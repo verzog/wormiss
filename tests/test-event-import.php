@@ -261,4 +261,57 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		);
 		$this->assertFalse( Wormiss_Settings::sanitize( [ 'event_import_section' => '1' ] )['event_import_enabled'] );
 	}
+
+	/**
+	 * With iMIS down, an earlier copy of the events list is never imported.
+	 *
+	 * @return void
+	 */
+	public function test_never_imports_an_old_copy(): void {
+		$old = Wormiss_Events::normalise( json_decode( (string) wp_json_encode( self::imis_event( 'OLDCOPY' ) ) ) );
+		set_transient( Wormiss_Events::cache_key() . '_stale', [ $old ], HOUR_IN_SECONDS );
+		$this->imis->token()->reply( '/api/Event?', 500, '{"Message":"An error occurred."}' );
+		$this->assertSame( 'error', Wormiss_Event_Import::run()['status'] );
+		$this->assertCount( 0, self::pages( 'OLDCOPY' ) );
+	}
+
+	/**
+	 * Only one import runs at a time; a lock left by a run that died is taken over.
+	 *
+	 * @return void
+	 */
+	public function test_one_import_at_a_time(): void {
+		add_option( Wormiss_Event_Import::LOCK_OPTION, (string) time(), '', false );
+		$this->assertSame( 'busy', Wormiss_Event_Import::run()['status'] );
+		$this->assertSame( 0, count( $this->imis->requests ) );
+
+		update_option( Wormiss_Event_Import::LOCK_OPTION, (string) ( time() - Wormiss_Event_Import::LOCK_SECONDS - 5 ), false );
+		$this->serve( [ self::imis_event( 'CONGRESS26' ) ] );
+		$this->assertSame( 'ok', Wormiss_Event_Import::run()['status'] );
+		$this->assertFalse( get_option( Wormiss_Event_Import::LOCK_OPTION ) );
+	}
+
+	/**
+	 * Backslashes in iMIS names and descriptions are kept, and an unchanged name is not seen as a change.
+	 *
+	 * @return void
+	 */
+	public function test_backslashes_kept(): void {
+		$event = self::imis_event(
+			'SLASH26',
+			[
+				'Name'        => 'C:\Training',
+				'Description' => 'Path C:\Files',
+			]
+		);
+		$this->serve( [ $event ] );
+		Wormiss_Event_Import::run();
+		$post = get_post( self::pages( 'SLASH26' )[0] );
+		$this->assertSame( 'C:\Training', $post->post_title );
+		$this->assertStringContainsString( 'C:\Files', $post->post_content );
+		$this->assertSame( 'C:\Training', get_post_meta( $post->ID, Wormiss_Event_Sync::META_LINKED_DETAILS, true )['name'] );
+
+		$this->serve( [ $event ] );
+		$this->assertSame( 0, Wormiss_Event_Import::run()['updated'] );
+	}
 }
