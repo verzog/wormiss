@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.14.0
+Stable tag: 0.15.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -155,6 +155,10 @@ For free events, yes. Under Wormiss > Settings > iMIS events, tick "Members regi
 
 Yes. Build an iMIS IQA with no prompts that returns ID, Email, FirstName, LastName and Status for the members who should have website accounts (tick "Available via REST API"). Under Wormiss > Settings > Sync members into WordPress, enter its path, choose the role for new members (only roles without editing rights are offered), and tick "Sync members daily" with the dry run still ticked. Press "Run the member sync now" and read the report. When it looks right, untick the dry run. Members are matched by iMIS ID, then email; new ones get the iMIS ID as their username and no email. Members whose Status is not in the Current statuses (Members-only content) are blocked from signing in until it is current again. Staff accounts are never changed.
 
+= Can members join a waitlist on the website? =
+
+Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
+
 = How do I show places left on an event? =
 
 The iMIS Events API reads registrations one member at a time, so the count comes from an IQA. Build one with a single prompt, the event ID, that returns one row per place taken (leave out cancelled and waitlisted registrations), or one row with a numeric Registered column. Tick "Available via REST API". Enter its path under Wormiss > Settings > iMIS events > Places count IQA. Event pages then show places left; the capacity comes from the iMIS event, and 1000 or more shows as "Places available".
@@ -181,6 +185,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.15.0 =
+* Join the waitlist: on a full free event whose iMIS waitlist is open to everyone ("Anyone can join"), signed-in members see "Join the waitlist" on the Event page. It registers them on the iMIS waitlist (RegisterEvent with Waitlist), after checking the event is still full. They then see "You're on the waitlist" with "Leave the waitlist". Needs the places count IQA, so the site knows the event is full. Uses the registration switch and dry run.
 
 = 0.14.0 =
 * Event numbers: each event (or its event type, as a default) can set minimum and expected attendance, written to the event's main registration option in iMIS. Attendance that cannot fit the capacity is flagged before sending.

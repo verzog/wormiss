@@ -523,10 +523,46 @@ class Wormiss_Rest_Client {
 			return null;
 		}
 		return [
-			'id'     => (string) $body->EventRegistrationId,
-			'status' => is_scalar( $body->Status ?? null ) ? (string) $body->Status : '',
+			'id'         => (string) $body->EventRegistrationId,
+			'status'     => is_scalar( $body->Status ?? null ) ? (string) $body->Status : '',
+			'waitlisted' => self::is_waitlisted( $body ),
 		];
 		// phpcs:enable
+	}
+
+	/**
+	 * Whether a registration is only on the waitlist: something waitlisted and nothing booked.
+	 *
+	 * @param object $registration EventRegistrationData.
+	 * @return bool
+	 */
+	public static function is_waitlisted( object $registration ): bool {
+		$booked     = 0.0;
+		$waitlisted = 0.0;
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		foreach ( self::values( $registration->Functions ?? null ) as $function ) {
+			if ( is_object( $function ) ) {
+				$booked     += self::quantity( $function->Quantity ?? null );
+				$waitlisted += self::quantity( $function->QuantityWaitlisted ?? null );
+			}
+		}
+		// phpcs:enable
+		return $waitlisted > 0 && $booked <= 0;
+	}
+
+	/**
+	 * A QuantityData amount as a number (0 if missing).
+	 *
+	 * @param mixed $quantity QuantityData.
+	 * @return float
+	 */
+	private static function quantity( $quantity ): float {
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+		$amount = is_object( $quantity ) ? ( $quantity->Amount ?? 0 ) : 0;
+		if ( is_object( $amount ) && property_exists( $amount, '$value' ) ) {
+			$amount = $amount->{'$value'};
+		}
+		return is_numeric( $amount ) ? (float) $amount : 0.0;
 	}
 
 	/**
@@ -576,11 +612,12 @@ class Wormiss_Rest_Client {
 	 * @param string $event_id  iMIS event ID.
 	 * @param string $party_id  The member's iMIS ID (registrant, registered by and bill to).
 	 * @param string $option_id The registration option's EventFunctionId ('' if the event has none).
+	 * @param bool   $waitlist  Join the waitlist instead (for a full event).
 	 * @return object The response.
 	 * @throws Wormiss_Exception On failure.
 	 */
-	public function register_event( string $event_id, string $party_id, string $option_id ): object {
-		$body = self::register_body( $event_id, $party_id, $option_id );
+	public function register_event( string $event_id, string $party_id, string $option_id, bool $waitlist = false ): object {
+		$body = self::register_body( $event_id, $party_id, $option_id, $waitlist );
 		return $this->request( 'POST', '/api/EventRegistration/_execute', $body, $party_id );
 	}
 
@@ -590,9 +627,10 @@ class Wormiss_Rest_Client {
 	 * @param string $event_id  iMIS event ID.
 	 * @param string $party_id  The member's iMIS ID.
 	 * @param string $option_id Registration option EventFunctionId, or ''.
+	 * @param bool   $waitlist  Join the waitlist instead.
 	 * @return array
 	 */
-	public static function register_body( string $event_id, string $party_id, string $option_id ): array {
+	public static function register_body( string $event_id, string $party_id, string $option_id, bool $waitlist = false ): array {
 		return [
 			'$type'                        => 'Asi.Soa.Events.DataContracts.EventRegistrationRequest, Asi.Contracts',
 			'EntityTypeName'               => 'EventRegistration',
@@ -608,7 +646,7 @@ class Wormiss_Rest_Client {
 			'RegistrantId'                 => $party_id,
 			'RegisteredBy'                 => $party_id,
 			'BillTo'                       => $party_id,
-			'Waitlist'                     => false,
+			'Waitlist'                     => $waitlist,
 		];
 	}
 
