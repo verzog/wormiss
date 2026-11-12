@@ -60,7 +60,7 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
 **Recording activity in iMIS**
 
 * Things signed-in members do here are written to iMIS as activity records (one
-  activity type you choose, e.g. `WEBACTIVITY`): **reads** of members-only posts
+  activity type you choose, e.g. `WEBACT`; iMIS allows up to 10 characters): **reads** of members-only posts
   and pages, **downloads** through tracked links
   (`[wormiss_download id="123"]Slides[/wormiss_download]`), clicks on a **Mark as
   done** block (with optional CPD points), and **form submissions** (Gravity

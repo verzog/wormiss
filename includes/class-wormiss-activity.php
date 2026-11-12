@@ -147,7 +147,8 @@ class Wormiss_Activity {
 			(string) $record['note'],
 			(string) $record['date'],
 			(float) $record['points'],
-			(int) $record['post_id']
+			(int) $record['post_id'],
+			(string) Wormiss_Settings::get( 'cpd_ceu_type' )
 		);
 	}
 

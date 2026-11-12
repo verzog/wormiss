@@ -510,7 +510,7 @@ class Wormiss_Rest_Client {
 	 * only the filled-in columns and accepted one with every column, typed decimals, ints
 	 * and booleans, and the envelope `$type`s, so every column is sent.
 	 *
-	 * @param string $activity_type iMIS activity type (e.g. WEBACTIVITY).
+	 * @param string $activity_type iMIS activity type (e.g. WEBACT).
 	 * @param string $imis_id       The member's iMIS ID.
 	 * @param string $kind          read, download, completion or form (stored in NOTE_2).
 	 * @param string $description   What it was about (DESCRIPTION, max 255).
@@ -519,6 +519,7 @@ class Wormiss_Rest_Client {
 	 * @param float  $points        CPD points or score (UF_4).
 	 * @param int    $post_id       WordPress post ID (UF_5).
 	 * @return array
+	 * @param string $ceu_type    iMIS CEU type for the points ('' to leave it empty).
 	 */
 	public static function build_activity_body(
 		string $activity_type,
@@ -528,7 +529,8 @@ class Wormiss_Rest_Client {
 		string $note,
 		string $date,
 		float $points = 0,
-		int $post_id = 0
+		int $post_id = 0,
+		string $ceu_type = ''
 	): array {
 		$values = [
 			'ACTION_CODES'          => null,
@@ -538,7 +540,8 @@ class Wormiss_Rest_Client {
 			'ATTACH_TOTAL'          => self::typed( 'System.Int32', 0 ),
 			'BATCH_NUM'             => null,
 			'CAMPAIGN_CODE'         => null,
-			'CATEGORY'              => null,
+			// CEU type and Quantity/CEU: iMIS's own place for credits (CPD points) on an activity.
+			'CATEGORY'              => ( $points > 0 && '' !== $ceu_type ) ? $ceu_type : null,
 			'CO_ID'                 => null,
 			'DESCRIPTION'           => mb_substr( $description, 0, 255 ),
 			'EFFECTIVE_DATE'        => null,
@@ -574,7 +577,7 @@ class Wormiss_Rest_Client {
 			'UF_5'                  => self::typed( 'System.Decimal', $post_id ),
 			'UF_6'                  => null,
 			'UF_7'                  => null,
-			'UNITS'                 => self::typed( 'System.Decimal', 0 ),
+			'UNITS'                 => self::typed( 'System.Decimal', $points ),
 		];
 
 		$props = [];

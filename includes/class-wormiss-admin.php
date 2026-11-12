@@ -127,6 +127,7 @@ class Wormiss_Admin {
 		self::field( 'activity_enabled', __( 'Record activity', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'activity_dry_run', __( 'Dry run (log only)', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'activity_type', __( 'iMIS activity type', 'wormiss' ), 'wormiss_activity' );
+		self::field( 'cpd_ceu_type', __( 'CEU type for CPD points', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_reads', __( 'Reads of members-only content', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_downloads', __( 'Tracked file downloads', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_forms', __( 'Form submissions', 'wormiss' ), 'wormiss_activity' );
@@ -409,12 +410,22 @@ class Wormiss_Admin {
 					. ' <code>' . esc_html( Wormiss_Settings::DEFAULT_EVENT_URL ) . '</code></p>';
 				return;
 			case 'activity_type':
+			case 'cpd_ceu_type':
 				printf(
-					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" placeholder="WEBACTIVITY" />',
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" maxlength="10" placeholder="%4$s" />',
 					esc_attr( $id ),
 					esc_attr( $name ),
-					esc_attr( (string) $value )
+					esc_attr( (string) $value ),
+					esc_attr( 'activity_type' === $key ? 'WEBACT' : 'CPD' )
 				);
+				echo '<p class="description">';
+				if ( 'activity_type' === $key ) {
+					echo esc_html__( 'Exactly as the Type code in iMIS (Settings > Contacts > Activity types), up to 10 characters.', 'wormiss' );
+				} else {
+					echo esc_html__( 'Points from Mark as done go in the activity\'s Quantity/CEU, with this CEU type.', 'wormiss' )
+						. ' ' . esc_html__( 'Use a CEU type set up in iMIS. Blank leaves the CEU type empty.', 'wormiss' );
+				}
+				echo '</p>';
 				return;
 			case 'log_enabled':
 			case 'log_capture':

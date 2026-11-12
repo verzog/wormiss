@@ -77,6 +77,8 @@ class Wormiss_Settings {
 			'activity_enabled'      => false,
 			'activity_dry_run'      => true,
 			'activity_type'         => '',
+			// The iMIS CEU type given to activities that carry CPD points ('' to leave it empty).
+			'cpd_ceu_type'          => '',
 			'record_reads'          => true,
 			'record_downloads'      => true,
 			'record_forms'          => false,
@@ -377,13 +379,19 @@ class Wormiss_Settings {
 		if ( isset( $input['log_retention_days'] ) ) {
 			$clean['log_retention_days'] = min( 365, max( 1, absint( $input['log_retention_days'] ) ) );
 		}
-		if ( isset( $input['activity_type'] ) ) {
-			$type = trim( (string) $input['activity_type'] );
-			if ( '' === $type || preg_match( '/^[A-Za-z0-9_]{1,32}$/', $type ) ) {
-				$clean['activity_type'] = $type;
-			} else {
-				$message = __( 'The iMIS activity type can only use letters, digits and _.', 'wormiss' );
-				add_settings_error( self::OPTION, 'activity_type', $message );
+		// iMIS keeps activity type and CEU type codes to 10 characters.
+		$codes = [
+			'activity_type' => __( 'The iMIS activity type can only use letters, digits and _, up to 10 characters.', 'wormiss' ),
+			'cpd_ceu_type'  => __( 'The iMIS CEU type can only use letters, digits and _, up to 10 characters.', 'wormiss' ),
+		];
+		foreach ( $codes as $key => $message ) {
+			if ( isset( $input[ $key ] ) ) {
+				$code = trim( (string) $input[ $key ] );
+				if ( '' === $code || preg_match( '/^[A-Za-z0-9_]{1,10}$/', $code ) ) {
+					$clean[ $key ] = $code;
+				} else {
+					add_settings_error( self::OPTION, $key, $message );
+				}
 			}
 		}
 		// Checkboxes: from the settings form (which marks its activity section, since an unticked
