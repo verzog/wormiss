@@ -217,6 +217,7 @@ class Wormiss_Admin {
 			__( 'Send events to iMIS', 'wormiss' )     => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
 			__( 'Free event registration', 'wormiss' ) => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
 			__( 'Member sync', 'wormiss' )             => $state( $on( 'user_sync_enabled' ), $on( 'user_sync_dry_run' ) ),
+			__( 'Member changes to iMIS', 'wormiss' )  => $state( $on( 'member_push_enabled' ), $on( 'member_push_dry_run' ) ),
 			__( 'iMIS event import', 'wormiss' )       => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
@@ -309,6 +310,8 @@ class Wormiss_Admin {
 		self::field( 'user_sync_dry_run', __( 'Member sync dry run (report only)', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_query', __( 'Members query', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_role', __( 'Role for new members', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'member_push_enabled', __( 'Send member changes to iMIS', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'member_push_dry_run', __( 'Member changes dry run (log only)', 'wormiss' ), 'wormiss_user_sync' );
 
 		$title = __( 'Record activity in iMIS', 'wormiss' );
 		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
@@ -710,6 +713,8 @@ class Wormiss_Admin {
 			case 'event_import_publish':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
+			case 'member_push_enabled':
+			case 'member_push_dry_run':
 			case 'event_registration_enabled':
 			case 'event_registration_dry_run':
 			case 'event_publish_dates':
@@ -742,6 +747,12 @@ class Wormiss_Admin {
 					echo ' <span class="description">'
 						. esc_html__( 'Imported pages go live with their iMIS description, image and event type. Off: drafts.', 'wormiss' )
 						. ' ' . esc_html__( 'Drafts made earlier are published too; a page an editor unpublishes stays a draft.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'member_push_enabled' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'When a member changes their first name, last name or email in WordPress, it is saved on', 'wormiss' )
+						. ' ' . esc_html__( 'their iMIS contact record in the background. Staff accounts are never sent.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'event_cancel_on_trash' === $key ) {

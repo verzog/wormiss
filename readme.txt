@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.21.0
+Stable tag: 0.22.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -171,6 +171,10 @@ Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS
 
 The iMIS Events API reads registrations one member at a time, so the count comes from an IQA. Build one with a single prompt, the event ID, that returns one row per place taken (leave out cancelled and waitlisted registrations), or one row with a numeric Registered column. Tick "Available via REST API". Enter its path under Wormiss > Settings > iMIS events > Places count IQA. Event pages then show places left; the capacity comes from the iMIS event, and 1000 or more shows as "Places available".
 
+= Do changes members make in WordPress reach iMIS? =
+
+Their first name, last name and email can. Under Wormiss > Settings > Sync members into WordPress, tick "Send member changes to iMIS" (keep the dry run on first and check the audit log). A changed name or email is then saved on the member's iMIS contact in the background. Nothing else is sent, and staff accounts are never sent.
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -193,6 +197,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.22.0 =
+* Send member changes to iMIS (Wormiss > Settings > Sync members into WordPress): when a member's first name, last name or email changes in WordPress (their profile, or an administrator), their iMIS contact is read, those three are set (the primary email; other emails and details are kept), and it is saved, in the background. Blank WordPress values never clear iMIS's. Only members with an iMIS ID; staff accounts and the member sync's own changes (which come from iMIS) are never sent. Off, and a dry run, by default.
 
 = 0.21.0 =
 * "Send events to iMIS now" (Wormiss > Settings), also run once a day: every published Event made in WordPress that iMIS does not have up to date (never sent, edited since it was last saved there, last sent with a problem, or only checked in a dry run) is sent, 10 a minute in the background, through the usual sync, so the sending switch and dry run apply. Events linked to or imported from iMIS are never sent. Each run is in the audit log.

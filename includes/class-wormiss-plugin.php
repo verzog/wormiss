@@ -53,6 +53,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Types::init();
 		Wormiss_Event_Registration::init();
 		Wormiss_User_Sync::init();
+		Wormiss_Member_Push::init();
 		Wormiss_Event_Sync::init();
 		Wormiss_Event_Import::init();
 		Wormiss_Event_Push::init();
@@ -126,6 +127,7 @@ class Wormiss_Plugin {
 		wp_unschedule_hook( Wormiss_Event_Sync::CANCEL_HOOK );
 		wp_clear_scheduled_hook( Wormiss_User_Sync::HOOK );
 		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
+		wp_unschedule_hook( Wormiss_Member_Push::HOOK );
 		wp_clear_scheduled_hook( Wormiss_Event_Import::HOOK );
 		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
 		wp_clear_scheduled_hook( Wormiss_Event_Push::HOOK );

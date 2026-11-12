@@ -88,6 +88,9 @@ class Wormiss_Settings {
 			'user_sync_dry_run'          => true,
 			'user_sync_query'            => '',
 			'user_sync_role'             => 'subscriber',
+			// Members' WordPress name and email changes sent to their iMIS record: off, and a dry run.
+			'member_push_enabled'        => false,
+			'member_push_dry_run'        => true,
 			// iMIS events on pages: the statuses that count as open, and each event's public page
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
 			'event_statuses'             => [ 'A' ],
@@ -445,7 +448,7 @@ class Wormiss_Settings {
 				}
 			}
 		}
-		foreach ( [ 'user_sync_enabled', 'user_sync_dry_run' ] as $box ) {
+		foreach ( [ 'user_sync_enabled', 'user_sync_dry_run', 'member_push_enabled', 'member_push_dry_run' ] as $box ) {
 			if ( isset( $input['user_sync_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {
