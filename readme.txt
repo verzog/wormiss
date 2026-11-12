@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.15.0
+Stable tag: 0.15.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -185,6 +185,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.15.1 =
+* Member sync works in batches: each run creates or changes at most 50 accounts, then carries on in the background a minute later until every member is done, so a large membership no longer stops the page with a "critical error" (time limit). Runs never overlap, and the settings page shows how many members are still to check. A dry run still counts everything at once.
 
 = 0.15.0 =
 * Join the waitlist: on a full free event whose iMIS waitlist is open to everyone ("Anyone can join"), signed-in members see "Join the waitlist" on the Event page. It registers them on the iMIS waitlist (RegisterEvent with Waitlist), after checking the event is still full. They then see "You're on the waitlist" with "Leave the waitlist". Needs the places count IQA, so the site knows the event is full. Uses the registration switch and dry run.

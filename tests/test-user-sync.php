@@ -346,4 +346,62 @@ class Test_Wormiss_User_Sync extends Wormiss_Test_Case {
 		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( array_fill( 0, 3, self::row( '901' ) ) ) );
 		$this->assertCount( 2, ( new Wormiss_Rest_Client() )->run_iqa( self::SYNC_QUERY, [], null, 2 ) );
 	}
+
+	/**
+	 * A large sync makes one batch of changes per run and carries on in the background, so a
+	 * page never times out; the next run picks up where the last left off.
+	 *
+	 * @return void
+	 */
+	public function test_batches(): void {
+		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
+		$rows = [];
+		for ( $i = 1; $i <= Wormiss_User_Sync::BATCH + 5; $i++ ) {
+			$rows[] = self::row( (string) ( 20000 + $i ) );
+		}
+		$this->serve( $rows );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( Wormiss_User_Sync::BATCH, $report['created'] );
+		$this->assertSame( 5, $report['remaining'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_User_Sync::MORE_HOOK ) );
+		$this->assertStringContainsString( '5 more members', Wormiss_User_Sync::summary() );
+
+		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
+		$this->serve( $rows );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( 5, $report['created'] );
+		$this->assertSame( 0, $report['remaining'] );
+		$this->assertFalse( wp_next_scheduled( Wormiss_User_Sync::MORE_HOOK ) );
+		$this->assertNotFalse( get_user_by( 'login', (string) ( 20000 + Wormiss_User_Sync::BATCH + 5 ) ) );
+	}
+
+	/**
+	 * A dry run counts everything at once (it changes nothing, so it is quick).
+	 *
+	 * @return void
+	 */
+	public function test_dry_run_is_not_batched(): void {
+		$this->turn_on( true );
+		$rows = [];
+		for ( $i = 1; $i <= Wormiss_User_Sync::BATCH + 5; $i++ ) {
+			$rows[] = self::row( (string) ( 30000 + $i ) );
+		}
+		$this->serve( $rows );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( Wormiss_User_Sync::BATCH + 5, $report['created'] );
+		$this->assertSame( 0, $report['remaining'] );
+	}
+
+	/**
+	 * Two runs never overlap.
+	 *
+	 * @return void
+	 */
+	public function test_one_run_at_a_time(): void {
+		set_transient( 'wormiss_user_sync_lock', 1, 60 );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( 'busy', $report['status'] );
+		$this->assertSame( 0, $this->imis->count( '/api/iqa' ) );
+		delete_transient( 'wormiss_user_sync_lock' );
+	}
 }
