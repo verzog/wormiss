@@ -56,7 +56,7 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 				[
 					'activity_enabled' => true,
 					'activity_dry_run' => $dry_run,
-					'activity_type'    => 'WEBACTIVITY',
+					'activity_type'    => 'WEBACT',
 				],
 				$more
 			)
@@ -145,7 +145,7 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 		$log = Wormiss_Logger::recent( 1 )[0];
 		$this->assertSame( 'DRY RUN POST /api/Activity (read: Members news)', $log['endpoint'] );
 		$this->assertSame( '12345', $log['imis_id'] );
-		$this->assertStringContainsString( 'WEBACTIVITY', (string) $log['request'] );
+		$this->assertStringContainsString( 'WEBACT', (string) $log['request'] );
 	}
 
 	/**
@@ -181,7 +181,7 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 		$body = json_decode( $request['body'], true );
 		$this->assertSame( 'Activity', $body['EntityTypeName'] );
 		$this->assertSame( [ '12345' ], $body['PrimaryParentIdentity']['IdentityElements']['$values'] );
-		$this->assertSame( 'WEBACTIVITY', self::prop( $body, 'ACTIVITY_TYPE' ) );
+		$this->assertSame( 'WEBACT', self::prop( $body, 'ACTIVITY_TYPE' ) );
 		$this->assertSame( '12345', self::prop( $body, 'PartyId' ) );
 		$this->assertSame( 'Dermoscopy quiz', self::prop( $body, 'DESCRIPTION' ) );
 		$this->assertSame( 'completion', self::prop( $body, 'NOTE_2' ) );
@@ -193,7 +193,35 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 			self::prop( $body, 'UF_4' )
 		);
 		$this->assertNull( self::prop( $body, 'UF_1' ) );
+		// The points also go in Quantity/CEU; no CEU type is set until one is chosen.
+		$this->assertSame( 2.5, self::prop( $body, 'UNITS' )['$value'] );
+		$this->assertNull( self::prop( $body, 'CATEGORY' ) );
 		$this->assertCount( 44, $body['Properties']['$values'] );
+	}
+
+	/**
+	 * With a CEU type set, points go in iMIS's CEU fields; activities without points get none.
+	 *
+	 * @return void
+	 */
+	public function test_cpd_ceu_type(): void {
+		$this->turn_on( false, [ 'cpd_ceu_type' => 'CPD' ] );
+		$record = [
+			'kind'        => 'completion',
+			'imis_id'     => '12345',
+			'user_id'     => 1,
+			'description' => 'Dermoscopy quiz',
+			'note'        => '',
+			'points'      => 1.5,
+			'post_id'     => 9,
+			'date'        => '2027-03-05T09:00:00',
+		];
+		$body   = Wormiss_Activity::body( $record );
+		$this->assertSame( 'CPD', self::prop( $body, 'CATEGORY' ) );
+		$this->assertSame( 1.5, self::prop( $body, 'UNITS' )['$value'] );
+
+		$record['points'] = 0;
+		$this->assertNull( self::prop( Wormiss_Activity::body( $record ), 'CATEGORY' ) );
 	}
 
 	/**
@@ -499,15 +527,24 @@ class Test_Wormiss_Activity extends Wormiss_Test_Case {
 		$form  = [
 			'activity_section' => '1',
 			'activity_enabled' => '1',
-			'activity_type'    => 'WEBACTIVITY',
+			'activity_type'    => 'WEBACT',
 		];
 		$twice = Wormiss_Settings::sanitize( Wormiss_Settings::sanitize( $form ) );
 		$this->assertTrue( $twice['activity_enabled'] );
 		$this->assertFalse( $twice['activity_dry_run'] );
 		$this->assertFalse( $twice['record_reads'] );
-		$this->assertSame( 'WEBACTIVITY', $twice['activity_type'] );
+		$this->assertSame( 'WEBACT', $twice['activity_type'] );
 
 		$bad = Wormiss_Settings::sanitize( [ 'activity_type' => 'WEB ACTIVITY;' ] );
 		$this->assertSame( '', $bad['activity_type'] );
+		// iMIS keeps these codes to 10 characters.
+		$long = Wormiss_Settings::sanitize(
+			[
+				'activity_type' => 'WEBACTIVITY',
+				'cpd_ceu_type'  => 'CPD',
+			]
+		);
+		$this->assertSame( '', $long['activity_type'] );
+		$this->assertSame( 'CPD', $long['cpd_ceu_type'] );
 	}
 }
