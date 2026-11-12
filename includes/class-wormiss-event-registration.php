@@ -316,11 +316,15 @@ class Wormiss_Event_Registration {
 				self::forget_status( $event_id, $imis_id );
 				return self::is_waitlisted( $status ) ? 'already_waitlisted' : 'already';
 			}
-			// A place came free meanwhile: say so, so they register instead (Register shows again).
+			// Only a confirmed full event takes waitlist requests: with no places IQA fullness cannot
+			// be known, and an event with no limit (or a place free again) should be registered for.
 			$capacity = (int) $event['capacity'];
 			$query    = (string) Wormiss_Settings::get( 'event_places_query' );
-			if ( '' !== $query && $capacity > 0 && $capacity < Wormiss_Events::UNLIMITED
-				&& $client->count_registrations( $query, $event_id ) < $capacity ) {
+			if ( '' === $query ) {
+				return 'no_waitlist';
+			}
+			if ( $capacity <= 0 || $capacity >= Wormiss_Events::UNLIMITED
+				|| $client->count_registrations( $query, $event_id ) < $capacity ) {
 				Wormiss_Events::forget_places( $event_id );
 				return 'not_full';
 			}

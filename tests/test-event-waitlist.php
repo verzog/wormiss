@@ -225,6 +225,13 @@ class Test_Wormiss_Event_Waitlist extends Wormiss_Test_Case {
 			->reply( '/api/EventRegistration?', 200, self::registration( true ) );
 		$this->assertSame( 'already_waitlisted', Wormiss_Event_Registration::join_waitlist( 'FREE1' ) );
 
+		// No limit any more: register instead, without counting.
+		$unlimited = array_merge( self::imis_event(), [ 'Capacity' => 1000 ] );
+		$this->imis->token()
+			->reply( '/api/Event/FREE1', 200, $unlimited )
+			->reply( '/api/EventRegistration?', 404, '{}' );
+		$this->assertSame( 'not_full', Wormiss_Event_Registration::join_waitlist( 'FREE1' ) );
+
 		$this->imis->token()
 			->reply( '/api/Event/FREE1', 200, self::imis_event() )
 			->reply( '/api/EventRegistration?', 200, self::registration( false ) );
@@ -236,6 +243,14 @@ class Test_Wormiss_Event_Waitlist extends Wormiss_Test_Case {
 			->reply( '/api/EventRegistration?', 404, '{}' )
 			->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( array_fill( 0, 30, [ 'ID' => '1' ] ) ) );
 		$this->assertSame( 'dry_run', Wormiss_Event_Registration::join_waitlist( 'FREE1' ) );
+		$this->assertSame( 0, $this->imis->count( '/api/EventRegistration/_execute' ) );
+
+		// With no places IQA, fullness cannot be confirmed: no waitlist request.
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_places_query' => '' ] ) );
+		$this->imis->token()
+			->reply( '/api/Event/FREE1', 200, self::imis_event() )
+			->reply( '/api/EventRegistration?', 404, '{}' );
+		$this->assertSame( 'no_waitlist', Wormiss_Event_Registration::join_waitlist( 'FREE1' ) );
 		$this->assertSame( 0, $this->imis->count( '/api/EventRegistration/_execute' ) );
 
 		// Registering while on the waitlist says so rather than registering twice.
