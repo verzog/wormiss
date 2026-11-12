@@ -219,4 +219,16 @@ class Test_Wormiss_Event_Blocks extends Wormiss_Test_Case {
 		Wormiss_Event_Sync::send_after_rest_save( get_post( $post_id ) );
 		$this->assertFalse( wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] ), 'Nothing queued, nothing sent.' );
 	}
+
+	/**
+	 * Events open inside their template: the editor's default mode is template-locked (newer
+	 * WordPress reads it from the editor feature), and the editor is still supported.
+	 *
+	 * @return void
+	 */
+	public function test_opens_in_template(): void {
+		$this->assertTrue( post_type_supports( Wormiss_Event_Sync::POST_TYPE, 'editor' ) );
+		$editor = get_all_post_type_supports( Wormiss_Event_Sync::POST_TYPE )['editor'];
+		$this->assertSame( 'template-locked', $editor[0]['default-mode'] ?? '' );
+	}
 }

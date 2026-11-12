@@ -82,7 +82,7 @@ class Wormiss_Plugin {
 		wp_register_script(
 			'wormiss-event-blocks',
 			plugins_url( 'assets/event-blocks.js', WORMISS_FILE ),
-			[ 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-core-data', 'wp-data', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-server-side-render' ],
+			[ 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-core-data', 'wp-data', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-preferences', 'wp-server-side-render' ],
 			WORMISS_VERSION,
 			true
 		);

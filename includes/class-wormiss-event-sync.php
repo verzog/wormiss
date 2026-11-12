@@ -171,9 +171,17 @@ class Wormiss_Event_Sync {
 				// Listed under the Wormiss menu rather than a menu of its own.
 				'show_in_menu'           => 'wormiss',
 				'show_in_rest'           => true,
-				'supports'               => [ 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields', 'revisions' ],
-				// Edited inside the event page's template (WordPress 6.8 and later), so editors see
-				// the page as it will look; the event blocks in it are editable.
+				// Edited inside the event page's template, so editors see the page as it will look;
+				// the event blocks in it are editable. Newer WordPress reads the editor's
+				// default-mode; WordPress 6.8 read default_rendering_mode.
+				'supports'               => [
+					'title',
+					'editor' => [ 'default-mode' => 'template-locked' ],
+					'excerpt',
+					'thumbnail',
+					'custom-fields',
+					'revisions',
+				],
 				'default_rendering_mode' => 'template-locked',
 			]
 		);
