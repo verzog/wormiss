@@ -165,7 +165,7 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->assertCount( 0, self::pages( 'TPL' ) );
 		$this->assertCount( 0, self::pages( 'OLD25' ) );
 		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
-		$this->assertStringContainsString( '2 draft pages made', Wormiss_Event_Import::summary() );
+		$this->assertStringContainsString( '2 pages made', Wormiss_Event_Import::summary() );
 	}
 
 	/**
@@ -604,5 +604,65 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$html = apply_filters( 'the_content', get_the_content() );
 		wp_reset_postdata();
 		$this->assertStringContainsString( '<dt>Registration closes</dt>', $html );
+	}
+
+	/**
+	 * A large import makes one batch of pages per run and carries on in the background from
+	 * where it stopped, so a page load never times out.
+	 *
+	 * @return void
+	 */
+	public function test_batches(): void {
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+		$events = [];
+		for ( $i = 1; $i <= Wormiss_Event_Import::BATCH + 3; $i++ ) {
+			$events[] = self::imis_event( 'BATCH' . $i );
+		}
+		$this->serve( $events );
+		$report = Wormiss_Event_Import::run();
+		$this->assertSame( Wormiss_Event_Import::BATCH, $report['created'] );
+		$this->assertSame( 3, $report['remaining'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Event_Import::MORE_HOOK ) );
+		$this->assertStringContainsString( '3 more events', Wormiss_Event_Import::summary() );
+
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+		$this->serve( $events );
+		$report = Wormiss_Event_Import::run_more();
+		$this->assertSame( 3, $report['created'] );
+		$this->assertSame( 0, $report['remaining'] );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Event_Import::MORE_HOOK ) );
+		$this->assertFalse( get_option( Wormiss_Event_Import::DONE_OPTION ) );
+		$this->assertCount( 1, self::pages( 'BATCH' . ( Wormiss_Event_Import::BATCH + 3 ) ) );
+
+		// Unchanged pages cost nothing: a later full run checks every event in one go.
+		$this->serve( $events );
+		$report = Wormiss_Event_Import::run();
+		$this->assertSame( 0, $report['remaining'] );
+		$this->assertSame( Wormiss_Event_Import::BATCH + 3, $report['skipped'] );
+	}
+
+	/**
+	 * An event that finishes between batches never makes the next batch skip another one.
+	 *
+	 * @return void
+	 */
+	public function test_batches_survive_a_changing_list(): void {
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+		$events = [];
+		for ( $i = 1; $i <= Wormiss_Event_Import::BATCH + 3; $i++ ) {
+			$events[] = self::imis_event( 'SHIFT' . $i );
+		}
+		$this->serve( $events );
+		$this->assertSame( 3, Wormiss_Event_Import::run()['remaining'] );
+
+		// The first event finished meanwhile, so the list is one shorter at the front.
+		array_shift( $events );
+		$this->serve( $events );
+		$report = Wormiss_Event_Import::run_more();
+		$this->assertSame( 3, $report['created'] );
+		$this->assertSame( 0, $report['remaining'] );
+		for ( $i = 1; $i <= Wormiss_Event_Import::BATCH + 3; $i++ ) {
+			$this->assertCount( 1, self::pages( 'SHIFT' . $i ), 'SHIFT' . $i );
+		}
 	}
 }

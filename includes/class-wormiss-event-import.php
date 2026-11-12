@@ -55,8 +55,17 @@ class Wormiss_Event_Import {
 	/** Post meta: the attachment the import made the featured image. */
 	const META_IMAGE_ID = '_wormiss_event_import_image_id';
 
-	/** Most pages made in one run (the rest come on the next run). */
-	const MAX_CREATE = 100;
+	/** Cron hook that carries on an import with more changes than one batch. */
+	const MORE_HOOK = 'wormiss_event_import_more';
+
+	/** Most pages made or changed in one run (each can mean an image download), so it never times out. */
+	const BATCH = 20;
+
+	/** Seconds before the next batch runs. */
+	const BATCH_GAP = MINUTE_IN_SECONDS;
+
+	/** Option: the iMIS event IDs this import has already dealt with (event ID => true). */
+	const DONE_OPTION = 'wormiss_event_import_done';
 
 	/** Option used as the one-run-at-a-time lock (its value is when it was taken). */
 	const LOCK_OPTION = 'wormiss_event_import_lock';
@@ -77,6 +86,7 @@ class Wormiss_Event_Import {
 	 */
 	public static function init(): void {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
+		add_action( self::MORE_HOOK, [ __CLASS__, 'run_more' ] );
 		add_action( 'init', [ __CLASS__, 'maybe_schedule' ] );
 		add_action( 'admin_post_wormiss_event_import_now', [ __CLASS__, 'handle_run_now' ] );
 		add_action( 'transition_post_status', [ __CLASS__, 'note_published' ], 10, 3 );
@@ -129,19 +139,33 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Import upcoming iMIS events. Nothing changes if iMIS cannot be read.
+	 * The next batch of an import (cron): carries on after the events the last batch reached.
 	 *
+	 * @return array The report.
+	 */
+	public static function run_more(): array {
+		return self::run( true );
+	}
+
+	/**
+	 * Import iMIS events, one batch of page changes at a time. Nothing changes if iMIS cannot
+	 * be read.
+	 *
+	 * @param bool $carry_on Carry on from the last batch (else start from the first event).
 	 * @return array The report (also saved for the settings page).
 	 */
-	public static function run(): array {
+	public static function run( $carry_on = false ): array {
+		$done   = true === $carry_on ? get_option( self::DONE_OPTION, [] ) : [];
+		$done   = is_array( $done ) ? $done : [];
 		$report = [
-			'time'    => time(),
-			'status'  => 'ok',
-			'read'    => 0,
-			'created' => 0,
-			'updated' => 0,
-			'skipped' => 0,
-			'notes'   => [],
+			'time'      => time(),
+			'status'    => 'ok',
+			'read'      => 0,
+			'created'   => 0,
+			'updated'   => 0,
+			'skipped'   => 0,
+			'remaining' => 0,
+			'notes'     => [],
 		];
 		if ( ! Wormiss_Settings::get( 'event_import_enabled' ) || ! Wormiss_Settings::is_configured() ) {
 			$report['status'] = 'off';
@@ -152,7 +176,7 @@ class Wormiss_Event_Import {
 			return $report;
 		}
 		try {
-			return self::import( $report );
+			return self::import( $report, $done );
 		} finally {
 			delete_option( self::LOCK_OPTION );
 		}
@@ -194,9 +218,10 @@ class Wormiss_Event_Import {
 	 * Read the events and make or update their pages.
 	 *
 	 * @param array $report Report so far.
+	 * @param array $done   iMIS event IDs earlier batches of this import dealt with (ID => true).
 	 * @return array The report.
 	 */
-	private static function import( array $report ): array {
+	private static function import( array $report, array $done ): array {
 		$since = (string) Wormiss_Settings::get( 'event_import_since' );
 		// The read starts at the earlier of the past-events date and the usual lookback, so events
 		// under way are never missed; the date only limits finished events (with_past()).
@@ -235,32 +260,54 @@ class Wormiss_Event_Import {
 		// finished ones since the past-events date when one is set.
 		$events         = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
 		$report['read'] = count( $events );
+		// At most BATCH page changes per run; the rest carry on in the background a minute later.
+		// Batches remember the events they dealt with by ID (not by place in the list, which
+		// shifts as events finish or change), so none is skipped and none holds others back.
+		$writes = 0;
+		$todo   = 0;
 		foreach ( $events as $event ) {
+			if ( isset( $done[ $event['id'] ] ) ) {
+				continue;
+			}
+			if ( $writes >= self::BATCH ) {
+				++$todo;
+				continue;
+			}
+			$done[ $event['id'] ] = true;
 			unset( $event['_start'] );
 			$extra   = $extras[ $event['id'] ] ?? self::extras( null );
 			$post_id = self::page_for( (string) $event['id'] );
 			if ( 0 === $post_id ) {
-				if ( $report['created'] >= self::MAX_CREATE ) {
-					++$report['skipped'];
-					continue;
-				}
+				++$writes;
 				if ( self::create( $event, $extra, $report ) ) {
 					++$report['created'];
 				}
 				continue;
 			}
 			if ( self::refresh( $post_id, $event, $extra, $report ) ) {
+				++$writes;
 				++$report['updated'];
 			} else {
 				++$report['skipped'];
 			}
 		}
-		if ( $report['created'] >= self::MAX_CREATE && $report['skipped'] > 0 ) {
+		$report['remaining'] = $todo;
+		if ( $todo > 0 ) {
+			update_option( self::DONE_OPTION, $done, false );
+			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+			}
 			self::note(
 				$report,
-				/* translators: %d: pages made per run. */
-				sprintf( __( 'Made the first %d pages; the rest come on the next import.', 'wormiss' ), self::MAX_CREATE )
+				sprintf(
+					/* translators: 1: pages per batch, 2: events still to check. */
+					__( 'Imported in batches of %1$d pages: carrying on in the background with %2$d more events to check.', 'wormiss' ),
+					self::BATCH,
+					$report['remaining']
+				)
 			);
+		} else {
+			delete_option( self::DONE_OPTION );
 		}
 		return self::save( $report );
 	}
@@ -624,14 +671,19 @@ class Wormiss_Event_Import {
 			/* translators: %s: date and time. */
 			return sprintf( __( 'Last import %s: importing is off, so nothing changed.', 'wormiss' ), $when );
 		}
-		return sprintf(
+		$text = sprintf(
 			/* translators: 1: date and time, 2: events read, 3: pages made, 4: pages updated, 5: unchanged. */
-			__( 'Last import %1$s: %2$d upcoming events in iMIS; %3$d draft pages made, %4$d updated, %5$d unchanged.', 'wormiss' ),
+			__( 'Last import %1$s: %2$d events in iMIS to import; %3$d pages made, %4$d updated, %5$d unchanged.', 'wormiss' ),
 			$when,
 			(int) $report['read'],
 			(int) $report['created'],
 			(int) $report['updated'],
 			(int) $report['skipped']
 		);
+		if ( ! empty( $report['remaining'] ) ) {
+			/* translators: %d: events still to check. */
+			$text .= ' ' . sprintf( __( 'Still going: %d more events to check in the background.', 'wormiss' ), (int) $report['remaining'] );
+		}
+		return $text;
 	}
 }
