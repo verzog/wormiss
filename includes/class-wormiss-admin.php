@@ -216,6 +216,7 @@ class Wormiss_Admin {
 			__( 'Record activity', 'wormiss' )         => $state( $on( 'activity_enabled' ), $on( 'activity_dry_run' ) ),
 			__( 'Send events to iMIS', 'wormiss' )     => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
 			__( 'Free event registration', 'wormiss' ) => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
+			__( 'Member sync', 'wormiss' )             => $state( $on( 'user_sync_enabled' ), $on( 'user_sync_dry_run' ) ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
@@ -292,6 +293,13 @@ class Wormiss_Admin {
 		self::field( 'event_sync_dry_run', __( 'Dry run (check only)', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_template_id', __( 'Default iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_cancel_on_trash', __( 'Cancel in iMIS when trashed', 'wormiss' ), 'wormiss_event_sync' );
+
+		$title = __( 'Sync members into WordPress', 'wormiss' );
+		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
+		self::field( 'user_sync_enabled', __( 'Sync members daily', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'user_sync_dry_run', __( 'Member sync dry run (report only)', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'user_sync_query', __( 'Members query', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'user_sync_role', __( 'Role for new members', 'wormiss' ), 'wormiss_user_sync' );
 
 		$title = __( 'Record activity in iMIS', 'wormiss' );
 		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
@@ -431,6 +439,21 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * Intro text for the member sync section (and the marker that its checkboxes were shown).
+	 *
+	 * @return void
+	 */
+	public static function user_sync_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[user_sync_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Once a day, members from the query below are created or updated as WordPress users', 'wormiss' )
+			. ' ' . esc_html__( '(login = iMIS ID; no emails are sent). Members whose status is not one of the Current', 'wormiss' )
+			. ' ' . esc_html__( 'statuses above are blocked from signing in until it is current again. Staff accounts are', 'wormiss' )
+			. ' ' . esc_html__( 'never changed. The query returns ID, Email, FirstName, LastName and Status, with no prompts.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
 	 * Intro text for the activity section (and the marker that its checkboxes were shown).
 	 *
 	 * @return void
@@ -558,6 +581,30 @@ class Wormiss_Admin {
 					. esc_html__( 'iMIS event status codes, comma-separated (default A, for active). Blank shows any status.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'user_sync_query':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'An IQA path, e.g. $/_SCCA/Membership/WebsiteMembers. Never shown on pages.', 'wormiss' ) . '</p>';
+				return;
+			case 'user_sync_role':
+				printf( '<select id="%1$s" name="%2$s">', esc_attr( $id ), esc_attr( $name ) );
+				foreach ( wp_roles()->get_names() as $role => $label ) {
+					if ( Wormiss_Settings::is_member_role( (string) $role ) ) {
+						printf(
+							'<option value="%1$s" %2$s>%3$s</option>',
+							esc_attr( (string) $role ),
+							selected( $value, $role, false ),
+							esc_html( translate_user_role( $label ) )
+						);
+					}
+				}
+				echo '</select>';
+				return;
 			case 'event_template_id':
 				printf(
 					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" placeholder="TEMPLATE" />',
@@ -608,6 +655,8 @@ class Wormiss_Admin {
 			case 'record_downloads':
 			case 'record_forms':
 			case 'record_purchases':
+			case 'user_sync_enabled':
+			case 'user_sync_dry_run':
 			case 'event_registration_enabled':
 			case 'event_registration_dry_run':
 			case 'event_sync_enabled':
@@ -692,6 +741,15 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="action" value="wormiss_test_connection" />';
 		wp_nonce_field( 'wormiss_test_connection' );
 		submit_button( __( 'Test connection', 'wormiss' ), 'secondary', 'submit', false );
+		echo '</form>';
+
+		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';
+		$summary = Wormiss_User_Sync::summary();
+		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The member sync has not run yet.', 'wormiss' ) ) . '</p>';
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		echo '<input type="hidden" name="action" value="wormiss_user_sync_now" />';
+		wp_nonce_field( 'wormiss_user_sync_now' );
+		submit_button( __( 'Run the member sync now', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
 		$log = self::log_url();

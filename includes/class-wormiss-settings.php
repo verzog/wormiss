@@ -83,6 +83,11 @@ class Wormiss_Settings {
 			'record_downloads'           => true,
 			'record_forms'               => false,
 			'record_purchases'           => false,
+			// Members synced into WordPress users from an IQA: off, and a dry run, until turned on.
+			'user_sync_enabled'          => false,
+			'user_sync_dry_run'          => true,
+			'user_sync_query'            => '',
+			'user_sync_role'             => 'subscriber',
 			// iMIS events on pages: the statuses that count as open, and each event's public page
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
 			'event_statuses'             => [ 'A' ],
@@ -227,6 +232,17 @@ class Wormiss_Settings {
 			}
 		}
 		return array_values( $out );
+	}
+
+	/**
+	 * Whether a role may be given to synced members: it exists and cannot edit posts.
+	 *
+	 * @param string $role Role name.
+	 * @return bool
+	 */
+	public static function is_member_role( string $role ): bool {
+		$object = get_role( $role );
+		return null !== $object && ! $object->has_cap( 'edit_posts' );
 	}
 
 	/**
@@ -379,6 +395,26 @@ class Wormiss_Settings {
 		}
 		foreach ( [ 'event_sync_enabled', 'event_sync_dry_run', 'event_cancel_on_trash' ] as $box ) {
 			if ( isset( $input['event_sync_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
+		}
+		if ( isset( $input['user_sync_query'] ) ) {
+			$query                    = self::parse_queries( (string) $input['user_sync_query'] );
+			$clean['user_sync_query'] = $query ? $query[0] : '';
+		}
+		if ( isset( $input['user_sync_role'] ) ) {
+			$role = sanitize_key( (string) $input['user_sync_role'] );
+			if ( self::is_member_role( $role ) ) {
+				$clean['user_sync_role'] = $role;
+			} else {
+				$message = __( 'Members can only be given a role without editing rights.', 'wormiss' );
+				add_settings_error( self::OPTION, 'user_sync_role', $message );
+			}
+		}
+		foreach ( [ 'user_sync_enabled', 'user_sync_dry_run' ] as $box ) {
+			if ( isset( $input['user_sync_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {
 				$clean[ $box ] = (bool) $input[ $box ];
