@@ -194,4 +194,41 @@ class Test_Wormiss_Event_Link extends Wormiss_Test_Case {
 		$this->assertStringContainsString( '<dt>Event code</dt><dd>CONGRESS26</dd>', $html );
 		$this->assertStringContainsString( 'EventKey=CONGRESS26', $html );
 	}
+
+	/**
+	 * A typo in the ID is reported and keeps the link there is; it never unlinks the page.
+	 *
+	 * @return void
+	 */
+	public function test_typo_keeps_link(): void {
+		$post_id = $this->event( 'conf 26' );
+		$this->assertSame( 'CONF 26', get_post_meta( $post_id, Wormiss_Event_Sync::META_EXISTING, true ) );
+		update_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, 'CONGRESS26' );
+		update_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED, 1 );
+		$this->assertSame( 'error', Wormiss_Event_Sync::maybe_link( $post_id, get_post( $post_id ) ) );
+		$this->assertSame( 'CONGRESS26', get_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, true ) );
+		$this->assertTrue( Wormiss_Event_Sync::is_linked( $post_id ) );
+		$this->assertStringContainsString( 'CONF 26', get_post_meta( $post_id, Wormiss_Event_Sync::META_MESSAGE, true ) );
+		$this->assertSame( 0, count( $this->imis->requests ) );
+	}
+
+	/**
+	 * An event no longer in the events list (it started long ago) still shows the details kept
+	 * when it was linked.
+	 *
+	 * @return void
+	 */
+	public function test_kept_details_when_not_listed(): void {
+		$post_id = $this->event();
+		$this->imis->token()->reply( '/api/Event/CONGRESS26', 200, self::imis_event() );
+		$this->assertSame( 'linked', Wormiss_Event_Sync::maybe_link( $post_id, get_post( $post_id ) ) );
+		$this->imis->token()->reply( '/api/Event?', 200, [ 'Items' => [ '$values' => [] ] ] );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$GLOBALS['wp_query']->the_post();
+		$html = apply_filters( 'the_content', get_the_content() );
+		wp_reset_postdata();
+		$this->assertStringContainsString( 'Gold Coast Convention Centre', $html );
+		$this->assertStringContainsString( '<dt>Event code</dt><dd>CONGRESS26</dd>', $html );
+	}
 }

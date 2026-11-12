@@ -79,6 +79,9 @@ class Wormiss_Event_Sync {
 	/** Set when the event is linked to an existing iMIS event (set by the link only). */
 	const META_LINKED = '_wormiss_event_linked';
 
+	/** A linked event's details as iMIS had them when linked (set by the link only). */
+	const META_LINKED_DETAILS = '_wormiss_event_linked_details';
+
 	/** Longest event code: iMIS event IDs are up to 10 characters. */
 	const CODE_LENGTH = 10;
 
@@ -150,7 +153,7 @@ class Wormiss_Event_Sync {
 		$auth    = static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id );
 		$strings = [
 			self::META_CODE         => [ __CLASS__, 'clean_code' ],
-			self::META_EXISTING     => [ __CLASS__, 'clean_code' ],
+			self::META_EXISTING     => [ __CLASS__, 'clean_existing' ],
 			self::META_START        => [ __CLASS__, 'clean_datetime' ],
 			self::META_END          => [ __CLASS__, 'clean_datetime' ],
 			self::META_LOCATION     => 'sanitize_text_field',
@@ -255,6 +258,17 @@ class Wormiss_Event_Sync {
 	public static function clean_code( $value ): string {
 		$code = strtoupper( trim( (string) $value ) );
 		return ( strlen( $code ) <= self::CODE_LENGTH && Wormiss_Rest_Client::is_event_id( $code ) ) ? $code : '';
+	}
+
+	/**
+	 * An existing iMIS event ID as typed, upper case. Not cleaned to '' when it is not a usable
+	 * ID, so a typo is reported rather than taken as a request to unlink.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function clean_existing( $value ): string {
+		return substr( strtoupper( trim( sanitize_text_field( (string) $value ) ) ), 0, 64 );
 	}
 
 	/**
@@ -672,6 +686,11 @@ class Wormiss_Event_Sync {
 		// The event as iMIS lists it (cached): for a linked event's details, places left and Register.
 		$wanted = $linked || Wormiss_Event_Registration::is_on() || '' !== (string) Wormiss_Settings::get( 'event_places_query' );
 		$listed = ( '' !== $imis_id && $wanted ) ? self::listed_event( $imis_id ) : null;
+		if ( $linked && null === $listed ) {
+			// Not in the events list (e.g. it started long ago): the details kept when it was linked.
+			$kept   = get_post_meta( $post->ID, self::META_LINKED_DETAILS, true );
+			$listed = is_array( $kept ) && ! empty( $kept['id'] ) ? $kept : null;
+		}
 		if ( $linked && null !== $listed ) {
 			// A linked event's details live in iMIS; anything filled in here still comes first.
 			foreach ( [ 'start', 'end', 'location', 'online', 'code' ] as $key ) {
@@ -798,7 +817,14 @@ class Wormiss_Event_Sync {
 		if ( '' === $existing ) {
 			delete_post_meta( $post_id, self::META_LINKED );
 			delete_post_meta( $post_id, self::META_IMIS_ID );
+			delete_post_meta( $post_id, self::META_LINKED_DETAILS );
 			return self::link_result( $post_id, 'unlinked', __( 'No longer linked to an iMIS event.', 'wormiss' ) );
+		}
+		if ( '' === self::clean_code( $existing ) ) {
+			// A typo: keep any link there is, and say what is wrong.
+			/* translators: %s: what was typed. */
+			$message = __( '"%s" is not an iMIS event ID (up to 10 letters, digits, _ and -). Nothing was changed.', 'wormiss' );
+			return self::link_result( $post_id, 'error', sprintf( $message, $existing ) );
 		}
 		if ( '' !== $imis_id && ! $linked ) {
 			/* translators: %s: iMIS event ID. */
@@ -823,10 +849,13 @@ class Wormiss_Event_Sync {
 		if ( null === $event ) {
 			delete_post_meta( $post_id, self::META_LINKED );
 			delete_post_meta( $post_id, self::META_IMIS_ID );
+			delete_post_meta( $post_id, self::META_LINKED_DETAILS );
 			return self::link_result( $post_id, 'error', $reason );
 		}
 		update_post_meta( $post_id, self::META_IMIS_ID, $event['id'] );
 		update_post_meta( $post_id, self::META_LINKED, 1 );
+		// Kept for the page, as the events list only reaches back LOOKBACK_DAYS.
+		update_post_meta( $post_id, self::META_LINKED_DETAILS, $event );
 		/* translators: 1: iMIS event ID, 2: event name in iMIS. */
 		$message = __( 'Linked to iMIS event %1$s (%2$s). Its details come from iMIS; WordPress never changes or cancels it.', 'wormiss' );
 		return self::link_result( $post_id, 'linked', sprintf( $message, $event['id'], $event['name'] ) );
