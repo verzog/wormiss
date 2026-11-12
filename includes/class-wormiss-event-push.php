@@ -51,6 +51,9 @@ class Wormiss_Event_Push {
 	/** Seconds before the next batch runs. */
 	const BATCH_GAP = MINUTE_IN_SECONDS;
 
+	/** Option that holds the lock while a batch runs (taken atomically). */
+	const LOCK_OPTION = 'wormiss_event_push_lock';
+
 	/** Seconds one run holds its lock. */
 	const LOCK_SECONDS = 600;
 
@@ -125,11 +128,10 @@ class Wormiss_Event_Push {
 			$report['status'] = 'off';
 			return self::save( $report );
 		}
-		if ( get_transient( 'wormiss_event_push_lock' ) ) {
+		if ( ! Wormiss_Event_Import::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS ) ) {
 			$report['status'] = 'busy';
 			return $report;
 		}
-		set_transient( 'wormiss_event_push_lock', 1, self::LOCK_SECONDS );
 		try {
 			$done = true === $carry_on ? get_option( self::DONE_OPTION, [] ) : [];
 			$done = is_array( $done ) ? $done : [];
@@ -157,14 +159,14 @@ class Wormiss_Event_Push {
 				delete_option( self::DONE_OPTION );
 			}
 		} finally {
-			delete_transient( 'wormiss_event_push_lock' );
+			delete_option( self::LOCK_OPTION );
 		}
 		return self::save( $report );
 	}
 
 	/**
-	 * Published Events made in WordPress that iMIS does not have up to date: never sent, edited
-	 * since they were last saved there, or last sent with a problem or still waiting.
+	 * Published, editor-approved Events made in WordPress that iMIS does not have up to date: never
+	 * sent, edited since they were last saved there, or last sent with a problem or still waiting.
 	 *
 	 * @return int[] Post IDs, oldest first.
 	 */
@@ -186,6 +188,11 @@ class Wormiss_Event_Push {
 			$post_id = (int) $post_id;
 			if ( Wormiss_Event_Sync::is_linked( $post_id ) ) {
 				continue; // Linked to, or imported from, iMIS: only ever read.
+			}
+			// Only events an editor last saved, as when an event is published (an Author's save
+			// clears the approval, so their new events and edits wait for an editor).
+			if ( ! get_post_meta( $post_id, Wormiss_Event_Sync::META_APPROVED, true ) ) {
+				continue;
 			}
 			$status = (string) get_post_meta( $post_id, Wormiss_Event_Sync::META_STATUS, true );
 			$synced = (int) get_post_meta( $post_id, Wormiss_Event_Sync::META_SYNCED_AT, true );

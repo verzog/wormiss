@@ -80,9 +80,10 @@ class Test_Wormiss_Event_Push extends Wormiss_Test_Case {
 			]
 		);
 		$meta   += [
-			Wormiss_Event_Sync::META_CODE  => $code,
-			Wormiss_Event_Sync::META_START => '2027-03-05T09:00',
-			Wormiss_Event_Sync::META_END   => '2027-03-05T17:00',
+			Wormiss_Event_Sync::META_CODE     => $code,
+			Wormiss_Event_Sync::META_START    => '2027-03-05T09:00',
+			Wormiss_Event_Sync::META_END      => '2027-03-05T17:00',
+			Wormiss_Event_Sync::META_APPROVED => get_current_user_id(),
 		];
 		foreach ( $meta as $key => $value ) {
 			update_post_meta( $post_id, $key, $value );
@@ -157,7 +158,9 @@ class Test_Wormiss_Event_Push extends Wormiss_Test_Case {
 				Wormiss_Event_Sync::META_LINKED  => 1,
 			]
 		);
+		$author  = $this->event( 'AUTH1', [ Wormiss_Event_Sync::META_APPROVED => '' ] );
 		$due     = Wormiss_Event_Push::due();
+		$this->assertNotContains( $author, $due, 'An event no editor approved is not sent.' );
 		$this->assertContains( $new, $due );
 		$this->assertContains( $failed, $due );
 		$this->assertContains( $edited, $due );
@@ -208,5 +211,19 @@ class Test_Wormiss_Event_Push extends Wormiss_Test_Case {
 		$this->assertSame( 0, $report['remaining'] );
 		$this->assertFalse( get_option( Wormiss_Event_Push::DONE_OPTION ) );
 		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
+	}
+
+	/**
+	 * A push already running stops a second one starting.
+	 *
+	 * @return void
+	 */
+	public function test_busy(): void {
+		$this->turn_on( true );
+		$this->event( 'BUSY1' );
+		add_option( Wormiss_Event_Push::LOCK_OPTION, (string) time(), '', false );
+		$this->assertSame( 'busy', Wormiss_Event_Push::run()['status'] );
+		$this->assertSame( 0, count( $this->imis->requests ) );
+		delete_option( Wormiss_Event_Push::LOCK_OPTION );
 	}
 }

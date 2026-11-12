@@ -183,33 +183,45 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Take the lock in one database step, so two runs started together cannot both go ahead
-	 * (and make two pages for one event). A lock older than LOCK_SECONDS is taken over.
+	 * Take the import lock (see take_lock()).
 	 *
 	 * @return bool Whether this run holds the lock.
 	 */
 	private static function lock(): bool {
+		return self::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS );
+	}
+
+	/**
+	 * Take a lock in one database step, so two runs started together cannot both go ahead
+	 * (and make two pages for one event). A lock older than $seconds is taken over.
+	 * Release it with delete_option( $name ).
+	 *
+	 * @param string $name    Option name that holds the lock.
+	 * @param int    $seconds Seconds after which a lock left by a run that died is taken over.
+	 * @return bool Whether this run holds the lock.
+	 */
+	public static function take_lock( string $name, int $seconds ): bool {
 		global $wpdb;
 		for ( $try = 0; $try < 2; $try++ ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- INSERT IGNORE is the atomic part; options have no such API.
 			$taken = $wpdb->query(
 				$wpdb->prepare(
 					"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
-					self::LOCK_OPTION,
+					$name,
 					(string) time()
 				)
 			);
-			wp_cache_delete( self::LOCK_OPTION, 'options' );
+			wp_cache_delete( $name, 'options' );
 			wp_cache_delete( 'notoptions', 'options' );
 			if ( 1 === (int) $taken ) {
 				return true;
 			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Read past the options cache.
-			$since = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::LOCK_OPTION ) );
-			if ( $since > time() - self::LOCK_SECONDS ) {
+			$since = (int) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $name ) );
+			if ( $since > time() - $seconds ) {
 				return false;
 			}
-			delete_option( self::LOCK_OPTION ); // Left by a run that died: take it over.
+			delete_option( $name ); // Left by a run that died: take it over.
 		}
 		return false;
 	}
