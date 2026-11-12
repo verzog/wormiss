@@ -37,6 +37,21 @@ class Wormiss_User_Sync {
 	/** Cron hook for the daily sync. */
 	const HOOK = 'wormiss_user_sync';
 
+	/** Cron hook that carries on a sync with more changes than one batch. */
+	const MORE_HOOK = 'wormiss_user_sync_more';
+
+	/** Most accounts created or changed in one run, so a page or cron run never times out. */
+	const BATCH = 50;
+
+	/** Option: where the next batch carries on in the list of members. */
+	const OFFSET_OPTION = 'wormiss_user_sync_offset';
+
+	/** Seconds before the next batch runs. */
+	const BATCH_GAP = MINUTE_IN_SECONDS;
+
+	/** Seconds one run holds its lock, so two runs never overlap. */
+	const LOCK_SECONDS = 600;
+
 	/** User meta: set while a member is blocked (when it was set). */
 	const META_BLOCKED = '_wormiss_blocked';
 
@@ -62,6 +77,7 @@ class Wormiss_User_Sync {
 	 */
 	public static function init(): void {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
+		add_action( self::MORE_HOOK, [ __CLASS__, 'run_more' ] );
 		add_action( 'init', [ __CLASS__, 'maybe_schedule' ] );
 		add_action( 'admin_post_wormiss_user_sync_now', [ __CLASS__, 'handle_run_now' ] );
 		// Blocked members: password sign-in is refused, and any session (including single
@@ -136,11 +152,22 @@ class Wormiss_User_Sync {
 	}
 
 	/**
+	 * The next batch of a sync (cron): carries on after the members the last batch reached.
+	 *
+	 * @return array The report.
+	 */
+	public static function run_more(): array {
+		return self::run( true );
+	}
+
+	/**
 	 * Sync members from iMIS. Nothing changes if iMIS cannot be read.
 	 *
+	 * @param bool $carry_on Carry on from the last batch (else start from the first member).
 	 * @return array The report (also saved for the settings page).
 	 */
-	public static function run(): array {
+	public static function run( $carry_on = false ): array {
+		$start  = true === $carry_on ? max( 0, (int) get_option( self::OFFSET_OPTION, 0 ) ) : 0;
 		$report = [
 			'time'      => time(),
 			'dry_run'   => (bool) Wormiss_Settings::get( 'user_sync_dry_run' ),
@@ -151,6 +178,7 @@ class Wormiss_User_Sync {
 			'blocked'   => 0,
 			'unblocked' => 0,
 			'skipped'   => 0,
+			'remaining' => 0,
 			'notes'     => [],
 		];
 		$query  = (string) Wormiss_Settings::get( 'user_sync_query' );
@@ -158,6 +186,29 @@ class Wormiss_User_Sync {
 			$report['status'] = 'off';
 			return self::save( $report );
 		}
+		// One run at a time (the button, the daily run and a following batch could meet).
+		if ( get_transient( 'wormiss_user_sync_lock' ) ) {
+			$report['status']  = 'busy';
+			$report['notes'][] = __( 'A sync is already running. Try again in a few minutes.', 'wormiss' );
+			return $report;
+		}
+		set_transient( 'wormiss_user_sync_lock', 1, self::LOCK_SECONDS );
+		try {
+			return self::sync( $report, $query, $start );
+		} finally {
+			delete_transient( 'wormiss_user_sync_lock' );
+		}
+	}
+
+	/**
+	 * Read the members and make one batch of changes.
+	 *
+	 * @param array  $report Report so far.
+	 * @param string $query  IQA path.
+	 * @param int    $start  Index of the first member this batch may change.
+	 * @return array The report.
+	 */
+	private static function sync( array $report, string $query, int $start ): array {
 		try {
 			// One more than the limit is asked for, so a cut-off list is noticed, not synced in part.
 			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $query, [], null, self::MAX_MEMBERS + 1 );
@@ -185,6 +236,8 @@ class Wormiss_User_Sync {
 		// Work out every change first, so a run that would block too many can hold back.
 		$plans   = [];
 		$claimed = []; // WordPress user ID => iMIS ID, so one account is never given to two members.
+		// Thousands of users are looked up: keep them out of the in-memory cache.
+		wp_suspend_cache_addition( true );
 		foreach ( $rows as $row ) {
 			$plan = self::plan( self::member( $row ), $current );
 			$user = (int) ( $plan['user_id'] ?? 0 );
@@ -205,6 +258,7 @@ class Wormiss_User_Sync {
 			}
 			$plans[] = $plan;
 		}
+		wp_suspend_cache_addition( false );
 		$blocks  = count( array_filter( $plans, static fn( $p ) => 'block' === ( $p['access'] ?? '' ) ) );
 		$matched = max( 1, count( array_filter( $plans, static fn( $p ) => ! empty( $p['user_id'] ) ) ) );
 		$hold    = $blocks > self::MASS_BLOCK_MIN && $blocks / $matched > self::MASS_BLOCK_SHARE;
@@ -223,12 +277,42 @@ class Wormiss_User_Sync {
 		// Changing a member's email must not email them (or anyone) about it.
 		add_filter( 'send_email_change_email', '__return_false' );
 		add_filter( 'send_password_change_email', '__return_false' );
-		foreach ( $plans as $plan ) {
-			self::apply( $plan, $report, $hold );
+		// At most one batch of changes per run; the rest carry on in the background, as
+		// creating an account takes a moment and a whole membership at once would time out.
+		// Each batch carries on after the members the last one reached, so members that cannot be
+		// synced (noted) never hold back the ones after them; the next full run tries them again.
+		$writes = 0;
+		$start  = $start < count( $plans ) ? $start : 0;
+		foreach ( $plans as $index => $plan ) {
+			if ( $index < $start ) {
+				continue;
+			}
+			if ( $writes >= self::BATCH ) {
+				$report['remaining'] = count( $plans ) - $index;
+				update_option( self::OFFSET_OPTION, $index, false );
+				break;
+			}
+			$writes += self::apply( $plan, $report, $hold ) ? 1 : 0;
 		}
 		remove_filter( 'send_email_change_email', '__return_false' );
 		remove_filter( 'send_password_change_email', '__return_false' );
 
+		if ( $report['remaining'] > 0 ) {
+			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+			}
+			self::note(
+				$report,
+				sprintf(
+					/* translators: 1: changes per batch, 2: members still to check. */
+					__( 'Synced in batches of %1$d: carrying on in the background with %2$d more members to check.', 'wormiss' ),
+					self::BATCH,
+					$report['remaining']
+				)
+			);
+		} else {
+			delete_option( self::OFFSET_OPTION );
+		}
 		return self::save( $report );
 	}
 
@@ -308,32 +392,34 @@ class Wormiss_User_Sync {
 	 * @param array $plan   From plan().
 	 * @param array $report Report, updated.
 	 * @param bool  $hold   Do not block anyone this run.
-	 * @return void
+	 * @return bool Whether something was written (not in a dry run).
 	 */
-	private static function apply( array $plan, array &$report, bool $hold ): void {
+	private static function apply( array $plan, array &$report, bool $hold ): bool {
 		if ( ! isset( $plan['member'] ) ) {
 			++$report['skipped'];
-			return;
+			return false;
 		}
 		$member  = $plan['member'];
 		$user_id = (int) $plan['user_id'];
 		$dry     = $report['dry_run'];
 		if ( ! empty( $plan['staff'] ) ) {
 			++$report['skipped'];
-			return;
+			return false;
 		}
 		if ( ! $user_id ) {
 			if ( $plan['lapsed'] || $plan['unknown'] ) {
 				++$report['skipped']; // Lapsed (or unknown) members are not given new accounts.
-				return;
+				return false;
 			}
-			$created = $dry ? 1 : self::create( $member, $report );
+			$created = $dry ? true : self::create( $member, $report );
 			if ( $created ) {
 				++$report['created'];
 			}
-			return;
+			return ! $dry;
 		}
+		$wrote = false;
 		if ( self::changes( $user_id, $member ) ) {
+			$wrote = ! $dry;
 			if ( $dry || self::update( $user_id, $member, $report ) ) {
 				++$report['updated'];
 			}
@@ -343,14 +429,17 @@ class Wormiss_User_Sync {
 			if ( ! $dry ) {
 				update_user_meta( $user_id, self::META_BLOCKED, time() );
 				WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+				$wrote = true;
 			}
 			++$report['blocked'];
 		} elseif ( 'unblock' === $access ) {
 			if ( ! $dry ) {
 				delete_user_meta( $user_id, self::META_BLOCKED );
+				$wrote = true;
 			}
 			++$report['unblocked'];
 		}
+		return $wrote;
 	}
 
 	/**
@@ -567,6 +656,10 @@ class Wormiss_User_Sync {
 		);
 		if ( $report['dry_run'] ) {
 			$text .= ' ' . __( 'Dry run: these are what would happen; nothing was changed.', 'wormiss' );
+		}
+		if ( ! empty( $report['remaining'] ) ) {
+			/* translators: %d: members still to check. */
+			$text .= ' ' . sprintf( __( 'Still going: %d more members to check in the background.', 'wormiss' ), (int) $report['remaining'] );
 		}
 		return $text;
 	}
