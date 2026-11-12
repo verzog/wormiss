@@ -103,6 +103,8 @@ class Wormiss_Settings {
 			'event_sync_dry_run'         => true,
 			'event_template_id'          => '',
 			'event_cancel_on_trash'      => false,
+			// Importing iMIS events as draft Event pages: off until an administrator turns it on.
+			'event_import_enabled'       => false,
 		];
 	}
 
@@ -419,6 +421,11 @@ class Wormiss_Settings {
 				$message = __( 'Members can only be given a role without editing rights.', 'wormiss' );
 				add_settings_error( self::OPTION, 'user_sync_role', $message );
 			}
+		}
+		if ( isset( $input['event_import_section'] ) ) {
+			$clean['event_import_enabled'] = ! empty( $input['event_import_enabled'] );
+		} elseif ( array_key_exists( 'event_import_enabled', $input ) ) {
+			$clean['event_import_enabled'] = (bool) $input['event_import_enabled'];
 		}
 		foreach ( [ 'user_sync_enabled', 'user_sync_dry_run' ] as $box ) {
 			if ( isset( $input['user_sync_section'] ) ) {

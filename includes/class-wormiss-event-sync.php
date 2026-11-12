@@ -842,7 +842,8 @@ class Wormiss_Event_Sync {
 		try {
 			$event = Wormiss_Events::normalise( ( new Wormiss_Rest_Client() )->get_event( $existing ) );
 		} catch ( Wormiss_Exception $e ) {
-			$event = null;
+			// Some events cannot be read on their own (iMIS errors on them); the events list may have it.
+			$event = self::listed_event( $existing );
 			/* translators: 1: iMIS event ID, 2: reason. */
 			$reason = sprintf( __( 'iMIS event %1$s could not be read (%2$s).', 'wormiss' ), $existing, $e->getMessage() );
 		}
