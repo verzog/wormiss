@@ -177,4 +177,76 @@ class Test_Wormiss_Event_Editor extends Wormiss_Test_Case {
 		$this->assertSame( 5, has_action( $hook, [ 'Wormiss_Event_Editor', 'save' ] ) );
 		$this->assertSame( 20, has_action( $hook, [ 'Wormiss_Event_Sync', 'maybe_queue' ] ) );
 	}
+
+	/**
+	 * An event WordPress created in iMIS cannot become a link: no field, and nothing saved.
+	 *
+	 * @return void
+	 */
+	public function test_no_link_once_created(): void {
+		$post_id = $this->event( [ Wormiss_Event_Sync::META_IMIS_ID => 'DERM27' ] );
+		$this->assertStringNotContainsString( 'name="' . Wormiss_Event_Sync::META_EXISTING . '"', $this->box( $post_id ) );
+		$_POST = [
+			Wormiss_Event_Editor::FIELD_SENT  => '1',
+			Wormiss_Event_Editor::NONCE       => wp_create_nonce( Wormiss_Event_Editor::NONCE ),
+			Wormiss_Event_Sync::META_EXISTING => 'CONGRESS26',
+		];
+		Wormiss_Event_Editor::save( $post_id );
+		$this->assertSame( '', get_post_meta( $post_id, Wormiss_Event_Sync::META_EXISTING, true ) );
+		$this->assertFalse( Wormiss_Event_Sync::is_linked( $post_id ) );
+	}
+
+	/**
+	 * Values reach their own sanitizers untouched: an online link keeps its %2F.
+	 *
+	 * @return void
+	 */
+	public function test_online_link_kept(): void {
+		$post_id = $this->event();
+		$_POST   = [
+			Wormiss_Event_Editor::FIELD_SENT => '1',
+			Wormiss_Event_Editor::NONCE      => wp_create_nonce( Wormiss_Event_Editor::NONCE ),
+			Wormiss_Event_Sync::META_ONLINE  => 'https://meet.example.org/join?token=abc%2Fdef',
+		];
+		Wormiss_Event_Editor::save( $post_id );
+		$this->assertSame( 'https://meet.example.org/join?token=abc%2Fdef', get_post_meta( $post_id, Wormiss_Event_Sync::META_ONLINE, true ) );
+	}
+
+	/**
+	 * A block editor (REST) save waits a minute for the box, whose save then sends straight away.
+	 *
+	 * @return void
+	 */
+	public function test_rest_save_waits_for_box(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_sync_enabled' => true ] ) );
+		add_filter( 'wormiss_event_sync_in_rest', '__return_true' );
+		$post_id = self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Event_Sync::POST_TYPE,
+				'post_title'  => 'Course',
+				'post_status' => 'publish',
+			]
+		);
+		remove_filter( 'wormiss_event_sync_in_rest', '__return_true' );
+		$when = wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] );
+		$this->assertNotFalse( $when );
+		$this->assertGreaterThan( time() + 30, $when );
+
+		$_POST = [
+			Wormiss_Event_Editor::FIELD_SENT => '1',
+			Wormiss_Event_Editor::NONCE      => wp_create_nonce( Wormiss_Event_Editor::NONCE ),
+			Wormiss_Event_Sync::META_CODE    => 'COURSE27',
+		];
+		wp_update_post(
+			[
+				'ID'         => $post_id,
+				'post_title' => 'Course 2027',
+			]
+		);
+		$when = wp_next_scheduled( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] );
+		$this->assertNotFalse( $when );
+		$this->assertLessThanOrEqual( time() + 5, $when );
+		$this->assertSame( 'COURSE27', get_post_meta( $post_id, Wormiss_Event_Sync::META_CODE, true ) );
+		wp_clear_scheduled_hook( Wormiss_Event_Sync::SYNC_HOOK, [ $post_id ] );
+	}
 }

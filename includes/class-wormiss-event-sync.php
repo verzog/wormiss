@@ -314,6 +314,20 @@ class Wormiss_Event_Sync {
 	}
 
 	/**
+	 * Whether this is a REST API request (as the block editor's save is).
+	 *
+	 * @return bool
+	 */
+	private static function in_rest(): bool {
+		/**
+		 * Filters whether the current request counts as a REST API save.
+		 *
+		 * @param bool $in_rest Whether it does.
+		 */
+		return (bool) apply_filters( 'wormiss_event_sync_in_rest', defined( 'REST_REQUEST' ) && REST_REQUEST );
+	}
+
+	/**
 	 * After an editor publishes or updates an event, send it to iMIS in the background.
 	 *
 	 * @param int     $post_id Post ID.
@@ -348,7 +362,11 @@ class Wormiss_Event_Sync {
 		update_post_meta( $post_id, self::META_STATUS, 'queued' );
 		update_post_meta( $post_id, self::META_MESSAGE, __( 'Waiting to be sent to iMIS.', 'wormiss' ) );
 		if ( ! wp_next_scheduled( self::SYNC_HOOK, [ (int) $post_id ] ) ) {
-			wp_schedule_single_event( time(), self::SYNC_HOOK, [ (int) $post_id ] );
+			// The block editor saves through the REST API, then sends the "Event details" box in a
+			// second request: wait a minute so a send cannot start on the details before the box's.
+			// The box's save sends straight away (Wormiss_Event_Editor::save()).
+			$when = self::in_rest() ? time() + MINUTE_IN_SECONDS : time();
+			wp_schedule_single_event( $when, self::SYNC_HOOK, [ (int) $post_id ] );
 		}
 	}
 

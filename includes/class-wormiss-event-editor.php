@@ -203,6 +203,10 @@ class Wormiss_Event_Editor {
 		$linked  = (bool) get_post_meta( $post->ID, Wormiss_Event_Sync::META_LINKED, true )
 			|| '' !== (string) get_post_meta( $post->ID, Wormiss_Event_Sync::META_EXISTING, true );
 		$tabs    = self::tabs();
+		if ( '' !== $imis_id && ! $linked ) {
+			// Created in iMIS from WordPress: it cannot become a link to another event.
+			unset( $tabs['imis'][1][ Wormiss_Event_Sync::META_EXISTING ] );
+		}
 		if ( $linked ) {
 			// A linked event is only read from iMIS: only its link can be changed here.
 			$tabs = [
@@ -312,6 +316,7 @@ class Wormiss_Event_Editor {
 			return;
 		}
 		$imis_id = (string) get_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, true );
+		$created = '' !== $imis_id && ! get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED, true );
 		foreach ( self::tabs() as [ , $fields ] ) {
 			foreach ( array_keys( $fields ) as $meta_key ) {
 				if ( ! isset( $_POST[ $meta_key ] ) ) {
@@ -320,9 +325,16 @@ class Wormiss_Event_Editor {
 				if ( Wormiss_Event_Sync::META_CODE === $meta_key && '' !== $imis_id ) {
 					continue; // In iMIS already: the code is fixed.
 				}
-				// Each key's registered sanitizer cleans the value as it is saved.
-				update_post_meta( (int) $post_id, $meta_key, sanitize_text_field( wp_unslash( $_POST[ $meta_key ] ) ) );
+				if ( Wormiss_Event_Sync::META_EXISTING === $meta_key && $created ) {
+					continue; // Created in iMIS from WordPress: it cannot become a link.
+				}
+				// Each key's registered sanitizer cleans the value as it is saved (a general text
+				// clean first would spoil some, e.g. %2F in an online link).
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Registered sanitizer.
+				update_post_meta( (int) $post_id, $meta_key, (string) wp_unslash( $_POST[ $meta_key ] ) );
 			}
 		}
+		// Send now: a block editor save waits a minute for this box (see maybe_queue()).
+		wp_clear_scheduled_hook( Wormiss_Event_Sync::SYNC_HOOK, [ (int) $post_id ] );
 	}
 }
