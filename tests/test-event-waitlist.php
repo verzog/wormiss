@@ -179,9 +179,9 @@ class Test_Wormiss_Event_Waitlist extends Wormiss_Test_Case {
 		delete_transient( 'wormiss_reg_' . md5( Wormiss_Settings::base_url() . "\0FREE1\0" . '12345' ) );
 		$this->imis->token()->reply( '/api/EventRegistration?', 200, self::registration( true ) );
 		$waiting = Wormiss_Event_Registration::button( self::event(), true );
-		$this->assertStringContainsString( "You're on the waitlist.", $waiting );
+		$this->assertStringContainsString( 'You&#039;re on the waitlist.', $waiting );
 		$this->assertStringContainsString( '>Leave the waitlist</button>', $waiting );
-		$this->assertStringNotContainsString( "You're registered.", $waiting );
+		$this->assertStringNotContainsString( 'registered.', $waiting );
 	}
 
 	/**
