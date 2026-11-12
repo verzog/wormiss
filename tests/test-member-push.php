@@ -62,14 +62,15 @@ class Test_Wormiss_Member_Push extends Wormiss_Test_Case {
 	/**
 	 * A member with an iMIS ID.
 	 *
-	 * @param string $role Role.
+	 * @param string $role  Role.
+	 * @param string $email Email (a new one if blank: emails must be unique).
 	 * @return int User ID.
 	 */
-	private function member( string $role = 'subscriber' ): int {
+	private function member( string $role = 'subscriber', string $email = '' ): int {
 		$user_id = self::factory()->user->create(
 			[
 				'role'       => $role,
-				'user_email' => 'old@example.org',
+				'user_email' => '' !== $email ? $email : wp_generate_password( 8, false ) . '@example.org',
 				'first_name' => 'Ann',
 				'last_name'  => 'Smith',
 			]
@@ -256,7 +257,7 @@ class Test_Wormiss_Member_Push extends Wormiss_Test_Case {
 		$this->assertSame( 'dry_run', Wormiss_Member_Push::push( $user_id ) );
 		$this->assertSame( 1, $this->imis->count( '/api/Party/12345' ) );
 
-		$same = $this->member();
+		$same = $this->member( 'subscriber', 'old@example.org' ); // As in iMIS.
 		$this->imis->token()->reply( '/api/Party/12345', 200, self::party() );
 		$this->assertSame( 'unchanged', Wormiss_Member_Push::push( $same ) );
 	}
