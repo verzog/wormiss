@@ -363,4 +363,50 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->assertSame( '', Wormiss_Settings::sanitize( [ 'event_import_since' => '2024-02-30' ] )['event_import_since'] );
 		$this->assertSame( '', Wormiss_Settings::sanitize( [ 'event_import_since' => '2999-01-01' ] )['event_import_since'] );
 	}
+
+	/**
+	 * A recent past-events date still imports events already under way.
+	 *
+	 * @return void
+	 */
+	public function test_recent_date_keeps_ongoing_events(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_since' => gmdate( 'Y-m-d' ) ] ) );
+		$this->serve(
+			[
+				self::imis_event(
+					'ONGOING',
+					[
+						'StartDateTime' => gmdate( 'Y-m-d', time() - 2 * DAY_IN_SECONDS ) . 'T09:00:00',
+						'EndDateTime'   => gmdate( 'Y-m-d', time() + 2 * DAY_IN_SECONDS ) . 'T17:00:00',
+					]
+				),
+			]
+		);
+		$this->assertSame( 1, Wormiss_Event_Import::run()['created'] );
+		$lookback = wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
+		$this->assertStringContainsString( rawurlencode( 'ge:' . $lookback ), $this->imis->requests[1]['url'] );
+	}
+
+	/**
+	 * A past-events read goes past the usual 1,000-event cap.
+	 *
+	 * @return void
+	 */
+	public function test_history_reads_past_the_cap(): void {
+		$this->assertGreaterThan( Wormiss_Rest_Client::MAX_EVENTS, Wormiss_Event_Import::MAX_READ );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_import_since' => '2024-01-01' ] ) );
+		$this->imis->token()
+			->reply(
+				'/api/Event?',
+				200,
+				[
+					'Items'      => [ '$values' => [ self::imis_event( 'PAGE1' ) ] ],
+					'HasNext'    => true,
+					'NextOffset' => 100,
+				]
+			)
+			->reply( '/api/Event?', 200, [ 'Items' => [ '$values' => [ self::imis_event( 'PAGE2' ) ] ] ] );
+		$this->assertSame( 2, Wormiss_Event_Import::run()['created'] );
+		$this->assertStringContainsString( 'limit=100&offset=100', $this->imis->requests[2]['url'] );
+	}
 }

@@ -51,6 +51,9 @@ class Wormiss_Event_Import {
 	/** Seconds after which a lock left by a run that died is taken over. */
 	const LOCK_SECONDS = 600;
 
+	/** Most iMIS events read for a past-events import; more is an error, never a part-import. */
+	const MAX_READ = 10000;
+
 	/** Most notes kept in a report. */
 	const MAX_NOTES = 20;
 
@@ -167,8 +170,20 @@ class Wormiss_Event_Import {
 		// A fresh read: new events come in today, and an earlier copy is never imported.
 		try {
 			if ( '' !== $since ) {
-				// Past events too: read from that date (not kept in the events cache).
-				$raw    = ( new Wormiss_Rest_Client() )->get_events( $since );
+				// Past events too. The read starts at the earlier of that date and the usual lookback,
+				// so events under way are never missed; the date only limits finished ones. Every
+				// event is read (up to MAX_READ), not a first batch, so a long history is complete.
+				$lookback = (string) wp_date( 'Y-m-d', time() - Wormiss_Events::LOOKBACK_DAYS * DAY_IN_SECONDS );
+				$raw      = ( new Wormiss_Rest_Client() )->get_events( min( $since, $lookback ), self::MAX_READ + 1 );
+				if ( count( $raw ) > self::MAX_READ ) {
+					$report['status']  = 'error';
+					$report['notes'][] = sprintf(
+						/* translators: %s: number of events. */
+						__( 'More than %s iMIS events since that date, so nothing was imported. Choose a later date.', 'wormiss' ),
+						number_format_i18n( self::MAX_READ )
+					);
+					return self::save( $report );
+				}
 				$events = self::with_past( array_values( array_filter( array_map( [ 'Wormiss_Events', 'normalise' ], $raw ) ) ), $since );
 			} else {
 				// The same events the events block shows: real, public, listed statuses, not finished.
