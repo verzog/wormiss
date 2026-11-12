@@ -378,6 +378,17 @@ class Wormiss_Event_Sync {
 		$imis_id  = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
 		$dry_run  = (bool) Wormiss_Settings::get( 'event_sync_dry_run' );
 		$template = $details['template'];
+		// iMIS saves an event with a category it does not have (or fails with "HTTP 500"), so check first.
+		if ( '' !== $details['category'] && ! $client->event_category_exists( $details['category'] ) ) {
+			return [
+				'error',
+				sprintf(
+					/* translators: %s: category ID. */
+					__( 'iMIS has no event category %s. On the event type, use the ID of a category iMIS has (e.g. COUR), or clear it to keep the template\'s.', 'wormiss' ),
+					$details['category']
+				),
+			];
+		}
 
 		if ( $dry_run ) {
 			// Check what would be sent: the existing event, or the template as the new event.
@@ -483,6 +494,11 @@ class Wormiss_Event_Sync {
 		}
 		if ( '' === $details['code'] ) {
 			return __( 'Add an event code (letters, digits, _ and - only, up to 10 characters).', 'wormiss' );
+		}
+		// A category saved before the 5-character limit was checked (e.g. COURSE).
+		$category = (string) ( $details['category'] ?? '' );
+		if ( '' !== $category && ! Wormiss_Rest_Client::is_category_id( $category ) ) {
+			return __( 'The event type\'s iMIS category ID is too long or not valid: use up to 5 characters, the ID iMIS uses (e.g. COUR).', 'wormiss' );
 		}
 		$minimum  = (int) ( $details['minimum'] ?? 0 );
 		$expected = (int) ( $details['expected'] ?? 0 );

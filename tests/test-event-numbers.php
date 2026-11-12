@@ -117,7 +117,8 @@ class Test_Wormiss_Event_Numbers extends Wormiss_Test_Case {
 		$this->assertSame( '', Wormiss_Event_Sync::clean_code( 'CONF2027ABC' ) );
 
 		$this->assertSame( 'M/L', Wormiss_Event_Types::clean_category( ' m/l ' ) );
-		$this->assertSame( 'WORKSHOP', Wormiss_Event_Types::clean_category( 'workshop' ) );
+		$this->assertSame( 'WKSHP', Wormiss_Event_Types::clean_category( 'wkshp' ) );
+		$this->assertSame( '', Wormiss_Event_Types::clean_category( 'workshop' ) ); // Over iMIS's 5 characters.
 		$this->assertSame( '', Wormiss_Event_Types::clean_category( '/ML' ) );
 		$this->assertSame( '', Wormiss_Event_Types::clean_category( 'M//L' ) );
 		$this->assertSame( '', Wormiss_Event_Types::clean_category( '../x' ) );

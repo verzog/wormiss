@@ -59,8 +59,8 @@ class Wormiss_Event_Types {
 	/** Form field: create the category in iMIS when the type is saved. */
 	const FIELD_CREATE = 'wormiss_create_category';
 
-	/** Longest iMIS category ID made from a type's name. */
-	const CATEGORY_ID_LENGTH = 10;
+	/** Longest iMIS category ID made from a type's name (iMIS's own limit). */
+	const CATEGORY_ID_LENGTH = Wormiss_Rest_Client::CATEGORY_ID_MAX;
 
 	/** Nonce action for the type form fields. */
 	const NONCE = 'wormiss_event_type_fields';
@@ -156,7 +156,8 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * An iMIS event category ID: letters, digits, _ and -, with / between parts (e.g. M/L), upper case.
+	 * An iMIS event category ID: up to 5 letters, digits, _ and -, with / between parts (e.g. M/L),
+	 * upper case.
 	 *
 	 * @param mixed $value Raw value.
 	 * @return string '' if it is not usable.
@@ -419,7 +420,8 @@ class Wormiss_Event_Types {
 	 */
 	private static function create_help(): string {
 		return __( 'Makes the iMIS event category if it does not exist yet, named after this type.', 'wormiss' )
-			. ' ' . __( 'With no category ID, one is made from the name (e.g. WORKSHOP).', 'wormiss' )
+			. ' ' . __( 'With no category ID, one is made from the name (e.g. WORKS).', 'wormiss' )
+			. ' ' . __( 'Some iMIS sites do not allow this: then create the category in iMIS.', 'wormiss' )
 			. ' ' . __( 'Uses the event sending switch and dry run in Wormiss > Settings.', 'wormiss' );
 	}
 
@@ -436,7 +438,7 @@ class Wormiss_Event_Types {
 			],
 			self::META_CATEGORY => [
 				__( 'iMIS event category ID', 'wormiss' ),
-				__( 'Events of this type get this iMIS event category each time they are sent. Blank keeps the one in iMIS.', 'wormiss' ),
+				__( 'Events of this type get this iMIS event category each time they are sent. Up to 5 characters: the category\'s ID in iMIS (e.g. COUR), not its name. Blank keeps the one in iMIS.', 'wormiss' ),
 			],
 		];
 	}
@@ -465,12 +467,19 @@ class Wormiss_Event_Types {
 				update_term_meta( (int) $term_id, $key, $clean( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
 			}
 		}
+		$typed    = isset( $_POST[ self::META_CATEGORY ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ self::META_CATEGORY ] ) ) ) : '';
+		$rejected = '' !== $typed && '' === self::clean_category( $typed );
+		if ( $rejected ) {
+			// Say why the category was not kept, rather than clear it without a word.
+			update_term_meta( (int) $term_id, self::META_CATEGORY_STATUS, self::category_rule( $typed ) );
+		}
 		foreach ( array_keys( self::number_fields() ) as $key ) {
 			if ( isset( $_POST[ $key ] ) ) {
 				update_term_meta( (int) $term_id, $key, self::clean_number( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
 			}
 		}
-		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) ) {
+		// Not for a rejected ID: that would make one from the name instead and create it.
+		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) && ! $rejected ) {
 			self::create_category( (int) $term_id );
 		}
 	}
@@ -508,7 +517,7 @@ class Wormiss_Event_Types {
 	 */
 	private static function send_category( string $category, WP_Term $term ): array {
 		if ( '' === $category ) {
-			return [ 'invalid', __( 'Add an iMIS event category ID (letters, digits, _, - and /).', 'wormiss' ) ];
+			return [ 'invalid', __( 'Add an iMIS event category ID (up to 5 letters, digits, _, - and /).', 'wormiss' ) ];
 		}
 		if ( ! Wormiss_Settings::get( 'event_sync_enabled' ) || ! Wormiss_Settings::is_configured() ) {
 			return [ 'off', __( 'Sending events to iMIS is off (Wormiss > Settings), so nothing was created.', 'wormiss' ) ];
@@ -532,6 +541,17 @@ class Wormiss_Event_Types {
 			}
 			$client->create_event_category( $category, $term->name, $description );
 		} catch ( Wormiss_Exception $e ) {
+			if ( 0 === strpos( $e->getMessage(), 'HTTP 501' ) ) {
+				// Some iMIS sites do not let the API create event categories.
+				return [
+					'error',
+					sprintf(
+						/* translators: %s: category ID. */
+						__( 'Your iMIS does not let Wormiss create event categories. Create %s in iMIS (Events settings), then save this type again, or use a category iMIS already has.', 'wormiss' ),
+						$category
+					),
+				];
+			}
 			return [ 'error', $e->getMessage() ];
 		}
 		/* translators: %s: category ID. */
@@ -539,7 +559,21 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * An iMIS category ID made from a type's name: letters and digits, upper case, up to 10.
+	 * Why a typed category ID was not kept.
+	 *
+	 * @param string $typed What was typed.
+	 * @return string
+	 */
+	public static function category_rule( string $typed ): string {
+		return sprintf(
+			/* translators: %s: what was typed. */
+			__( '"%s" was not kept: an iMIS event category ID is up to 5 letters, digits, _, - or /, e.g. COUR. Use the ID, not the name iMIS shows.', 'wormiss' ),
+			$typed
+		);
+	}
+
+	/**
+	 * An iMIS category ID made from a type's name: letters and digits, upper case, up to 5.
 	 *
 	 * @param string $name Type name.
 	 * @return string
