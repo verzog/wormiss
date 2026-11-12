@@ -746,6 +746,14 @@ class Wormiss_Admin {
 		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';
 		$summary = Wormiss_User_Sync::summary();
 		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The member sync has not run yet.', 'wormiss' ) ) . '</p>';
+		$notes = Wormiss_User_Sync::notes();
+		if ( $notes ) {
+			echo '<ul class="ul-disc">';
+			foreach ( $notes as $note ) {
+				echo '<li>' . esc_html( $note ) . '</li>';
+			}
+			echo '</ul>';
+		}
 		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
 		echo '<input type="hidden" name="action" value="wormiss_user_sync_now" />';
 		wp_nonce_field( 'wormiss_user_sync_now' );

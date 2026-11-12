@@ -43,6 +43,9 @@ class Wormiss_User_Sync {
 	/** Option holding the last run's report. */
 	const REPORT_OPTION = 'wormiss_user_sync_report';
 
+	/** Most members read in one run; a query with more is not synced (rather than synced in part). */
+	const MAX_MEMBERS = 50000;
+
 	/** Most notes kept in a report. */
 	const MAX_NOTES = 20;
 
@@ -156,13 +159,23 @@ class Wormiss_User_Sync {
 			return self::save( $report );
 		}
 		try {
-			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $query );
+			// One more than the limit is asked for, so a cut-off list is noticed, not synced in part.
+			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $query, [], null, self::MAX_MEMBERS + 1 );
 		} catch ( Wormiss_Exception $e ) {
 			$report['status']  = 'error';
 			$report['notes'][] = $e->getMessage();
 			return self::save( $report );
 		}
 		$report['rows'] = count( $rows );
+		if ( $report['rows'] > self::MAX_MEMBERS ) {
+			$report['status']  = 'error';
+			$report['notes'][] = sprintf(
+				/* translators: %s: number of members. */
+				__( 'The query returns more than %s members, so nothing was synced. Narrow the query.', 'wormiss' ),
+				number_format_i18n( self::MAX_MEMBERS )
+			);
+			return self::save( $report );
+		}
 
 		$current = array_map( 'strtolower', (array) Wormiss_Settings::get( 'access_statuses' ) );
 		if ( ! $current ) {
@@ -170,9 +183,23 @@ class Wormiss_User_Sync {
 		}
 
 		// Work out every change first, so a run that would block too many can hold back.
-		$plans = [];
+		$plans   = [];
+		$claimed = []; // WordPress user ID => iMIS ID, so one account is never given to two members.
 		foreach ( $rows as $row ) {
 			$plan = self::plan( self::member( $row ), $current );
+			$user = (int) ( $plan['user_id'] ?? 0 );
+			if ( $user && isset( $claimed[ $user ] ) ) {
+				$plan = [
+					'note' => sprintf(
+						/* translators: 1: iMIS ID, 2: the other iMIS ID. */
+						__( 'Member %1$s: matched the same account as member %2$s (shared email?), so it was left alone.', 'wormiss' ),
+						$plan['member']['id'],
+						$claimed[ $user ]
+					),
+				];
+			} elseif ( $user ) {
+				$claimed[ $user ] = $plan['member']['id'];
+			}
 			if ( isset( $plan['note'] ) ) {
 				self::note( $report, $plan['note'] );
 			}
@@ -245,18 +272,26 @@ class Wormiss_User_Sync {
 			/* translators: %s: iMIS ID (may be blank). */
 			return [ 'note' => sprintf( __( 'Skipped a row without a usable iMIS ID and email (ID "%s").', 'wormiss' ), $member['id'] ) ];
 		}
-		$lapsed  = $current && '' !== $member['status'] && ! in_array( strtolower( $member['status'] ), $current, true );
+		// With current statuses set, a blank status is unknown: no account is made and no one is
+		// unblocked (or blocked) on it, as for members-only content.
+		$unknown = $current && '' === $member['status'];
+		$lapsed  = $current && ! $unknown && ! in_array( strtolower( $member['status'] ), $current, true );
 		$user_id = self::find_user( $member );
 		$plan    = [
 			'member'  => $member,
 			'user_id' => $user_id,
 			'lapsed'  => $lapsed,
+			'unknown' => $unknown,
 		];
+		if ( $unknown ) {
+			/* translators: %s: iMIS ID. */
+			$plan['note'] = sprintf( __( 'Member %s: no status in iMIS, so their sign-in was not changed.', 'wormiss' ), $member['id'] );
+		}
 		if ( $user_id && self::is_staff( $user_id ) ) {
 			$plan['staff'] = true;
 			return $plan;
 		}
-		if ( $user_id ) {
+		if ( $user_id && ! $unknown ) {
 			$blocked = (bool) get_user_meta( $user_id, self::META_BLOCKED, true );
 			if ( $lapsed && ! $blocked ) {
 				$plan['access'] = 'block';
@@ -288,8 +323,8 @@ class Wormiss_User_Sync {
 			return;
 		}
 		if ( ! $user_id ) {
-			if ( $plan['lapsed'] ) {
-				++$report['skipped']; // Lapsed members are not given new accounts.
+			if ( $plan['lapsed'] || $plan['unknown'] ) {
+				++$report['skipped']; // Lapsed (or unknown) members are not given new accounts.
 				return;
 			}
 			$created = $dry ? 1 : self::create( $member, $report );
@@ -484,6 +519,19 @@ class Wormiss_User_Sync {
 			);
 		}
 		return $report;
+	}
+
+	/**
+	 * The last run's notes (warnings and problems), for the settings page.
+	 *
+	 * @return string[]
+	 */
+	public static function notes(): array {
+		$report = get_option( self::REPORT_OPTION );
+		if ( ! is_array( $report ) || 'error' === ( $report['status'] ?? '' ) ) {
+			return []; // An error's reason is already in the summary.
+		}
+		return array_map( 'strval', (array) ( $report['notes'] ?? [] ) );
 	}
 
 	/**

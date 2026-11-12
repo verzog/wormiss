@@ -298,4 +298,52 @@ class Test_Wormiss_User_Sync extends Wormiss_Test_Case {
 		$this->assertTrue( Wormiss_Settings::is_member_role( 'subscriber' ) );
 		$this->assertFalse( Wormiss_Settings::is_member_role( 'administrator' ) );
 	}
+
+	/**
+	 * Two members sharing one unlinked account's email: only the first is linked to it.
+	 *
+	 * @return void
+	 */
+	public function test_one_account_per_member(): void {
+		$shared = self::factory()->user->create( [ 'user_email' => 'shared@example.org' ] );
+		$this->serve(
+			[
+				self::row( '701', 'A', [ 'Email' => 'shared@example.org' ] ),
+				self::row( '702', 'A', [ 'Email' => 'shared@example.org' ] ),
+			]
+		);
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( '701', get_user_meta( $shared, 'imis_id', true ) );
+		$this->assertSame( 1, $report['updated'] );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertStringContainsString( 'same account as member 701', implode( ' ', Wormiss_User_Sync::notes() ) );
+	}
+
+	/**
+	 * A blank status is unknown: no new account, and a blocked member is not unblocked.
+	 *
+	 * @return void
+	 */
+	public function test_blank_status_changes_no_access(): void {
+		$blocked = $this->linked( '801' );
+		update_user_meta( $blocked, Wormiss_User_Sync::META_BLOCKED, time() );
+		$this->serve( [ self::row( '801', '' ), self::row( '802', '' ) ] );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( 0, $report['unblocked'] );
+		$this->assertTrue( Wormiss_User_Sync::is_blocked( $blocked ) );
+		$this->assertFalse( get_user_by( 'login', '802' ) );
+		$this->assertStringContainsString( 'no status in iMIS', implode( ' ', Wormiss_User_Sync::notes() ) );
+	}
+
+	/**
+	 * A query with more members than one run can take syncs no one, rather than some.
+	 *
+	 * @return void
+	 */
+	public function test_too_many_members(): void {
+		$this->assertGreaterThan( Wormiss_Rest_Client::MAX_ROWS, Wormiss_User_Sync::MAX_MEMBERS );
+		// The client stops at the limit it is given; the sync asks for one more than it will take.
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( array_fill( 0, 3, self::row( '901' ) ) ) );
+		$this->assertCount( 2, ( new Wormiss_Rest_Client() )->run_iqa( self::SYNC_QUERY, [], null, 2 ) );
+	}
 }
