@@ -132,6 +132,7 @@ class Wormiss_Event_Sync {
 	public static function init(): void {
 		add_action( 'init', [ __CLASS__, 'register' ] );
 		add_action( 'save_post_' . self::POST_TYPE, [ __CLASS__, 'maybe_queue' ], 20, 2 );
+		add_action( 'rest_after_insert_' . self::POST_TYPE, [ __CLASS__, 'send_after_rest_save' ] );
 		// After the editor's meta is saved (the block editor saves it after save_post).
 		add_action( 'wp_after_insert_post', [ __CLASS__, 'maybe_link' ], 10, 2 );
 		add_action( 'wp_trash_post', [ __CLASS__, 'maybe_queue_cancel' ] );
@@ -152,7 +153,7 @@ class Wormiss_Event_Sync {
 		register_post_type(
 			'wormiss_event',
 			[
-				'labels'       => [
+				'labels'                 => [
 					'name'          => __( 'Events', 'wormiss' ),
 					'singular_name' => __( 'Event', 'wormiss' ),
 					'add_new_item'  => __( 'Add New Event', 'wormiss' ),
@@ -164,13 +165,16 @@ class Wormiss_Event_Sync {
 					'all_items'     => __( 'All Events', 'wormiss' ),
 					'menu_name'     => __( 'Events', 'wormiss' ),
 				],
-				'public'       => true,
-				'has_archive'  => 'events',
-				'rewrite'      => [ 'slug' => 'event' ],
+				'public'                 => true,
+				'has_archive'            => 'events',
+				'rewrite'                => [ 'slug' => 'event' ],
 				// Listed under the Wormiss menu rather than a menu of its own.
-				'show_in_menu' => 'wormiss',
-				'show_in_rest' => true,
-				'supports'     => [ 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields', 'revisions' ],
+				'show_in_menu'           => 'wormiss',
+				'show_in_rest'           => true,
+				'supports'               => [ 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields', 'revisions' ],
+				// Edited inside the event page's template (WordPress 6.8 and later), so editors see
+				// the page as it will look; the event blocks in it are editable.
+				'default_rendering_mode' => 'template-locked',
 			]
 		);
 
@@ -260,6 +264,25 @@ class Wormiss_Event_Sync {
 			'linked'   => (bool) get_post_meta( $post_id, self::META_LINKED, true ),
 			// Places left in iMIS, in words ('' if not known).
 			'places'   => $post_id ? self::places_text( $post_id ) : '',
+			// CPD: whether the lines are set here, whether this user may set them, and (until they
+			// are set here) iMIS's lines to start from: null when they could not be read.
+			'cpd'      => $post_id ? self::rest_cpd( $post_id ) : [],
+		];
+	}
+
+	/**
+	 * The CPD part of the read-only wormiss_sync field.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return array
+	 */
+	private static function rest_cpd( int $post_id ): array {
+		$owned    = Wormiss_Event_Cpd::owned( $post_id );
+		$event_id = Wormiss_Event_Cpd::event_id( $post_id );
+		return [
+			'owned'    => $owned,
+			'editable' => Wormiss_Event_Cpd::editable( $post_id ),
+			'imis'     => ! $owned && '' !== $event_id ? Wormiss_Event_Cpd::rows( $event_id ) : [],
 		];
 	}
 
@@ -311,6 +334,22 @@ class Wormiss_Event_Sync {
 		$value = substr( trim( (string) $value ), 0, 16 );
 		$date  = DateTimeImmutable::createFromFormat( '!Y-m-d\TH:i', $value, wp_timezone() );
 		return ( $date && $date->format( 'Y-m-d\TH:i' ) === $value ) ? $value : '';
+	}
+
+	/**
+	 * After a REST save (the block editor's), its fields are saved too: send it now rather than
+	 * in a minute (see maybe_queue()), when a send is waiting.
+	 *
+	 * @param WP_Post $post Event.
+	 * @return void
+	 */
+	public static function send_after_rest_save( $post ): void {
+		$post_id = $post instanceof WP_Post ? (int) $post->ID : 0;
+		$when    = $post_id ? wp_next_scheduled( self::SYNC_HOOK, [ $post_id ] ) : false;
+		if ( false !== $when && $when > time() ) {
+			wp_unschedule_event( $when, self::SYNC_HOOK, [ $post_id ] );
+			wp_schedule_single_event( time(), self::SYNC_HOOK, [ $post_id ] );
+		}
 	}
 
 	/**
@@ -869,6 +908,31 @@ class Wormiss_Event_Sync {
 		if ( ! $post || self::POST_TYPE !== $post->post_type || ! is_singular( self::POST_TYPE ) || ! in_the_loop() ) {
 			return $content;
 		}
+		if ( self::template_has( 'wormiss/event-facts' ) ) {
+			return $content; // The page's template places the facts itself.
+		}
+		return self::facts_html( $post ) . $content;
+	}
+
+	/**
+	 * Whether the template showing this page holds a block (so its content is not added twice).
+	 *
+	 * @param string $block_name Block name.
+	 * @return bool
+	 */
+	public static function template_has( string $block_name ): bool {
+		global $_wp_current_template_content;
+		return is_string( $_wp_current_template_content ) && has_block( $block_name, $_wp_current_template_content );
+	}
+
+	/**
+	 * An event's facts: when and where it is, its code, when registration closes and places left,
+	 * with the Register button.
+	 *
+	 * @param WP_Post $post Event.
+	 * @return string HTML ('' when there is nothing to show).
+	 */
+	public static function facts_html( WP_Post $post ): string {
 		$details = self::details( $post );
 		$imis_id = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
 		$linked  = (bool) get_post_meta( $post->ID, self::META_LINKED, true );
@@ -919,13 +983,13 @@ class Wormiss_Event_Sync {
 		// A free event: register (or cancel) here instead of linking to iMIS.
 		$button = ( null !== $listed && Wormiss_Event_Registration::is_on() ) ? Wormiss_Event_Registration::button( $listed, true ) : '';
 		if ( '' !== $button ) {
-			return $box . $button . $content;
+			return $box . $button;
 		}
 		if ( '' !== $url ) {
 			$box .= '<p class="wormiss-event-register"><a class="wp-element-button" href="' . esc_url( $url ) . '">'
 				. esc_html__( 'Register', 'wormiss' ) . '</a></p>';
 		}
-		return $box . $content;
+		return $box;
 	}
 
 	/**

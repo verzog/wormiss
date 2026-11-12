@@ -89,6 +89,7 @@ class Wormiss_Event_Cpd {
 	public static function init(): void {
 		// After the details box (20), so the CPD table comes after the event's text.
 		add_filter( 'the_content', [ __CLASS__, 'append' ], 25 );
+		add_action( 'init', [ __CLASS__, 'register_meta' ], 20 );
 	}
 
 	/**
@@ -254,13 +255,30 @@ class Wormiss_Event_Cpd {
 			|| ! in_the_loop() || ! self::is_on() ) {
 			return $content;
 		}
-		$event_id = self::event_id( $post->ID );
-		$rows     = '' !== $event_id ? self::rows( $event_id ) : null;
-		$table    = null !== $rows ? self::table( $rows ) : '';
-		if ( '' === $table ) {
-			return $content;
+		if ( Wormiss_Event_Sync::template_has( 'wormiss/event-cpd' ) ) {
+			return $content; // The page's template places the CPD itself.
 		}
-		return $content . '<section class="wormiss-cpd"><h2 class="wormiss-cpd__title">' . esc_html__( 'CPD information', 'wormiss' )
+		return $content . self::section_html( $post->ID );
+	}
+
+	/**
+	 * The "CPD information" section for an event, or '' when it has no CPD hours.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return string HTML.
+	 */
+	public static function section_html( int $post_id ): string {
+		$event_id = self::event_id( $post_id );
+		if ( self::owned( $post_id ) ) {
+			$rows = self::saved_rows( $post_id ); // Set here: shown as saved, before iMIS has them.
+		} else {
+			$rows = '' !== $event_id && self::is_on() ? self::rows( $event_id ) : null;
+		}
+		$table = null !== $rows ? self::table( $rows ) : '';
+		if ( '' === $table ) {
+			return '';
+		}
+		return '<section class="wormiss-cpd"><h2 class="wormiss-cpd__title">' . esc_html__( 'CPD information', 'wormiss' )
 			. '</h2>' . $table . '</section>';
 	}
 
@@ -305,6 +323,66 @@ class Wormiss_Event_Cpd {
 		return '<table class="widefat striped"><thead><tr>' . $head . '<th scope="col">'
 			. esc_html__( 'Program level requirement', 'wormiss' ) . '</th></tr></thead><tbody>' . $list . '</tbody></table>'
 			. '<h4>' . esc_html__( 'On the event page', 'wormiss' ) . '</h4>' . self::table( $rows ) . $note;
+	}
+
+	/**
+	 * Let the block editor save an event's CPD lines (the CPD information block): editors and
+	 * administrators, on events made in WordPress. At most MAX_ROWS lines (more is refused).
+	 *
+	 * @return void
+	 */
+	public static function register_meta(): void {
+		$number = [ 'type' => 'number' ];
+		register_post_meta(
+			Wormiss_Event_Sync::POST_TYPE,
+			self::META,
+			[
+				'type'              => 'array',
+				'single'            => true,
+				// No default: unset reads as null, which the editor sends back untouched and the
+				// REST API then skips, so saving other details never sets CPD (and removes iMIS's).
+				'show_in_rest'      => [
+					'schema' => [
+						'type'     => 'array',
+						'maxItems' => self::MAX_ROWS,
+						'items'    => [
+							'type'                 => 'object',
+							'additionalProperties' => false,
+							'properties'           => [
+								'education'   => $number,
+								'reviewing'   => $number,
+								'outcomes'    => $number,
+								'requirement' => [ 'type' => 'string' ],
+								'ordinal'     => [ 'type' => 'integer' ],
+								'uid'         => [ 'type' => 'string' ],
+							],
+						],
+					],
+				],
+				'sanitize_callback' => static fn( $value ) => self::clean_rows( $value ),
+				// Anyone who can edit the event may send the field back (the editor always does);
+				// only editors and administrators change it (see guard()).
+				'auth_callback'     => static fn( $allowed, $meta_key, $post_id ) => current_user_can( 'edit_post', (int) $post_id ),
+			]
+		);
+		add_filter( 'update_post_metadata', [ __CLASS__, 'guard' ], 10, 3 );
+		add_filter( 'add_post_metadata', [ __CLASS__, 'guard' ], 10, 3 );
+	}
+
+	/**
+	 * Leave the CPD lines as they are when the change comes from someone who may not set them
+	 * (an author, or on a linked event), whatever the request, without failing the save.
+	 *
+	 * @param mixed  $check    Null to carry on.
+	 * @param int    $post_id  Post ID.
+	 * @param string $meta_key Meta key.
+	 * @return mixed True to skip the change; $check to carry on.
+	 */
+	public static function guard( $check, $post_id, $meta_key ) {
+		if ( self::META !== $meta_key || ! is_user_logged_in() || wp_doing_cron() ) {
+			return $check; // The background sync records row numbers with no one signed in.
+		}
+		return self::editable( (int) $post_id ) ? $check : true;
 	}
 
 	/**
