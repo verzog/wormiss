@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.6.0
+Stable tag: 0.7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -143,6 +143,10 @@ Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wor
 
 In iMIS, set up a template event with your usual prices, registration options and sessions. Under Settings > iMIS Bridge > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the iMIS event panel in the sidebar (event code, start, end, place, online link, capacity) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
 
+= Can different kinds of event use different iMIS templates? =
+
+Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. Events with no type, or whose type has no template, use the default template in Settings > iMIS Bridge. The template only matters when the event is first created in iMIS.
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -165,6 +169,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.7.0 =
+* Event types (Events > Event types), each with its own iMIS template event and optional iMIS event category; events without a type, or whose type has no template, use the default template. An event with more than one type is not sent until one is chosen.
 
 = 0.6.0 =
 * Events post type sent to iMIS: a new event copies an iMIS template event (CloneEvent) and saves the WordPress title, description, dates, place, online link and capacity over it; later saves update it. Off and a dry run (iMIS _validate only) by default; optional cancel in iMIS when trashed; the event page shows when, where and a Register button.

@@ -187,9 +187,11 @@ class Wormiss_Event_Sync {
 	public static function rest_sync_field( array $post ): array {
 		$post_id = (int) ( $post['id'] ?? 0 );
 		return [
-			'imis_id' => (string) get_post_meta( $post_id, self::META_IMIS_ID, true ),
-			'status'  => (string) get_post_meta( $post_id, self::META_STATUS, true ),
-			'message' => (string) get_post_meta( $post_id, self::META_MESSAGE, true ),
+			'imis_id'  => (string) get_post_meta( $post_id, self::META_IMIS_ID, true ),
+			'status'   => (string) get_post_meta( $post_id, self::META_STATUS, true ),
+			'message'  => (string) get_post_meta( $post_id, self::META_MESSAGE, true ),
+			// The template a new event would be copied from, as saved (type or default).
+			'template' => $post_id ? Wormiss_Event_Types::for_event( $post_id )['template'] : '',
 		];
 	}
 
@@ -299,7 +301,7 @@ class Wormiss_Event_Sync {
 		$client   = new Wormiss_Rest_Client();
 		$imis_id  = (string) get_post_meta( $post->ID, self::META_IMIS_ID, true );
 		$dry_run  = (bool) Wormiss_Settings::get( 'event_sync_dry_run' );
-		$template = (string) Wormiss_Settings::get( 'event_template_id' );
+		$template = $details['template'];
 
 		if ( $dry_run ) {
 			// Check what would be sent: the existing event, or the template as the new event.
@@ -355,15 +357,20 @@ class Wormiss_Event_Sync {
 	public static function details( WP_Post $post ): array {
 		$meta = static fn( string $key ) => get_post_meta( $post->ID, $key, true );
 		$html = wp_kses_post( do_blocks( $post->post_content ) );
+		$type = Wormiss_Event_Types::for_event( $post->ID );
 		return [
-			'code'        => (string) $meta( self::META_CODE ),
-			'name'        => wp_strip_all_tags( get_the_title( $post ) ),
-			'description' => trim( (string) preg_replace( '/<!--.*?-->/s', '', $html ) ),
-			'start'       => (string) $meta( self::META_START ),
-			'end'         => (string) $meta( self::META_END ),
-			'location'    => (string) $meta( self::META_LOCATION ),
-			'online'      => (string) $meta( self::META_ONLINE ),
-			'capacity'    => (int) $meta( self::META_CAPACITY ),
+			'imis_id'      => (string) $meta( self::META_IMIS_ID ),
+			'template'     => $type['template'],
+			'category'     => $type['category'],
+			'type_problem' => $type['problem'],
+			'code'         => (string) $meta( self::META_CODE ),
+			'name'         => wp_strip_all_tags( get_the_title( $post ) ),
+			'description'  => trim( (string) preg_replace( '/<!--.*?-->/s', '', $html ) ),
+			'start'        => (string) $meta( self::META_START ),
+			'end'          => (string) $meta( self::META_END ),
+			'location'     => (string) $meta( self::META_LOCATION ),
+			'online'       => (string) $meta( self::META_ONLINE ),
+			'capacity'     => (int) $meta( self::META_CAPACITY ),
 		];
 	}
 
@@ -374,8 +381,12 @@ class Wormiss_Event_Sync {
 	 * @return string
 	 */
 	public static function problem( array $details ): string {
-		if ( '' === (string) Wormiss_Settings::get( 'event_template_id' ) ) {
-			return __( 'Choose the iMIS template event in Settings > iMIS Bridge first.', 'wormiss' );
+		if ( '' !== ( $details['type_problem'] ?? '' ) ) {
+			return $details['type_problem'];
+		}
+		// A template is only used to create the event; one already in iMIS is just updated.
+		if ( '' === ( $details['template'] ?? '' ) && '' === ( $details['imis_id'] ?? '' ) ) {
+			return __( 'No iMIS template event: give this event type one, or set the default in Settings > iMIS Bridge.', 'wormiss' );
 		}
 		if ( '' === $details['code'] ) {
 			return __( 'Add an event code (letters, digits, _ and - only).', 'wormiss' );
@@ -411,6 +422,13 @@ class Wormiss_Event_Sync {
 		$event->VirtualMeetingUrl = $details['online'];
 		if ( $details['capacity'] > 0 ) {
 			$event->Capacity = $details['capacity'];
+		}
+		if ( '' !== ( $details['category'] ?? '' ) ) {
+			// The type's category replaces whatever the event had (its name comes from iMIS).
+			$event->Category = (object) [
+				'$type'           => 'Asi.Soa.Events.DataContracts.EventCategoryData, Asi.Contracts',
+				'EventCategoryId' => $details['category'],
+			];
 		}
 		if ( '' !== $details['location'] ) {
 			if ( isset( $event->Location ) && is_object( $event->Location ) ) {
