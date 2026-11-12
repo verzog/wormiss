@@ -155,7 +155,64 @@ class Test_Wormiss_Member_Push extends Wormiss_Test_Case {
 		$this->assertTrue( Wormiss_Member_Push::apply( $bare, $details ) );
 		$this->assertSame( 'new@example.org', $bare->Emails->{'$values'}[0]->Address );
 		$this->assertTrue( $bare->Emails->{'$values'}[0]->IsPrimary );
+
+		// No primary email: the Work address is kept and a primary one is added.
+		$work = json_decode( '{"Emails":{"$values":[{"Address":"work@example.org","EmailType":"Work","IsPrimary":false}]}}' );
+		$this->assertTrue( Wormiss_Member_Push::apply( $work, $details ) );
+		$this->assertSame( 'work@example.org', $work->Emails->{'$values'}[0]->Address );
+		$this->assertFalse( $work->Emails->{'$values'}[0]->IsPrimary );
+		$this->assertSame( 'new@example.org', $work->Emails->{'$values'}[1]->Address );
+		$this->assertTrue( $work->Emails->{'$values'}[1]->IsPrimary );
+
+		// No primary email, but one already holds this address: it becomes the primary.
+		$this->assertTrue( Wormiss_Member_Push::apply( $work, [ 'email' => 'WORK@example.org' ] + $details ) );
+		$this->assertTrue( $work->Emails->{'$values'}[0]->IsPrimary );
 		// phpcs:enable
+	}
+
+	/**
+	 * A save that changes neither name nor email (a password, a biography) sends nothing, even
+	 * for a member never sent before, so older WordPress details never replace newer iMIS ones.
+	 *
+	 * @return void
+	 */
+	public function test_other_changes_send_nothing(): void {
+		$this->turn_on( false );
+		$user_id = $this->member();
+		wp_update_user(
+			[
+				'ID'        => $user_id,
+				'user_pass' => 'A new password 123!',
+			]
+		);
+		wp_update_user(
+			[
+				'ID'          => $user_id,
+				'description' => 'Bio only',
+			]
+		);
+		$this->assertFalse( wp_next_scheduled( Wormiss_Member_Push::HOOK, [ $user_id ] ) );
+	}
+
+	/**
+	 * When iMIS cannot be reached, the send is tried again later, a few times, then stops.
+	 *
+	 * @return void
+	 */
+	public function test_retries(): void {
+		$this->turn_on( false );
+		$user_id = $this->member();
+		for ( $try = 1; $try < Wormiss_Member_Push::MAX_TRIES; $try++ ) {
+			$this->imis->token()->reply( '/api/Party/12345', 503, 'Service Unavailable' );
+			$this->assertSame( 'error', Wormiss_Member_Push::push( $user_id ) );
+			$this->assertNotFalse( wp_next_scheduled( Wormiss_Member_Push::HOOK, [ $user_id ] ), 'Try ' . $try );
+			$this->assertSame( $try, (int) get_user_meta( $user_id, Wormiss_Member_Push::META_TRIES, true ) );
+			wp_unschedule_hook( Wormiss_Member_Push::HOOK );
+		}
+		$this->imis->token()->reply( '/api/Party/12345', 503, 'Service Unavailable' );
+		$this->assertSame( 'error', Wormiss_Member_Push::push( $user_id ) );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Member_Push::HOOK, [ $user_id ] ), 'Stops after the last try.' );
+		$this->assertSame( '', get_user_meta( $user_id, Wormiss_Member_Push::META_TRIES, true ) );
 	}
 
 	/**

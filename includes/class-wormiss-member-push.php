@@ -36,8 +36,22 @@ class Wormiss_Member_Push {
 	/** Cron hook that sends one member. */
 	const HOOK = 'wormiss_member_push';
 
-	/** User meta: what was last sent (or found already in iMIS), so unchanged saves send nothing. */
-	const META_SENT = '_wormiss_member_pushed';
+	/** User meta: how many sends in a row failed (for the retries). */
+	const META_TRIES = '_wormiss_member_push_tries';
+
+	/** Tries in all when iMIS cannot be reached (the first send plus retries). */
+	const MAX_TRIES = 4;
+
+	/** Seconds before a retry, times the number of tries so far. */
+	const RETRY_GAP = 900;
+
+	/**
+	 * Each user's names as they were before the save under way (insert_user_meta runs before the
+	 * new names are stored; the old WP_User would read the new ones).
+	 *
+	 * @var array User ID => first and last name.
+	 */
+	private static $before = [];
 
 	/**
 	 * Hook in.
@@ -45,7 +59,8 @@ class Wormiss_Member_Push {
 	 * @return void
 	 */
 	public static function init(): void {
-		add_action( 'profile_update', [ __CLASS__, 'maybe_queue' ], 20 );
+		add_filter( 'insert_user_meta', [ __CLASS__, 'remember_names' ], 10, 3 );
+		add_action( 'profile_update', [ __CLASS__, 'maybe_queue' ], 20, 2 );
 		add_action( self::HOOK, [ __CLASS__, 'push' ] );
 	}
 
@@ -73,12 +88,33 @@ class Wormiss_Member_Push {
 	}
 
 	/**
-	 * After a user is saved, queue sending their details to iMIS if they changed.
+	 * Before an existing user's names are saved, remember the old ones (for maybe_queue()).
 	 *
-	 * @param int $user_id User ID.
+	 * @param array   $meta   User meta about to be saved (returned as it is).
+	 * @param WP_User $user   User.
+	 * @param bool    $update Whether this updates an existing user.
+	 * @return array
+	 */
+	public static function remember_names( $meta, $user, $update ) {
+		if ( $update && $user instanceof WP_User ) {
+			self::$before[ (int) $user->ID ] = [
+				'first' => trim( (string) get_user_meta( $user->ID, 'first_name', true ) ),
+				'last'  => trim( (string) get_user_meta( $user->ID, 'last_name', true ) ),
+			];
+		}
+		return $meta;
+	}
+
+	/**
+	 * After a user is saved, queue sending their details to iMIS if this save changed their
+	 * name or email (a password or biography change sends nothing, so it cannot put older
+	 * WordPress details over newer ones in iMIS).
+	 *
+	 * @param int          $user_id  User ID.
+	 * @param WP_User|null $old_user The user as they were before the save.
 	 * @return void
 	 */
-	public static function maybe_queue( $user_id ): void {
+	public static function maybe_queue( $user_id, $old_user = null ): void {
 		$user_id = (int) $user_id;
 		// The member sync's changes came from iMIS: sending them back would be a loop.
 		if ( ! self::is_on() || Wormiss_User_Sync::$applying ) {
@@ -88,9 +124,16 @@ class Wormiss_Member_Push {
 		if ( ! $user instanceof WP_User || user_can( $user, 'edit_posts' ) || '' === Wormiss_Member::imis_id( $user_id ) ) {
 			return;
 		}
-		if ( get_user_meta( $user_id, self::META_SENT, true ) === md5( (string) wp_json_encode( self::details( $user ) ) ) ) {
+		$names = self::$before[ $user_id ] ?? null;
+		unset( self::$before[ $user_id ] );
+		if ( null === $names || ! $old_user instanceof WP_User ) {
+			return; // Not a normal profile save: what changed is unknown, so nothing is sent.
+		}
+		$old = $names + [ 'email' => trim( (string) $old_user->user_email ) ];
+		if ( self::details( $user ) === $old ) {
 			return; // Nothing iMIS needs has changed.
 		}
+		delete_user_meta( $user_id, self::META_TRIES );
 		if ( ! wp_next_scheduled( self::HOOK, [ $user_id ] ) ) {
 			wp_schedule_single_event( time(), self::HOOK, [ $user_id ] );
 		}
@@ -121,7 +164,7 @@ class Wormiss_Member_Push {
 			$party   = $client->get_party( $imis_id );
 			$changed = self::apply( $party, $details );
 			if ( ! $changed ) {
-				update_user_meta( $user_id, self::META_SENT, md5( (string) wp_json_encode( $details ) ) );
+				delete_user_meta( $user_id, self::META_TRIES );
 				return 'unchanged';
 			}
 			if ( Wormiss_Settings::get( 'member_push_dry_run' ) ) {
@@ -137,10 +180,30 @@ class Wormiss_Member_Push {
 			}
 			$client->update_party( $imis_id, $party );
 		} catch ( Wormiss_Exception $e ) {
-			return 'error'; // The reason is in the audit log.
+			self::retry( $user_id ); // The reason is in the audit log.
+			return 'error';
 		}
-		update_user_meta( $user_id, self::META_SENT, md5( (string) wp_json_encode( $details ) ) );
+		delete_user_meta( $user_id, self::META_TRIES );
 		return 'sent';
+	}
+
+	/**
+	 * After a failed send, try again later (iMIS may be down for a while), a few times with a
+	 * growing gap, so a change is not lost; after the last try it waits for the next save.
+	 *
+	 * @param int $user_id User ID.
+	 * @return void
+	 */
+	private static function retry( int $user_id ): void {
+		$tries = (int) get_user_meta( $user_id, self::META_TRIES, true ) + 1;
+		if ( $tries >= self::MAX_TRIES ) {
+			delete_user_meta( $user_id, self::META_TRIES );
+			return;
+		}
+		update_user_meta( $user_id, self::META_TRIES, $tries );
+		if ( ! wp_next_scheduled( self::HOOK, [ $user_id ] ) ) {
+			wp_schedule_single_event( time() + self::RETRY_GAP * $tries, self::HOOK, [ $user_id ] );
+		}
 	}
 
 	/**
@@ -175,7 +238,14 @@ class Wormiss_Member_Push {
 					break;
 				}
 			}
-			$main = $main ?? ( isset( $values[0] ) && is_object( $values[0] ) ? $values[0] : null );
+			// With no primary email, one already holding this address becomes the primary; other
+			// addresses (Work and so on) are never overwritten, and a new primary is added instead.
+			foreach ( null === $main ? $values : [] as $email ) {
+				if ( is_object( $email ) && 0 === strcasecmp( (string) ( $email->Address ?? '' ), $details['email'] ) ) {
+					$email->IsPrimary = true;
+					return true;
+				}
+			}
 			if ( null !== $main ) {
 				if ( 0 !== strcasecmp( (string) ( $main->Address ?? '' ), $details['email'] ) ) {
 					$main->Address = $details['email'];
