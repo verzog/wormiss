@@ -90,7 +90,8 @@ class Wormiss_Event_Cpd {
 		if ( ! Wormiss_Rest_Client::is_event_id( $event_id ) ) {
 			return null;
 		}
-		$key    = self::CACHE_PREFIX . md5( strtoupper( $event_id ) );
+		// Per connection too, so a changed iMIS address or account never shows the old one's rows.
+		$key    = self::CACHE_PREFIX . md5( Wormiss_Settings::base_url() . "\0" . Wormiss_Settings::username() . "\0" . strtoupper( $event_id ) );
 		$cached = get_transient( $key );
 		if ( is_array( $cached ) ) {
 			return $cached['rows'];

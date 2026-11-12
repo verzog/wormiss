@@ -149,6 +149,11 @@ class Test_Wormiss_Event_Cpd extends Wormiss_Test_Case {
 		Wormiss_Event_Cpd::rows( 'congress26' );
 		$this->assertSame( $count, count( $this->imis->requests ) );
 		$this->assertNull( Wormiss_Event_Cpd::rows( '../x' ) );
+
+		// Another iMIS connection does not get these rows from the cache.
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'base_url' => 'https://other.example.org' ] ) );
+		$this->imis->token()->reply( '/api/EventCPD?EventKey=CONGRESS26', 200, self::page( [] ) );
+		$this->assertSame( [], Wormiss_Event_Cpd::rows( 'CONGRESS26' ) );
 	}
 
 	/**
