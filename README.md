@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.12.0)
+## What it does (0.13.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -70,6 +70,11 @@ whose iMIS REST client and audit log it reuses.
   Settings and the audit log in one place (the old Settings and Tools addresses
   redirect). Editors see the Overview and events; Settings and the log are for
   administrators.
+
+* **Member sync:** daily (or on demand), members from an iMIS IQA are created or
+  updated as WordPress users, and lapsed members are blocked from signing in until
+  current again. Staff are never changed; a mass-block guard holds back runs that
+  would block an unusually large share. Off and a dry run by default.
 
 ## Requirements
 

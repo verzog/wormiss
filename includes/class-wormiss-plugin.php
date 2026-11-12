@@ -52,6 +52,7 @@ class Wormiss_Plugin {
 		Wormiss_Woocommerce::init();
 		Wormiss_Event_Types::init();
 		Wormiss_Event_Registration::init();
+		Wormiss_User_Sync::init();
 		Wormiss_Event_Sync::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
@@ -121,6 +122,7 @@ class Wormiss_Plugin {
 		wp_unschedule_hook( Wormiss_Activity::SEND_HOOK );
 		wp_unschedule_hook( Wormiss_Event_Sync::SYNC_HOOK );
 		wp_unschedule_hook( Wormiss_Event_Sync::CANCEL_HOOK );
+		wp_clear_scheduled_hook( Wormiss_User_Sync::HOOK );
 		// The Events post type goes away with the plugin: rebuild permalinks next time.
 		delete_option( 'wormiss_rewrite_version' );
 		flush_rewrite_rules( false );
@@ -254,6 +256,7 @@ class Wormiss_Plugin {
 				. ' ' . esc_html__( 'reading members-only pages, downloading files, completing activities and submitting forms.', 'wormiss' )
 				. ' ' . esc_html__( 'If you buy from our online shop, the order number, items and total may be recorded too.', 'wormiss' )
 				. ' ' . esc_html__( 'If you register for an event here, the registration is made in iMIS under your record.', 'wormiss' )
+				. ' ' . esc_html__( 'Members\' website accounts may be created and updated from iMIS (name, email, iMIS ID).', 'wormiss' )
 				. ' ' . esc_html__( 'A log of each request to iMIS (when, what, and whether it worked) is kept for a while.', 'wormiss' )
 				. '</p>'
 		);
