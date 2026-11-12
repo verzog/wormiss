@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.11.0
+Stable tag: 0.12.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -23,7 +23,7 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
   that may appear on pages; a block can never run any other query.
 * **Fast and resilient.** Results are cached for a set time, and if iMIS is
   unavailable the last good copy is shown instead of an error.
-* **Audit log.** Every call to iMIS is logged (Tools > iMIS Bridge log), with
+* **Audit log.** Every call to iMIS is logged (Wormiss > Audit log), with
   passwords and tokens always removed, and old entries deleted automatically.
 
 **Members' own data**
@@ -84,7 +84,7 @@ made or endorsed by ASI.
 2. In iMIS, create a dedicated service account with the RemoteService role and
    only the rights it needs (read the queries you will show). Do not use a
    person's login.
-3. Go to *Settings > iMIS Bridge* and enter the iMIS site address (for example
+3. Go to *Wormiss > Settings* and enter the iMIS site address (for example
    `https://members.example.org`, without `/api`), the service-account username
    and password. To keep the password out of the database, set it in
    `wp-config.php` instead:
@@ -137,19 +137,19 @@ edit their iMIS ID.
 
 = How do I show upcoming iMIS events? =
 
-Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wormiss_events limit="3" category="Workshop" button_text="Register"]). It reads events from the iMIS Events API, so the service account needs read access to events. Under Settings > iMIS Bridge > iMIS events, choose which event status codes count as open (default A) and where each event links (default /iCore/Events/Event_display.aspx?EventKey={EventId}, on the iMIS site). Event templates, unpublished events and events that have finished are never listed.
+Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wormiss_events limit="3" category="Workshop" button_text="Register"]). It reads events from the iMIS Events API, so the service account needs read access to events. Under Wormiss > Settings > iMIS events, choose which event status codes count as open (default A) and where each event links (default /iCore/Events/Event_display.aspx?EventKey={EventId}, on the iMIS site). Event templates, unpublished events and events that have finished are never listed.
 
 = How do I create iMIS events from WordPress? =
 
-In iMIS, set up a template event with your usual prices, registration options and sessions. Under Settings > iMIS Bridge > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the iMIS event panel in the sidebar (event code, start, end, place, online link, capacity) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
+In iMIS, set up a template event with your usual prices, registration options and sessions. Under Wormiss > Settings > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the iMIS event panel in the sidebar (event code, start, end, place, online link, capacity) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
 
 = Can different kinds of event use different iMIS templates? =
 
-Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. A type can also have a default capacity (used when an event leaves its own Capacity at 0), and "Create this category in iMIS when saved" makes the type's iMIS event category for you if it does not exist yet. Events with no type, or whose type has no template, use the default template in Settings > iMIS Bridge. The template only matters when the event is first created in iMIS.
+Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. A type can also have a default capacity (used when an event leaves its own Capacity at 0), and "Create this category in iMIS when saved" makes the type's iMIS event category for you if it does not exist yet. Events with no type, or whose type has no template, use the default template in Wormiss > Settings. The template only matters when the event is first created in iMIS.
 
 = Can members register for events on the website? =
 
-For free events, yes. Under Settings > iMIS Bridge > iMIS events, tick "Members register for free events here" (keep the dry run on first). Events whose iMIS registration type is "registration required" (no fee) then show a Register button to signed-in members with an iMIS ID, in the Upcoming iMIS events block and on Event pages; Event pages also show "You're registered" and a Cancel button. Members always register themselves, using the event's first registration option. Paid events keep linking to iMIS to pay.
+For free events, yes. Under Wormiss > Settings > iMIS events, tick "Members register for free events here" (keep the dry run on first). Events whose iMIS registration type is "registration required" (no fee) then show a Register button to signed-in members with an iMIS ID, in the Upcoming iMIS events block and on Event pages; Event pages also show "You're registered" and a Cancel button. Members always register themselves, using the event's first registration option. Paid events keep linking to iMIS to pay.
 
 = How do I make content members only? =
 
@@ -173,6 +173,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.12.0 =
+* One Wormiss menu in the admin, with an Overview (connection, and what is on or in a dry run), Events, Add New Event, Event types, Settings and the audit log. Settings moved from Settings > iMIS Bridge and the log from Tools > iMIS Bridge log; the old addresses redirect.
 
 = 0.11.0 =
 * Event types can have a default capacity, used for their events when an event's own Capacity is 0.

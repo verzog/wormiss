@@ -19,7 +19,7 @@
  *
  * With iMIS single sign-on, the SSO plugin stores each member's iMIS ID on their
  * WordPress account (by default in the user meta field "imis_id"); Wormiss reads it
- * from there, or from the username, as set in Settings > iMIS Bridge. Developers can
+ * from there, or from the username, as set in Wormiss > Settings. Developers can
  * replace the lookup with the "wormiss_member_imis_id" filter.
  *
  * @package    wormiss

@@ -115,7 +115,8 @@ class Wormiss_Event_Sync {
 				'public'       => true,
 				'has_archive'  => 'events',
 				'rewrite'      => [ 'slug' => 'event' ],
-				'menu_icon'    => 'dashicons-calendar-alt',
+				// Listed under the Wormiss menu rather than a menu of its own.
+				'show_in_menu' => 'wormiss',
 				'show_in_rest' => true,
 				'supports'     => [ 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields', 'revisions' ],
 			]
@@ -387,7 +388,7 @@ class Wormiss_Event_Sync {
 		}
 		// A template is only used to create the event; one already in iMIS is just updated.
 		if ( '' === ( $details['template'] ?? '' ) && '' === ( $details['imis_id'] ?? '' ) ) {
-			return __( 'No iMIS template event: give this event type one, or set the default in Settings > iMIS Bridge.', 'wormiss' );
+			return __( 'No iMIS template event: give this event type one, or set the default in Wormiss > Settings.', 'wormiss' );
 		}
 		if ( '' === $details['code'] ) {
 			return __( 'Add an event code (letters, digits, _ and - only).', 'wormiss' );

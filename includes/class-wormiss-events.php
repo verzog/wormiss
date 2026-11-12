@@ -91,7 +91,7 @@ class Wormiss_Events {
 		// The set-up and "not available" messages use the iMIS data block's styles.
 		wp_enqueue_style( 'wormiss-iqa-style' );
 		if ( ! Wormiss_Settings::is_configured() ) {
-			return Wormiss_Iqa_Display::editor_notice( __( 'The iMIS connection is not set up yet (Settings > iMIS Bridge).', 'wormiss' ) );
+			return Wormiss_Iqa_Display::editor_notice( __( 'The iMIS connection is not set up yet (Wormiss > Settings).', 'wormiss' ) );
 		}
 		try {
 			$events = self::get_events();

@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Admin screens: Settings > iMIS Bridge (with a connection test) and Tools > iMIS Bridge log.
+ * Admin screens under the Wormiss menu: Overview, Settings (with a connection test) and the audit log.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -32,6 +32,12 @@ class Wormiss_Admin {
 	/** Settings page slug. */
 	const PAGE = 'wormiss';
 
+	/** The Wormiss menu's overview page slug (also the menu's own slug). */
+	const MENU = 'wormiss';
+
+	/** Settings page slug (the settings group stays PAGE). */
+	const SETTINGS_PAGE = 'wormiss-settings';
+
 	/** Log page slug. */
 	const LOG_PAGE = 'wormiss-log';
 
@@ -41,7 +47,11 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function init(): void {
-		add_action( 'admin_menu', [ __CLASS__, 'menus' ] );
+		// Early, so the Events post type (listed under this menu) finds its parent.
+		add_action( 'admin_menu', [ __CLASS__, 'menus' ], 9 );
+		add_action( 'admin_menu', [ __CLASS__, 'more_menus' ], 11 );
+		add_action( 'admin_init', [ __CLASS__, 'redirect_old_pages' ] );
+		add_filter( 'parent_file', [ __CLASS__, 'parent_file' ] );
 		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
 		add_action( 'admin_post_wormiss_test_connection', [ __CLASS__, 'test_connection' ] );
 		add_filter( 'plugin_action_links_' . plugin_basename( WORMISS_FILE ), [ __CLASS__, 'action_links' ] );
@@ -53,20 +63,179 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function menus(): void {
-		add_options_page(
-			__( 'iMIS Bridge', 'wormiss' ),
-			__( 'iMIS Bridge', 'wormiss' ),
+		// Editors see the menu (for events); Settings and the audit log are for administrators.
+		add_menu_page(
+			__( 'Wormiss', 'wormiss' ),
+			__( 'Wormiss', 'wormiss' ),
+			'edit_posts',
+			self::MENU,
+			[ __CLASS__, 'render_overview' ],
+			'dashicons-randomize',
+			26
+		);
+		add_submenu_page( self::MENU, __( 'Wormiss', 'wormiss' ), __( 'Overview', 'wormiss' ), 'edit_posts', self::MENU );
+	}
+
+	/**
+	 * The rest of the Wormiss menu, after the Events list WordPress adds for the post type.
+	 *
+	 * @return void
+	 */
+	public static function more_menus(): void {
+		$type = get_post_type_object( Wormiss_Event_Sync::POST_TYPE );
+		if ( $type ) {
+			add_submenu_page(
+				self::MENU,
+				$type->labels->add_new_item,
+				$type->labels->add_new_item,
+				'edit_posts',
+				'post-new.php?post_type=' . Wormiss_Event_Sync::POST_TYPE
+			);
+		}
+		$taxonomy = get_taxonomy( Wormiss_Event_Types::TAXONOMY );
+		if ( $taxonomy ) {
+			add_submenu_page(
+				self::MENU,
+				$taxonomy->labels->name,
+				$taxonomy->labels->menu_name,
+				'manage_categories',
+				self::types_page()
+			);
+		}
+		add_submenu_page(
+			self::MENU,
+			__( 'Wormiss settings', 'wormiss' ),
+			__( 'Settings', 'wormiss' ),
 			'manage_options',
-			self::PAGE,
+			self::SETTINGS_PAGE,
 			[ __CLASS__, 'render_settings' ]
 		);
-		add_management_page(
-			__( 'iMIS Bridge log', 'wormiss' ),
-			__( 'iMIS Bridge log', 'wormiss' ),
+		add_submenu_page(
+			self::MENU,
+			__( 'Wormiss audit log', 'wormiss' ),
+			__( 'Audit log', 'wormiss' ),
 			'manage_options',
 			self::LOG_PAGE,
 			[ __CLASS__, 'render_log' ]
 		);
+	}
+
+	/**
+	 * The Event types screen, as a menu path.
+	 *
+	 * @return string
+	 */
+	private static function types_page(): string {
+		return 'edit-tags.php?taxonomy=' . Wormiss_Event_Types::TAXONOMY . '&post_type=' . Wormiss_Event_Sync::POST_TYPE;
+	}
+
+	/**
+	 * Keep the Wormiss menu open on the Event types screens (WordPress would look for an
+	 * Events menu of their own).
+	 *
+	 * @param string $parent_file Parent menu.
+	 * @return string
+	 */
+	public static function parent_file( $parent_file ) {
+		global $submenu_file;
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( $screen && Wormiss_Event_Types::TAXONOMY === $screen->taxonomy ) {
+			$submenu_file = self::types_page(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Highlights the menu item.
+			return self::MENU;
+		}
+		return $parent_file;
+	}
+
+	/**
+	 * Old addresses (Wormiss > Settings, Wormiss > Audit log) go to the new pages.
+	 *
+	 * @return void
+	 */
+	public static function redirect_old_pages(): void {
+		global $pagenow;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only redirects to another page.
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$to   = self::old_page_target( (string) $pagenow, $page );
+		if ( '' !== $to ) {
+			wp_safe_redirect( $to );
+			exit;
+		}
+	}
+
+	/**
+	 * Where an old Wormiss admin address now lives, or ''.
+	 *
+	 * @param string $pagenow Admin file, e.g. options-general.php.
+	 * @param string $page    The page query value.
+	 * @return string
+	 */
+	public static function old_page_target( string $pagenow, string $page ): string {
+		if ( 'options-general.php' === $pagenow && self::PAGE === $page ) {
+			return self::settings_url();
+		}
+		if ( 'tools.php' === $pagenow && self::LOG_PAGE === $page ) {
+			return self::log_url();
+		}
+		return '';
+	}
+
+	/**
+	 * The Settings page address.
+	 *
+	 * @return string
+	 */
+	public static function settings_url(): string {
+		return admin_url( 'admin.php?page=' . self::SETTINGS_PAGE );
+	}
+
+	/**
+	 * The audit log address.
+	 *
+	 * @return string
+	 */
+	public static function log_url(): string {
+		return admin_url( 'admin.php?page=' . self::LOG_PAGE );
+	}
+
+	/**
+	 * The Overview page: what is set up and switched on, with links to each part.
+	 *
+	 * @return void
+	 */
+	public static function render_overview(): void {
+		$on    = static fn( string $key ) => (bool) Wormiss_Settings::get( $key );
+		$state = static function ( bool $enabled, bool $dry_run ) {
+			if ( ! $enabled ) {
+				return __( 'Off', 'wormiss' );
+			}
+			return $dry_run ? __( 'On (dry run: nothing is sent)', 'wormiss' ) : __( 'On', 'wormiss' );
+		};
+		$rows  = [
+			__( 'iMIS connection', 'wormiss' )         => Wormiss_Settings::is_configured()
+				? Wormiss_Settings::base_url() : __( 'Not set up', 'wormiss' ),
+			__( 'Record activity', 'wormiss' )         => $state( $on( 'activity_enabled' ), $on( 'activity_dry_run' ) ),
+			__( 'Send events to iMIS', 'wormiss' )     => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
+			__( 'Free event registration', 'wormiss' ) => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
+		];
+		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
+		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
+		echo '<table class="widefat striped" style="max-width:48rem"><tbody>';
+		foreach ( $rows as $label => $value ) {
+			echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>' . esc_html( $value ) . '</td></tr>';
+		}
+		echo '</tbody></table><h2>' . esc_html__( 'Go to', 'wormiss' ) . '</h2><ul class="ul-disc">';
+		$items = [ [ admin_url( 'edit.php?post_type=' . Wormiss_Event_Sync::POST_TYPE ), __( 'Events', 'wormiss' ) ] ];
+		if ( current_user_can( 'manage_categories' ) ) {
+			$items[] = [ admin_url( self::types_page() ), __( 'Event types (iMIS templates, categories and capacity)', 'wormiss' ) ];
+		}
+		if ( current_user_can( 'manage_options' ) ) {
+			$items[] = [ self::settings_url(), __( 'Settings', 'wormiss' ) ];
+			$items[] = [ self::log_url(), __( 'Audit log (every call to iMIS)', 'wormiss' ) ];
+		}
+		foreach ( $items as [ $url, $text ] ) {
+			echo '<li><a href="' . esc_url( $url ) . '">' . esc_html( $text ) . '</a></li>';
+		}
+		echo '</ul></div>';
 	}
 
 	/**
@@ -76,7 +245,7 @@ class Wormiss_Admin {
 	 * @return array
 	 */
 	public static function action_links( array $links ): array {
-		$url = admin_url( 'options-general.php?page=' . self::PAGE );
+		$url = self::settings_url();
 		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'wormiss' ) . '</a>' );
 		return $links;
 	}
@@ -504,7 +673,9 @@ class Wormiss_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		echo '<div class="wrap"><h1>' . esc_html__( 'iMIS Bridge', 'wormiss' ) . '</h1>';
+		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss settings', 'wormiss' ) . '</h1>';
+		// Pages outside the Settings menu show "Settings saved" and errors themselves.
+		settings_errors( Wormiss_Settings::OPTION );
 		self::connection_result_notice();
 		echo '<form action="options.php" method="post">';
 		settings_fields( self::PAGE );
@@ -522,7 +693,7 @@ class Wormiss_Admin {
 		submit_button( __( 'Test connection', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
-		$log = admin_url( 'tools.php?page=' . self::LOG_PAGE );
+		$log = self::log_url();
 		echo '<p><a href="' . esc_url( $log ) . '">' . esc_html__( 'Open the audit log', 'wormiss' ) . '</a></p></div>';
 	}
 
@@ -539,7 +710,7 @@ class Wormiss_Admin {
 
 		$result = self::run_connection_test();
 		set_transient( 'wormiss_test_' . get_current_user_id(), $result, 5 * MINUTE_IN_SECONDS );
-		wp_safe_redirect( admin_url( 'options-general.php?page=' . self::PAGE ) );
+		wp_safe_redirect( self::settings_url() );
 		exit;
 	}
 
@@ -617,10 +788,10 @@ class Wormiss_Admin {
 		$total = Wormiss_Logger::count();
 		$rows  = Wormiss_Logger::recent( $per_page, ( $paged - 1 ) * $per_page );
 
-		echo '<div class="wrap"><h1>' . esc_html__( 'iMIS Bridge log', 'wormiss' ) . '</h1>';
+		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss audit log', 'wormiss' ) . '</h1>';
 		if ( ! Wormiss_Logger::is_enabled() ) {
 			echo '<div class="notice notice-warning"><p>'
-				. esc_html__( 'Logging is switched off in Settings > iMIS Bridge.', 'wormiss' ) . '</p></div>';
+				. esc_html__( 'Logging is switched off in Wormiss > Settings.', 'wormiss' ) . '</p></div>';
 		}
 		echo '<table class="widefat striped"><thead><tr>';
 		$headings = [

@@ -2,7 +2,7 @@
  * iMIS data block: editor script. Plain JavaScript (no build step).
  *
  * The block is rendered on the server; the editor shows a live preview and the
- * settings. Only queries approved in Settings > iMIS Bridge can be chosen.
+ * settings. Only queries approved in Wormiss > Settings can be chosen.
  *
  * @copyright  2026 Vernon Spain
  * @license    GNU GPL v3 or later
@@ -35,7 +35,7 @@
 					PanelBody,
 					{title: __('iMIS query', 'wormiss')},
 					!data.configured && el(Notice, {status: 'warning', isDismissible: false},
-						__('The iMIS connection is not set up yet (Settings > iMIS Bridge).', 'wormiss')),
+						__('The iMIS connection is not set up yet (Wormiss > Settings).', 'wormiss')),
 					el(SelectControl, {
 						label: __('Query', 'wormiss'),
 						help: __('Only queries approved by an administrator are listed.', 'wormiss'),
@@ -106,7 +106,7 @@
 					label: __('iMIS data', 'wormiss'),
 					instructions: data.queries.length
 						? __('Choose a query in the block settings.', 'wormiss')
-						: __('No queries are approved yet. An administrator can add them in Settings > iMIS Bridge.', 'wormiss'),
+						: __('No queries are approved yet. An administrator can add them in Wormiss > Settings.', 'wormiss'),
 				});
 
 			return el('div', blockProps, controls, preview);

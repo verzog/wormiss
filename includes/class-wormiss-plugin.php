@@ -145,7 +145,7 @@ class Wormiss_Plugin {
 	 */
 	public static function register_exporter( array $exporters ): array {
 		$exporters['wormiss'] = [
-			'exporter_friendly_name' => __( 'iMIS Bridge log', 'wormiss' ),
+			'exporter_friendly_name' => __( 'Wormiss audit log', 'wormiss' ),
 			'callback'               => [ __CLASS__, 'export_personal_data' ],
 		];
 		return $exporters;
@@ -159,7 +159,7 @@ class Wormiss_Plugin {
 	 */
 	public static function register_eraser( array $erasers ): array {
 		$erasers['wormiss'] = [
-			'eraser_friendly_name' => __( 'iMIS Bridge log', 'wormiss' ),
+			'eraser_friendly_name' => __( 'Wormiss audit log', 'wormiss' ),
 			'callback'             => [ __CLASS__, 'erase_personal_data' ],
 		];
 		return $erasers;
@@ -186,7 +186,7 @@ class Wormiss_Plugin {
 		foreach ( $rows as $row ) {
 			$data[] = [
 				'group_id'    => 'wormiss-log',
-				'group_label' => __( 'iMIS Bridge log', 'wormiss' ),
+				'group_label' => __( 'Wormiss audit log', 'wormiss' ),
 				'item_id'     => 'wormiss-log-' . $row['id'],
 				'data'        => [
 					[

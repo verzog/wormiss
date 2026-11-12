@@ -32,7 +32,7 @@
 					PanelBody,
 					{title: __('Events', 'wormiss')},
 					!data.configured && el(Notice, {status: 'warning', isDismissible: false},
-						__('The iMIS connection is not set up yet (Settings > iMIS Bridge).', 'wormiss')),
+						__('The iMIS connection is not set up yet (Wormiss > Settings).', 'wormiss')),
 					el(RangeControl, {
 						label: __('Events to show', 'wormiss'),
 						value: a.limit,

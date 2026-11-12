@@ -69,7 +69,7 @@
 		const template = sync.template || data.template || '';
 		let state;
 		if (!data.enabled) {
-			state = __('Sending events to iMIS is off (Settings > iMIS Bridge).', 'wormiss');
+			state = __('Sending events to iMIS is off (Wormiss > Settings).', 'wormiss');
 		} else if (data.dryRun) {
 			state = __('Dry run: on publish or update, iMIS only checks this event.', 'wormiss');
 		} else {
@@ -83,7 +83,7 @@
 			!imisId && el('p', {className: 'description'}, template
 				? sprintf(__('A new event is copied from iMIS template %s (chosen by its event type, or the default).',
 					'wormiss'), template)
-				: __('No iMIS template yet: give the event type one, or set the default in Settings > iMIS Bridge.', 'wormiss')),
+				: __('No iMIS template yet: give the event type one, or set the default in Wormiss > Settings.', 'wormiss')),
 			syncNotice(sync),
 			field('_wormiss_event_code', __('Event code', 'wormiss'), {
 				help: imisId

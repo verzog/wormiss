@@ -76,7 +76,7 @@ class Wormiss_Member_Display {
 		}
 		if ( ! Wormiss_Settings::is_member_query( $query ) ) {
 			return Wormiss_Iqa_Display::editor_notice(
-				__( 'This iMIS query is not on the approved member-query list (Settings > iMIS Bridge).', 'wormiss' )
+				__( 'This iMIS query is not on the approved member-query list (Wormiss > Settings).', 'wormiss' )
 			);
 		}
 

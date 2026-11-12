@@ -53,14 +53,14 @@
 			}),
 			enabled && el(TextControl, {
 				label: __('Membership statuses (optional)', 'wormiss'),
-				help: __('Comma-separated, e.g. "Active". Blank for the statuses set in Settings > iMIS Bridge.', 'wormiss'),
+				help: __('Comma-separated, e.g. "Active". Blank for the statuses set in Wormiss > Settings.', 'wormiss'),
 				value: meta._wormiss_member_statuses || '',
 				onChange: (v) => set('_wormiss_member_statuses', v),
 				__nextHasNoMarginBottom: true,
 			}),
 			enabled && !data.accessQuery && el(Notice, {status: 'info', isDismissible: false},
 				__('No membership query is set, so any signed-in member with an iMIS ID can read this; '
-					+ 'type and status rules need one (Settings > iMIS Bridge).', 'wormiss'))
+					+ 'type and status rules need one (Wormiss > Settings).', 'wormiss'))
 		);
 	}
 
