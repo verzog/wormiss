@@ -370,7 +370,8 @@ class Wormiss_Event_Sync {
 			'end'          => (string) $meta( self::META_END ),
 			'location'     => (string) $meta( self::META_LOCATION ),
 			'online'       => (string) $meta( self::META_ONLINE ),
-			'capacity'     => (int) $meta( self::META_CAPACITY ),
+			// The event's own capacity, else its type's default (0 keeps the template's).
+			'capacity'     => (int) $meta( self::META_CAPACITY ) > 0 ? (int) $meta( self::META_CAPACITY ) : $type['capacity'],
 		];
 	}
 

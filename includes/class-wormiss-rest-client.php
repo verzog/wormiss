@@ -433,6 +433,58 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * Whether an iMIS event category exists (GET /api/EventCategory/{id}).
+	 *
+	 * @param string $category_id EventCategoryId.
+	 * @return bool
+	 * @throws Wormiss_Exception On a failure other than "not found".
+	 */
+	public function event_category_exists( string $category_id ): bool {
+		if ( ! self::is_event_id( $category_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event category ID.', 'wormiss' ) );
+		}
+		try {
+			$result = $this->request( 'GET', '/api/EventCategory/' . rawurlencode( $category_id ) );
+		} catch ( Wormiss_Exception $e ) {
+			if ( 0 === strpos( $e->getMessage(), 'HTTP 404' ) ) {
+				return false;
+			}
+			throw $e;
+		}
+		return is_object( $result->body );
+	}
+
+	/**
+	 * Create an iMIS event category (POST /api/EventCategory).
+	 *
+	 * @param string $category_id EventCategoryId.
+	 * @param string $name        Name.
+	 * @param string $description Description.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function create_event_category( string $category_id, string $name, string $description ): object {
+		return $this->request( 'POST', '/api/EventCategory', self::event_category_body( $category_id, $name, $description ) );
+	}
+
+	/**
+	 * An EventCategoryData body.
+	 *
+	 * @param string $category_id EventCategoryId.
+	 * @param string $name        Name.
+	 * @param string $description Description.
+	 * @return array
+	 */
+	public static function event_category_body( string $category_id, string $name, string $description ): array {
+		return [
+			'$type'           => 'Asi.Soa.Events.DataContracts.EventCategoryData, Asi.Contracts',
+			'EventCategoryId' => $category_id,
+			'Name'            => $name,
+			'Description'     => $description,
+		];
+	}
+
+	/**
 	 * A member's registration for an event (GET /api/EventRegistration?EventId=&PartyId=).
 	 *
 	 * @param string $event_id iMIS event ID.
