@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.19.0
+Stable tag: 0.20.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -193,6 +193,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.20.0 =
+* The iMIS event import works in batches: each run makes or changes at most 20 pages (each may download an image), then carries on in the background a minute later from where it stopped, until every event is done, so a large import never stops the page with a time limit. Unchanged pages cost nothing. The settings page shows how many events are still to check. Replaces the old 100-pages-per-run limit.
 
 = 0.19.0 =
 * Imported event pages carry iMIS's details: the full event description (with its formatting) as the page text, the iMIS event image as the featured image (downloaded once into the Media Library), and the iMIS category as the Event type (created with the category's ID when missing). Title and description follow iMIS whenever they change there.

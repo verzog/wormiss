@@ -126,6 +126,7 @@ class Wormiss_Plugin {
 		wp_clear_scheduled_hook( Wormiss_User_Sync::HOOK );
 		wp_clear_scheduled_hook( Wormiss_User_Sync::MORE_HOOK );
 		wp_clear_scheduled_hook( Wormiss_Event_Import::HOOK );
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
 		// The Events post type goes away with the plugin: rebuild permalinks next time.
 		delete_option( 'wormiss_rewrite_version' );
 		flush_rewrite_rules( false );
