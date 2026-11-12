@@ -2,7 +2,7 @@
 	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
 	"apiVersion": 3,
 	"name": "wormiss/events",
-	"version": "0.5.0",
+	"version": "0.10.0",
 	"title": "Upcoming iMIS events",
 	"category": "widgets",
 	"icon": "calendar-alt",

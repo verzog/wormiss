@@ -69,3 +69,14 @@
 .wormiss-events--list .wormiss-events__action {
 	margin: 0;
 }
+
+.wormiss-register {
+	margin: 0.5em 0 0;
+}
+
+.wormiss-register-notice {
+	margin: 0.5em 0;
+	padding: 0.5em 0.75em;
+	border-left: 4px solid currentColor;
+	background: rgba(0, 0, 0, 0.04);
+}

@@ -168,7 +168,7 @@ class Wormiss_Members_Only {
 	 *
 	 * @return void
 	 */
-	private static function no_page_cache(): void {
+	public static function no_page_cache(): void {
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- Caching-plugin convention.
 			define( 'DONOTCACHEPAGE', true );

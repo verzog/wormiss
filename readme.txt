@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.9.0
+Stable tag: 0.10.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -147,6 +147,10 @@ In iMIS, set up a template event with your usual prices, registration options an
 
 Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. Events with no type, or whose type has no template, use the default template in Settings > iMIS Bridge. The template only matters when the event is first created in iMIS.
 
+= Can members register for events on the website? =
+
+For free events, yes. Under Settings > iMIS Bridge > iMIS events, tick "Members register for free events here" (keep the dry run on first). Events whose iMIS registration type is "registration required" (no fee) then show a Register button to signed-in members with an iMIS ID, in the Upcoming iMIS events block and on Event pages; Event pages also show "You're registered" and a Cancel button. Members always register themselves, using the event's first registration option. Paid events keep linking to iMIS to pay.
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -169,6 +173,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.10.0 =
+* Free event registration: on free iMIS events (registration required, no fee), signed-in members with an iMIS ID get a Register button in the Upcoming iMIS events block and on Event pages, and can cancel from the Event page. Registers through iMIS (RegisterEvent, without payment, for the member themselves) after checking the event is open and they are not already registered. Off and a dry run by default. Paid events still link to iMIS.
 
 = 0.9.0 =
 * WooCommerce purchases: each paid order (processing or completed) by a member with an iMIS ID is recorded once as an iMIS activity, with the items and order number in the description and note and the order total in Amount. Nothing is created in iMIS finance. Off by default; uses the activity type and dry run of Record activity in iMIS.

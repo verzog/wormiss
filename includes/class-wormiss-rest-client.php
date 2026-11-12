@@ -433,6 +433,118 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * A member's registration for an event (GET /api/EventRegistration?EventId=&PartyId=).
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @param string $party_id The member's iMIS ID.
+	 * @return array|null {id, status} or null when they have no registration (iMIS answers 404).
+	 * @throws Wormiss_Exception On any other failure.
+	 */
+	public function get_registration( string $event_id, string $party_id ): ?array {
+		if ( ! self::is_event_id( $event_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		$path = '/api/EventRegistration?EventId=' . rawurlencode( $event_id ) . '&PartyId=' . rawurlencode( $party_id );
+		try {
+			$result = $this->request( 'GET', $path, null, $party_id );
+		} catch ( Wormiss_Exception $e ) {
+			if ( 0 === strpos( $e->getMessage(), 'HTTP 404' ) ) {
+				return null;
+			}
+			throw $e;
+		}
+		$body = $result->body;
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		if ( ! is_object( $body ) || ! isset( $body->EventRegistrationId ) ) {
+			return null;
+		}
+		return [
+			'id'     => (string) $body->EventRegistrationId,
+			'status' => is_scalar( $body->Status ?? null ) ? (string) $body->Status : '',
+		];
+		// phpcs:enable
+	}
+
+	/**
+	 * Register a member for an event without payment (RegisterEvent, RegisterWithoutPayment).
+	 *
+	 * @param string $event_id  iMIS event ID.
+	 * @param string $party_id  The member's iMIS ID (registrant, registered by and bill to).
+	 * @param string $option_id The registration option's EventFunctionId ('' if the event has none).
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function register_event( string $event_id, string $party_id, string $option_id ): object {
+		$body = self::register_body( $event_id, $party_id, $option_id );
+		return $this->request( 'POST', '/api/EventRegistration/_execute', $body, $party_id );
+	}
+
+	/**
+	 * The RegisterEvent request body.
+	 *
+	 * @param string $event_id  iMIS event ID.
+	 * @param string $party_id  The member's iMIS ID.
+	 * @param string $option_id Registration option EventFunctionId, or ''.
+	 * @return array
+	 */
+	public static function register_body( string $event_id, string $party_id, string $option_id ): array {
+		return [
+			'$type'                        => 'Asi.Soa.Events.DataContracts.EventRegistrationRequest, Asi.Contracts',
+			'EntityTypeName'               => 'EventRegistration',
+			'OperationName'                => 'RegisterEvent',
+			// EventRegistrationType.RegisterWithoutPayment, the one type iMIS supports here.
+			'RegistrationType'             => [
+				'$type'  => 'Asi.Soa.Events.DataContracts.EventRegistrationType, Asi.Contracts',
+				'$value' => 3,
+			],
+			'EventId'                      => $event_id,
+			'RegistrationOptionFunctionId' => $option_id,
+			'FunctionId'                   => '',
+			'RegistrantId'                 => $party_id,
+			'RegisteredBy'                 => $party_id,
+			'BillTo'                       => $party_id,
+			'Waitlist'                     => false,
+		];
+	}
+
+	/**
+	 * Cancel a registration with no cancellation fee (CancelEventRegistration).
+	 *
+	 * @param string $registration_id EventRegistrationId.
+	 * @param string $party_id        The member's iMIS ID, for the audit log.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function cancel_registration( string $registration_id, string $party_id ): object {
+		return $this->request(
+			'POST',
+			'/api/EventRegistration/_execute',
+			[
+				'$type'          => 'Asi.Soa.Core.DataContracts.GenericExecuteRequest, Asi.Contracts',
+				'OperationName'  => 'CancelEventRegistration',
+				'EntityTypeName' => 'EventRegistration',
+				'Parameters'     => [
+					'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.Object, mscorlib]], mscorlib',
+					'$values' => [
+						[
+							'$type'  => 'System.String',
+							'$value' => $registration_id,
+						],
+						[
+							'$type'           => 'Asi.Soa.Commerce.DataContracts.OrderLineData, Asi.Contracts',
+							'ChildOrderLines' => [
+								'$type'   => 'Asi.Soa.Commerce.DataContracts.OrderLineDataCollection, Asi.Contracts',
+								'$values' => [ [ '$type' => 'Asi.Soa.Commerce.DataContracts.OrderLineData, Asi.Contracts' ] ],
+							],
+						],
+					],
+				],
+			],
+			$party_id
+		);
+	}
+
+	/**
 	 * The new EventId in a CloneEvent response, which may be the event itself, a result
 	 * wrapper, or the bare ID.
 	 *

@@ -522,6 +522,25 @@ class Wormiss_Event_Sync {
 	}
 
 	/**
+	 * The iMIS event with this ID from the cached events list, or null.
+	 *
+	 * @param string $imis_id iMIS event ID.
+	 * @return array|null
+	 */
+	private static function listed_event( string $imis_id ): ?array {
+		try {
+			foreach ( Wormiss_Events::get_events() as $event ) {
+				if ( $event['id'] === $imis_id ) {
+					return $event;
+				}
+			}
+		} catch ( Wormiss_Exception $e ) {
+			unset( $e ); // iMIS unavailable: fall back to the link.
+		}
+		return null;
+	}
+
+	/**
 	 * On an event's own page, show when and where it is, with a button to register in iMIS.
 	 *
 	 * @param string $content Post content.
@@ -550,6 +569,12 @@ class Wormiss_Event_Sync {
 			]
 		) : '';
 		$box     = '' !== $rows ? '<dl class="wormiss-event-details">' . $rows . '</dl>' : '';
+		// A free event: register (or cancel) here instead of linking to iMIS.
+		$listed = ( '' !== $imis_id && Wormiss_Event_Registration::is_on() ) ? self::listed_event( $imis_id ) : null;
+		$button = null !== $listed ? Wormiss_Event_Registration::button( $listed, true ) : '';
+		if ( '' !== $button ) {
+			return $box . $button . $content;
+		}
 		if ( '' !== $url ) {
 			$box .= '<p class="wormiss-event-register"><a class="wp-element-button" href="' . esc_url( $url ) . '">'
 				. esc_html__( 'Register', 'wormiss' ) . '</a></p>';
