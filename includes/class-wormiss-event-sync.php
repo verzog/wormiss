@@ -452,8 +452,9 @@ class Wormiss_Event_Sync {
 	public static function cancel( $post_id, $imis_id ): string {
 		$post_id = (int) $post_id;
 		$imis_id = (string) $imis_id;
-		// Restored from the bin before this ran: leave the iMIS event alone.
-		if ( 'trash' !== get_post_status( $post_id ) || ! Wormiss_Settings::get( 'event_sync_enabled' ) ) {
+		// Restored from the bin, or cancelling switched off, before this ran: leave the iMIS event alone.
+		if ( 'trash' !== get_post_status( $post_id ) || ! Wormiss_Settings::get( 'event_sync_enabled' )
+			|| ! Wormiss_Settings::get( 'event_cancel_on_trash' ) ) {
 			return '';
 		}
 		if ( Wormiss_Settings::get( 'event_sync_dry_run' ) ) {

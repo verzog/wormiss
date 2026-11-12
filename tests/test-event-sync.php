@@ -408,6 +408,12 @@ class Test_Wormiss_Event_Sync extends Wormiss_Test_Case {
 		$this->assertSame( 'CancelEvent', $cancel['OperationName'] );
 		$this->assertSame( 'CONF27', $cancel['Parameters']['$values'][0]['$value'] );
 
+		// Switched off after it was queued: the queued cancel does nothing.
+		$this->turn_on( false, [ 'event_cancel_on_trash' => false ] );
+		$this->assertSame( '', Wormiss_Event_Sync::cancel( $post_id, 'CONF27' ) );
+		$this->assertSame( 1, $this->imis->count( '/_execute' ) );
+
+		$this->turn_on( false, [ 'event_cancel_on_trash' => true ] );
 		wp_untrash_post( $post_id );
 		$this->assertSame( '', Wormiss_Event_Sync::cancel( $post_id, 'CONF27' ) );
 	}
