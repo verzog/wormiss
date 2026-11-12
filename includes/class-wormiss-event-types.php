@@ -38,6 +38,18 @@ class Wormiss_Event_Types {
 	/** Term meta: the iMIS event category (EventCategoryId) given to events of this type. */
 	const META_CATEGORY = 'wormiss_category_id';
 
+	/** Term meta: default capacity for events of this type (0 for none). */
+	const META_CAPACITY = 'wormiss_capacity';
+
+	/** Term meta: what happened the last time the type's category was created in iMIS. */
+	const META_CATEGORY_STATUS = 'wormiss_category_status';
+
+	/** Form field: create the category in iMIS when the type is saved. */
+	const FIELD_CREATE = 'wormiss_create_category';
+
+	/** Longest iMIS category ID made from a type's name. */
+	const CATEGORY_ID_LENGTH = 10;
+
 	/** Nonce action for the type form fields. */
 	const NONCE = 'wormiss_event_type_fields';
 
@@ -84,6 +96,18 @@ class Wormiss_Event_Types {
 				'rewrite'           => [ 'slug' => 'event-type' ],
 			]
 		);
+		register_term_meta(
+			self::TAXONOMY,
+			self::META_CAPACITY,
+			[
+				'type'              => 'integer',
+				'single'            => true,
+				'default'           => 0,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static fn( $value ) => min( 100000, absint( $value ) ),
+				'auth_callback'     => static fn( $allowed, $meta_key, $term_id ) => current_user_can( 'edit_term', (int) $term_id ),
+			]
+		);
 		foreach ( [ self::META_TEMPLATE, self::META_CATEGORY ] as $key ) {
 			register_term_meta(
 				self::TAXONOMY,
@@ -122,6 +146,7 @@ class Wormiss_Event_Types {
 		$out   = [
 			'template' => (string) Wormiss_Settings::get( 'event_template_id' ),
 			'category' => '',
+			'capacity' => 0,
 			'type'     => '',
 			'problem'  => '',
 		];
@@ -138,6 +163,7 @@ class Wormiss_Event_Types {
 		$template        = (string) get_term_meta( $term->term_id, self::META_TEMPLATE, true );
 		$out['template'] = '' !== $template ? $template : $out['template'];
 		$out['category'] = (string) get_term_meta( $term->term_id, self::META_CATEGORY, true );
+		$out['capacity'] = (int) get_term_meta( $term->term_id, self::META_CAPACITY, true );
 		return $out;
 	}
 
@@ -157,6 +183,19 @@ class Wormiss_Event_Types {
 				esc_html( $help )
 			);
 		}
+		printf(
+			'<div class="form-field"><label for="%1$s">%2$s</label>'
+				. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="" /><p>%3$s</p></div>',
+			esc_attr( self::META_CAPACITY ),
+			esc_html__( 'Default capacity', 'wormiss' ),
+			esc_html( self::capacity_help() )
+		);
+		printf(
+			'<div class="form-field"><label><input type="checkbox" name="%1$s" value="1" /> %2$s</label><p>%3$s</p></div>',
+			esc_attr( self::FIELD_CREATE ),
+			esc_html__( 'Create this category in iMIS when saved', 'wormiss' ),
+			esc_html( self::create_help() )
+		);
 	}
 
 	/**
@@ -177,9 +216,49 @@ class Wormiss_Event_Types {
 				esc_html( $help )
 			);
 		}
+		$capacity = (int) get_term_meta( $term->term_id, self::META_CAPACITY, true );
+		printf(
+			'<tr class="form-field"><th scope="row"><label for="%1$s">%2$s</label></th><td>'
+				. '<input type="number" min="0" class="small-text" id="%1$s" name="%1$s" value="%3$s" />'
+				. '<p class="description">%4$s</p></td></tr>',
+			esc_attr( self::META_CAPACITY ),
+			esc_html__( 'Default capacity', 'wormiss' ),
+			esc_attr( $capacity > 0 ? (string) $capacity : '' ),
+			esc_html( self::capacity_help() )
+		);
+		$status = (string) get_term_meta( $term->term_id, self::META_CATEGORY_STATUS, true );
+		printf(
+			'<tr class="form-field"><th scope="row">%1$s</th><td><label><input type="checkbox" name="%2$s" value="1" /> %3$s</label>'
+				. '<p class="description">%4$s</p>%5$s</td></tr>',
+			esc_html__( 'iMIS category', 'wormiss' ),
+			esc_attr( self::FIELD_CREATE ),
+			esc_html__( 'Create this category in iMIS when saved', 'wormiss' ),
+			esc_html( self::create_help() ),
+			'' !== $status ? '<p><strong>' . esc_html__( 'Last result:', 'wormiss' ) . '</strong> ' . esc_html( $status ) . '</p>' : ''
+		);
 		echo '<tr class="hidden"><td>';
 		wp_nonce_field( self::NONCE, 'wormiss_event_type_nonce' );
 		echo '</td></tr>';
+	}
+
+	/**
+	 * Help for the default capacity.
+	 *
+	 * @return string
+	 */
+	private static function capacity_help(): string {
+		return __( 'Places for events of this type when an event leaves its own Capacity at 0. Blank keeps the template\'s.', 'wormiss' );
+	}
+
+	/**
+	 * Help for creating the category.
+	 *
+	 * @return string
+	 */
+	private static function create_help(): string {
+		return __( 'Makes the iMIS event category if it does not exist yet, named after this type.', 'wormiss' )
+			. ' ' . __( 'With no category ID, one is made from the name (e.g. WORKSHOP).', 'wormiss' )
+			. ' ' . __( 'Uses the event sending switch and dry run in Settings > iMIS Bridge.', 'wormiss' );
 	}
 
 	/**
@@ -219,6 +298,86 @@ class Wormiss_Event_Types {
 				update_term_meta( (int) $term_id, $key, $value );
 			}
 		}
+		if ( isset( $_POST[ self::META_CAPACITY ] ) ) {
+			update_term_meta( (int) $term_id, self::META_CAPACITY, min( 100000, absint( wp_unslash( $_POST[ self::META_CAPACITY ] ) ) ) );
+		}
+		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) ) {
+			self::create_category( (int) $term_id );
+		}
+	}
+
+	/**
+	 * Create the type's event category in iMIS, if it is not there yet. The result is kept on
+	 * the type and shown on its edit screen.
+	 *
+	 * @param int $term_id Term ID.
+	 * @return string Result: created, exists, dry_run, off, invalid or error.
+	 */
+	public static function create_category( int $term_id ): string {
+		$term = get_term( $term_id, self::TAXONOMY );
+		if ( ! $term instanceof WP_Term ) {
+			return 'invalid';
+		}
+		$category = (string) get_term_meta( $term_id, self::META_CATEGORY, true );
+		if ( '' === $category ) {
+			$category = self::category_id_from_name( $term->name );
+			if ( '' !== $category ) {
+				update_term_meta( $term_id, self::META_CATEGORY, $category );
+			}
+		}
+		[ $result, $message ] = self::send_category( $category, $term );
+		update_term_meta( $term_id, self::META_CATEGORY_STATUS, $message );
+		return $result;
+	}
+
+	/**
+	 * Check for, and create, the category in iMIS.
+	 *
+	 * @param string  $category EventCategoryId.
+	 * @param WP_Term $term     Type.
+	 * @return string[] [result, message].
+	 */
+	private static function send_category( string $category, WP_Term $term ): array {
+		if ( '' === $category ) {
+			return [ 'invalid', __( 'Add an iMIS event category ID (letters, digits, _ and -).', 'wormiss' ) ];
+		}
+		if ( ! Wormiss_Settings::get( 'event_sync_enabled' ) || ! Wormiss_Settings::is_configured() ) {
+			return [ 'off', __( 'Sending events to iMIS is off (Settings > iMIS Bridge), so nothing was created.', 'wormiss' ) ];
+		}
+		$client = new Wormiss_Rest_Client();
+		try {
+			if ( $client->event_category_exists( $category ) ) {
+				/* translators: %s: category ID. */
+				return [ 'exists', sprintf( __( 'Category %s is already in iMIS.', 'wormiss' ), $category ) ];
+			}
+			$description = wp_strip_all_tags( (string) $term->description );
+			if ( Wormiss_Settings::get( 'event_sync_dry_run' ) ) {
+				Wormiss_Logger::record_call(
+					'DRY RUN POST /api/EventCategory (' . $category . ')',
+					Wormiss_Logger::STATUS_SUCCESS,
+					null,
+					(string) wp_json_encode( Wormiss_Rest_Client::event_category_body( $category, $term->name, $description ) )
+				);
+				/* translators: %s: category ID. */
+				return [ 'dry_run', sprintf( __( 'Dry run: category %s would have been created. Nothing was sent.', 'wormiss' ), $category ) ];
+			}
+			$client->create_event_category( $category, $term->name, $description );
+		} catch ( Wormiss_Exception $e ) {
+			return [ 'error', $e->getMessage() ];
+		}
+		/* translators: %s: category ID. */
+		return [ 'created', sprintf( __( 'Category %s was created in iMIS.', 'wormiss' ), $category ) ];
+	}
+
+	/**
+	 * An iMIS category ID made from a type's name: letters and digits, upper case, up to 10.
+	 *
+	 * @param string $name Type name.
+	 * @return string
+	 */
+	public static function category_id_from_name( string $name ): string {
+		$id = strtoupper( (string) preg_replace( '/[^A-Za-z0-9]/', '', remove_accents( $name ) ) );
+		return substr( $id, 0, self::CATEGORY_ID_LENGTH );
 	}
 
 	/**

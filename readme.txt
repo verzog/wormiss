@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -145,7 +145,7 @@ In iMIS, set up a template event with your usual prices, registration options an
 
 = Can different kinds of event use different iMIS templates? =
 
-Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. Events with no type, or whose type has no template, use the default template in Settings > iMIS Bridge. The template only matters when the event is first created in iMIS.
+Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. A type can also have a default capacity (used when an event leaves its own Capacity at 0), and "Create this category in iMIS when saved" makes the type's iMIS event category for you if it does not exist yet. Events with no type, or whose type has no template, use the default template in Settings > iMIS Bridge. The template only matters when the event is first created in iMIS.
 
 = Can members register for events on the website? =
 
@@ -173,6 +173,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.11.0 =
+* Event types can have a default capacity, used for their events when an event's own Capacity is 0.
+* "Create this category in iMIS when saved" on an event type creates its iMIS event category (POST /api/EventCategory) if it does not exist yet, with an ID made from the name when none is given; follows the event sending switch and dry run. The result shows on the type's edit screen.
 
 = 0.10.0 =
 * Free event registration: on free iMIS events (registration required, no fee), signed-in members with an iMIS ID get a Register button in the Upcoming iMIS events block and on Event pages, and can cancel from the Event page. Registers through iMIS (RegisterEvent, without payment, for the member themselves) after checking the event is open and they are not already registered. Off and a dry run by default. Paid events still link to iMIS.

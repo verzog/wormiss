@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.10.0)
+## What it does (0.11.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -59,7 +59,8 @@ whose iMIS REST client and audit log it reuses.
 * **Event types** (Events > Event types): each type has its own iMIS template
   event, and optionally an iMIS event category given to its events on every send.
   An event with no type, or a type with no template, uses the default template.
-  Types also have their own archive pages (`/event-type/<type>/`).
+  Types also have their own archive pages (`/event-type/<type>/`), a default
+  capacity, and can create their iMIS event category when saved.
 
 * **Free event registration:** signed-in members register for (and cancel) free iMIS
   events from the events block and Event pages, through iMIS's RegisterEvent without

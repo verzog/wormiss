@@ -219,6 +219,90 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An event with no capacity of its own takes its type's default capacity.
+	 *
+	 * @return void
+	 */
+	public function test_default_capacity(): void {
+		$term_id = $this->type( 'Workshop', 'WKSHPTPL' );
+		update_term_meta( $term_id, Wormiss_Event_Types::META_CAPACITY, 40 );
+		$post_id = $this->event( [ $term_id ] );
+		$this->assertSame( 40, Wormiss_Event_Sync::details( get_post( $post_id ) )['capacity'] );
+
+		update_post_meta( $post_id, Wormiss_Event_Sync::META_CAPACITY, 25 );
+		$this->assertSame( 25, Wormiss_Event_Sync::details( get_post( $post_id ) )['capacity'] );
+
+		$this->assertSame( 0, Wormiss_Event_Sync::details( get_post( $this->event() ) )['capacity'] );
+	}
+
+	/**
+	 * Saving a type can create its event category in iMIS, with an ID made from its name when
+	 * none is given; one that exists already is left alone.
+	 *
+	 * @return void
+	 */
+	public function test_create_category(): void {
+		$this->assertSame( 'SKINCANCER', Wormiss_Event_Types::category_id_from_name( 'Skin cancer workshops' ) );
+		$term_id = $this->type( 'Skin cancer workshops' );
+		$this->imis->token()
+			->reply( '/api/EventCategory/SKINCANCER', 404, '{"Message":"Not found"}' )
+			->reply( '/api/EventCategory', 200, '{}' );
+		$this->assertSame( 'created', Wormiss_Event_Types::create_category( $term_id ) );
+		$this->assertSame( 'SKINCANCER', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		$body = json_decode( (string) $this->imis->requests[2]['body'], true );
+		$this->assertSame( 'POST', $this->imis->requests[2]['method'] );
+		$this->assertSame( 'SKINCANCER', $body['EventCategoryId'] );
+		$this->assertSame( 'Skin cancer workshops', $body['Name'] );
+		$this->assertStringContainsString( 'was created', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
+
+		$this->imis->requests = [];
+		$this->imis->token()->reply( '/api/EventCategory/SKINCANCER', 200, '{"EventCategoryId":"SKINCANCER"}' );
+		$this->assertSame( 'exists', Wormiss_Event_Types::create_category( $term_id ) );
+		$this->assertSame( 2, count( $this->imis->requests ) );
+	}
+
+	/**
+	 * A dry run only checks and logs; with sending off nothing is contacted.
+	 *
+	 * @return void
+	 */
+	public function test_create_category_dry_run_and_off(): void {
+		$this->turn_on( true );
+		$term_id = $this->type( 'Webinar', '', 'WEBINAR' );
+		$this->imis->token()->reply( '/api/EventCategory/WEBINAR', 404, '{}' );
+		$this->assertSame( 'dry_run', Wormiss_Event_Types::create_category( $term_id ) );
+		$this->assertSame( 2, count( $this->imis->requests ) );
+
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_sync_enabled' => false ] ) );
+		$this->imis->requests = [];
+		$this->assertSame( 'off', Wormiss_Event_Types::create_category( $term_id ) );
+		$this->assertSame( [], $this->imis->requests );
+	}
+
+	/**
+	 * The type form saves the capacity and, when ticked, creates the category.
+	 *
+	 * @return void
+	 */
+	public function test_form_capacity_and_create(): void {
+		$term_id = $this->type( 'Seminar', '', 'SEMINAR' );
+		$this->imis->token()
+			->reply( '/api/EventCategory/SEMINAR', 404, '{}' )
+			->reply( '/api/EventCategory', 200, '{}' );
+		$_POST = [
+			'wormiss_event_type_nonce'         => wp_create_nonce( Wormiss_Event_Types::NONCE ),
+			Wormiss_Event_Types::META_CAPACITY => '60',
+			Wormiss_Event_Types::FIELD_CREATE  => '1',
+			Wormiss_Event_Types::META_CATEGORY => 'seminar',
+		];
+		Wormiss_Event_Types::save_fields( $term_id );
+		$_POST = [];
+		$this->assertSame( 60, (int) get_term_meta( $term_id, Wormiss_Event_Types::META_CAPACITY, true ) );
+		$this->assertSame( 1, $this->imis->count( '/api/EventCategory/SEMINAR' ) );
+		$this->assertStringContainsString( 'was created', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
+	}
+
+	/**
 	 * The type form saves cleaned IDs with a valid nonce, and nothing without one.
 	 *
 	 * @return void
