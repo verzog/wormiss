@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.18.0)
+## What it does (0.19.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -60,8 +60,9 @@ whose iMIS REST client and audit log it reuses.
   (its "Existing iMIS event ID"). The page then shows that event's dates, place,
   places left and Register button, and WordPress never changes or cancels it.
 
-* **iMIS event import:** daily (or on demand), each upcoming iMIS event gets a linked
-  Event page as a draft, with titles kept in step with iMIS. Nothing is changed in
+* **iMIS event import:** daily (or on demand), each upcoming iMIS event (and optionally
+  past ones) gets a linked Event page with its iMIS description, image and event type,
+  published or as a draft, kept in step with iMIS. Nothing is changed in
   iMIS and no page is removed.
 
 * **Event types** (Events > Event types): each type has its own iMIS template

@@ -105,6 +105,8 @@ class Wormiss_Settings {
 			'event_cancel_on_trash'      => false,
 			// Importing iMIS events as draft Event pages: off until an administrator turns it on.
 			'event_import_enabled'       => false,
+			// Publish imported pages (else they are drafts for an editor to publish).
+			'event_import_publish'       => false,
 			// Also import finished events that started on or after this date (YYYY-MM-DD; '' for none).
 			'event_import_since'         => '',
 		];
@@ -435,8 +437,13 @@ class Wormiss_Settings {
 		}
 		if ( isset( $input['event_import_section'] ) ) {
 			$clean['event_import_enabled'] = ! empty( $input['event_import_enabled'] );
-		} elseif ( array_key_exists( 'event_import_enabled', $input ) ) {
-			$clean['event_import_enabled'] = (bool) $input['event_import_enabled'];
+			$clean['event_import_publish'] = ! empty( $input['event_import_publish'] );
+		} else {
+			foreach ( [ 'event_import_enabled', 'event_import_publish' ] as $box ) {
+				if ( array_key_exists( $box, $input ) ) {
+					$clean[ $box ] = (bool) $input[ $box ];
+				}
+			}
 		}
 		foreach ( [ 'user_sync_enabled', 'user_sync_dry_run' ] as $box ) {
 			if ( isset( $input['user_sync_section'] ) ) {

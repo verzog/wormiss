@@ -709,6 +709,11 @@ class Wormiss_Event_Sync {
 		if ( '' !== $details['code'] ) {
 			$rows .= '<dt>' . esc_html__( 'Event code', 'wormiss' ) . '</dt><dd>' . esc_html( $details['code'] ) . '</dd>';
 		}
+		$closes = null !== $listed ? Wormiss_Events::timestamp( (string) ( $listed['reg_end'] ?? '' ) ) : null;
+		if ( null !== $closes && $closes >= time() ) {
+			$rows .= '<dt>' . esc_html__( 'Registration closes', 'wormiss' ) . '</dt><dd>'
+				. esc_html( Wormiss_Events::when( (string) $listed['reg_end'], '' ) ) . '</dd>';
+		}
 		$places = null !== $listed ? Wormiss_Events::places( $listed ) : null;
 		if ( null !== $places ) {
 			$rows .= '<dt>' . esc_html__( 'Places', 'wormiss' ) . '</dt><dd>' . esc_html( Wormiss_Events::places_text( $places ) ) . '</dd>';
