@@ -800,6 +800,43 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * The rows of an iMIS business object (e.g. a custom panel such as EventCPD) that match the
+	 * given properties, each as name => value (GET /api/{entity}?Property=value, every page).
+	 *
+	 * @param string $entity  Business object name (letters, digits and _).
+	 * @param array  $filters Property => value to match.
+	 * @param int    $max     Most rows to read.
+	 * @return array[] Each row's properties.
+	 * @throws Wormiss_Exception On failure, or an unreadable response.
+	 */
+	public function get_entities( string $entity, array $filters, int $max = 500 ): array {
+		if ( 1 !== preg_match( '/^[A-Za-z][A-Za-z0-9_]{0,63}$/', $entity ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS business object name.', 'wormiss' ) );
+		}
+		$query = '';
+		foreach ( $filters as $name => $value ) {
+			$query .= rawurlencode( (string) $name ) . '=' . rawurlencode( (string) $value ) . '&';
+		}
+		$rows   = [];
+		$offset = 0;
+		do {
+			$path   = '/api/' . $entity . '?' . $query . 'limit=' . self::EVENT_PAGE_SIZE . '&offset=' . $offset;
+			$result = $this->request( 'GET', $path );
+			if ( ! self::is_paged_result( $result->body ) ) {
+				throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
+			}
+			$page = array_values( array_filter( self::items( $result->body ), 'is_object' ) );
+			foreach ( $page as $item ) {
+				$rows[] = self::properties( $item );
+			}
+			$page_count            = count( $page );
+			$row_count             = count( $rows );
+			[ $has_next, $offset ] = self::next_page( $result->body, $offset, $page_count );
+		} while ( $has_next && $page_count > 0 && $row_count < $max );
+		return array_slice( $rows, 0, $max );
+	}
+
+	/**
 	 * Create an activity record in iMIS.
 	 *
 	 * @param array  $body    Body from build_activity_body().
