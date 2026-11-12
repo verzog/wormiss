@@ -165,8 +165,10 @@ class Test_Wormiss_Member_Push extends Wormiss_Test_Case {
 		$this->assertTrue( $work->Emails->{'$values'}[1]->IsPrimary );
 
 		// No primary email, but one already holds this address: it becomes the primary.
-		$this->assertTrue( Wormiss_Member_Push::apply( $work, [ 'email' => 'WORK@example.org' ] + $details ) );
-		$this->assertTrue( $work->Emails->{'$values'}[0]->IsPrimary );
+		$same = json_decode( '{"Emails":{"$values":[{"Address":"work@example.org","EmailType":"Work","IsPrimary":false}]}}' );
+		$this->assertTrue( Wormiss_Member_Push::apply( $same, [ 'email' => 'WORK@example.org' ] + $details ) );
+		$this->assertCount( 1, $same->Emails->{'$values'} );
+		$this->assertTrue( $same->Emails->{'$values'}[0]->IsPrimary );
 		// phpcs:enable
 	}
 
