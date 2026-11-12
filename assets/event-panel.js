@@ -34,7 +34,7 @@
 		if (!status) {
 			return null;
 		}
-		const kinds = {synced: 'success', cancelled: 'warning', error: 'error'};
+		const kinds = {synced: 'success', linked: 'success', cancelled: 'warning', error: 'error'};
 		return el(Notice, {status: kinds[status] || 'info', isDismissible: false},
 			sync.message || status);
 	}
@@ -108,6 +108,27 @@
 			state = __('On publish or update, this event is saved in iMIS.', 'wormiss');
 		}
 
+		const existing = meta._wormiss_event_existing || '';
+		const existingField = (!imisId || sync.linked) && field('_wormiss_event_existing', __('Existing iMIS event ID', 'wormiss'), {
+			help: __('To use an event already in iMIS (e.g. CONGRESS26) instead of creating one. Its details, places', 'wormiss')
+				+ ' ' + __('and registration come from iMIS, and WordPress never changes or cancels it. Clear it to unlink.', 'wormiss'),
+			maxLength: 10,
+		});
+
+		if (sync.linked || existing) {
+			// A linked event is only read from iMIS: nothing else here is sent.
+			return el(
+				Panel,
+				{name: 'wormiss-event', title: __('iMIS event', 'wormiss')},
+				syncNotice(sync),
+				existingField,
+				sync.places && el('p', {className: 'description'},
+					sprintf(__('Places in iMIS: %s', 'wormiss'), sync.places)),
+				!sync.linked && el('p', {className: 'description'},
+					__('Save to link this page to the iMIS event.', 'wormiss'))
+			);
+		}
+
 		return el(
 			Panel,
 			{name: 'wormiss-event', title: __('iMIS event', 'wormiss')},
@@ -117,6 +138,7 @@
 					'wormiss'), template)
 				: __('No iMIS template yet: give the event type one, or set the default in Wormiss > Settings.', 'wormiss')),
 			syncNotice(sync),
+			existingField,
 			field('_wormiss_event_code', __('Event code', 'wormiss'), {
 				help: imisId
 					? sprintf(__('In iMIS as %s. The code cannot change now.', 'wormiss'), imisId)
