@@ -351,6 +351,18 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 		$this->assertSame( '', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
 		$this->assertStringContainsString( 'up to 5', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
 
+		// Ticking "create" with a rejected ID creates nothing and keeps the reason.
+		$_POST = [
+			'wormiss_event_type_nonce'         => wp_create_nonce( Wormiss_Event_Types::NONCE ),
+			Wormiss_Event_Types::META_CATEGORY => 'COURSE',
+			Wormiss_Event_Types::FIELD_CREATE  => '1',
+		];
+		Wormiss_Event_Types::save_fields( $term_id );
+		$_POST = [];
+		$this->assertSame( '', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY, true ) );
+		$this->assertStringContainsString( 'was not kept', get_term_meta( $term_id, Wormiss_Event_Types::META_CATEGORY_STATUS, true ) );
+		$this->assertSame( [], $this->imis->requests );
+
 		// Saved before the limit was checked: stopped before anything is sent.
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Store an old value past the sanitizer.

@@ -467,8 +467,9 @@ class Wormiss_Event_Types {
 				update_term_meta( (int) $term_id, $key, $clean( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
 			}
 		}
-		$typed = isset( $_POST[ self::META_CATEGORY ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ self::META_CATEGORY ] ) ) ) : '';
-		if ( '' !== $typed && '' === self::clean_category( $typed ) ) {
+		$typed    = isset( $_POST[ self::META_CATEGORY ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ self::META_CATEGORY ] ) ) ) : '';
+		$rejected = '' !== $typed && '' === self::clean_category( $typed );
+		if ( $rejected ) {
 			// Say why the category was not kept, rather than clear it without a word.
 			update_term_meta( (int) $term_id, self::META_CATEGORY_STATUS, self::category_rule( $typed ) );
 		}
@@ -477,7 +478,8 @@ class Wormiss_Event_Types {
 				update_term_meta( (int) $term_id, $key, self::clean_number( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) );
 			}
 		}
-		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) ) {
+		// Not for a rejected ID: that would make one from the name instead and create it.
+		if ( ! empty( $_POST[ self::FIELD_CREATE ] ) && ! $rejected ) {
 			self::create_category( (int) $term_id );
 		}
 	}
