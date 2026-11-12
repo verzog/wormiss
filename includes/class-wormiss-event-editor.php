@@ -167,6 +167,9 @@ class Wormiss_Event_Editor {
 	 * @return void
 	 */
 	public static function add_box(): void {
+		if ( function_exists( 'use_block_editor_for_post_type' ) && use_block_editor_for_post_type( Wormiss_Event_Sync::POST_TYPE ) ) {
+			return; // The block editor edits the details in the page, with the event blocks.
+		}
 		add_meta_box(
 			'wormiss-event-details',
 			__( 'Event details', 'wormiss' ),

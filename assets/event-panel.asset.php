@@ -26,5 +26,5 @@ defined( 'ABSPATH' ) || exit;
 
 return [
 	'dependencies' => [ 'wp-components', 'wp-data', 'wp-editor', 'wp-element', 'wp-i18n', 'wp-plugins' ],
-	'version'      => '0.24.0',
+	'version'      => '0.28.0',
 ];

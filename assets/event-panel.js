@@ -2,7 +2,7 @@
  * "iMIS event" panel in the Event editor sidebar. Plain JavaScript (no build step).
  *
  * Shows whether the event is sent to iMIS, what happened the last time, and places left. The
- * details themselves are edited in the "Event details" box under the content.
+ * details themselves are edited in the page, in the event blocks (see event-blocks.js).
  *
  * @copyright  2026 Vernon Spain
  * @license    GNU GPL v3 or later
@@ -73,7 +73,7 @@
 			sync.places && el('p', {className: 'description'},
 				sprintf(__('Places in iMIS: %s', 'wormiss'), sync.places)),
 			el('p', {className: 'description'},
-				__('Fill in the dates, place, places and waitlist in "Event details" below the content.', 'wormiss'))
+				__('The dates, place, places, CPD hours and iMIS settings are edited in the page, in its event blocks.', 'wormiss'))
 		);
 	}
 

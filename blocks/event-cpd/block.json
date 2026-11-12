@@ -1,0 +1,29 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/event-cpd",
+	"version": "0.28.0",
+	"title": "CPD information",
+	"category": "widgets",
+	"icon": "awards",
+	"description": "The event's CPD hours per category (Australian and New Zealand names), edited in place on events made in WordPress.",
+	"keywords": [
+		"cpd",
+		"hours",
+		"points",
+		"education"
+	],
+	"textdomain": "wormiss",
+	"usesContext": [
+		"postId",
+		"postType"
+	],
+	"supports": {
+		"html": false,
+		"multiple": false,
+		"reusable": false
+	},
+	"editorScript": "wormiss-event-blocks",
+	"editorStyle": "wormiss-event-blocks-editor",
+	"render": "file:./render.php"
+}

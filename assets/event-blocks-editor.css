@@ -1,0 +1,60 @@
+/* The event blocks in the editor: fields typed into the page, laid out as on the website. */
+.wormiss-inline {
+	background: transparent;
+	border: 1px dashed #8c8f94;
+	border-radius: 2px;
+	color: inherit;
+	font: inherit;
+	margin: 0 0 4px;
+	max-width: 100%;
+	padding: 2px 6px;
+}
+
+.wormiss-inline:focus {
+	border-style: solid;
+	border-color: var(--wp-admin-theme-color, #2271b1);
+	outline: none;
+}
+
+.wormiss-inline--wide {
+	display: block;
+	width: 100%;
+}
+
+.wormiss-inline-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.wormiss-editor-note {
+	color: #646970;
+	font-size: 12px;
+	margin: 6px 0 0;
+}
+
+.wormiss-imis-settings {
+	border: 1px dashed #8c8f94;
+	padding: 12px;
+}
+
+.wormiss-imis-settings__title {
+	font-weight: 600;
+	margin: 0 0 8px;
+}
+
+.wormiss-imis-settings__title span {
+	color: #646970;
+	font-weight: 400;
+}
+
+.wormiss-imis-settings__grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	margin-top: 8px;
+}
+
+.wormiss-cpd__table--edit input {
+	width: 6em;
+}

@@ -1,0 +1,30 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/event-facts",
+	"version": "0.28.0",
+	"title": "Event facts",
+	"category": "widgets",
+	"icon": "info-outline",
+	"description": "When and where the event is, its places left and the Register button. Edited in place on events made in WordPress.",
+	"keywords": [
+		"event",
+		"details",
+		"when",
+		"where",
+		"register"
+	],
+	"textdomain": "wormiss",
+	"usesContext": [
+		"postId",
+		"postType"
+	],
+	"supports": {
+		"html": false,
+		"multiple": false,
+		"reusable": false
+	},
+	"editorScript": "wormiss-event-blocks",
+	"editorStyle": "wormiss-event-blocks-editor",
+	"render": "file:./render.php"
+}

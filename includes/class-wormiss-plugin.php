@@ -78,6 +78,29 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		register_block_type( WORMISS_DIR . '/blocks/complete' );
 		register_block_type( WORMISS_DIR . '/blocks/events' );
+		// The event blocks share one editor script and style.
+		wp_register_script(
+			'wormiss-event-blocks',
+			plugins_url( 'assets/event-blocks.js', WORMISS_FILE ),
+			[ 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-core-data', 'wp-data', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-server-side-render' ],
+			WORMISS_VERSION,
+			true
+		);
+		wp_register_style( 'wormiss-event-blocks-editor', plugins_url( 'assets/event-blocks-editor.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		wp_add_inline_script(
+			'wormiss-event-blocks',
+			'window.wormissEventBlocks = ' . wp_json_encode(
+				[
+					'requirements' => Wormiss_Event_Cpd::REQUIREMENTS,
+					'maxRows'      => Wormiss_Event_Cpd::MAX_ROWS,
+					'countries'    => Wormiss_Event_Sync::COUNTRIES,
+				]
+			) . ';',
+			'before'
+		);
+		register_block_type( WORMISS_DIR . '/blocks/event-facts' );
+		register_block_type( WORMISS_DIR . '/blocks/event-cpd' );
+		register_block_type( WORMISS_DIR . '/blocks/event-imis' );
 		add_shortcode( 'wormiss_iqa', [ 'Wormiss_Iqa_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_member', [ 'Wormiss_Member_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_events', [ 'Wormiss_Events', 'shortcode' ] );

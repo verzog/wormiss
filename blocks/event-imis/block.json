@@ -1,0 +1,29 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/event-imis",
+	"version": "0.28.0",
+	"title": "iMIS settings",
+	"category": "widgets",
+	"icon": "admin-generic",
+	"description": "The event's iMIS settings (event code, existing iMIS event, attendance and waitlist), edited in place. Shown to editors only, never on the website.",
+	"keywords": [
+		"imis",
+		"code",
+		"waitlist",
+		"attendance"
+	],
+	"textdomain": "wormiss",
+	"usesContext": [
+		"postId",
+		"postType"
+	],
+	"supports": {
+		"html": false,
+		"multiple": false,
+		"reusable": false
+	},
+	"editorScript": "wormiss-event-blocks",
+	"editorStyle": "wormiss-event-blocks-editor",
+	"render": "file:./render.php"
+}
