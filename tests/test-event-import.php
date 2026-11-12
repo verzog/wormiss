@@ -655,7 +655,11 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->serve( $events );
 		$this->assertSame( 3, Wormiss_Event_Import::run()['remaining'] );
 
-		// The first event finished meanwhile, so the list is one shorter at the front.
+		// The first event finished meanwhile, so the list is one shorter at the front. The kept
+		// list is too old to use by now, so iMIS is read again.
+		$kept         = get_option( Wormiss_Event_Import::LIST_OPTION );
+		$kept['time'] = time() - Wormiss_Event_Import::LIST_MAX_AGE - 1;
+		update_option( Wormiss_Event_Import::LIST_OPTION, $kept, false );
 		array_shift( $events );
 		$this->serve( $events );
 		$report = Wormiss_Event_Import::run_more();
@@ -664,5 +668,74 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		for ( $i = 1; $i <= Wormiss_Event_Import::BATCH + 3; $i++ ) {
 			$this->assertCount( 1, self::pages( 'SHIFT' . $i ), 'SHIFT' . $i );
 		}
+	}
+
+	/**
+	 * Later batches use the list read at the start: iMIS is read once per import, not once
+	 * per batch.
+	 *
+	 * @return void
+	 */
+	public function test_later_batches_reuse_the_list(): void {
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+		$events = [];
+		for ( $i = 1; $i <= Wormiss_Event_Import::BATCH + 2; $i++ ) {
+			$events[] = self::imis_event( 'KEEP' . $i );
+		}
+		$this->serve( $events );
+		$this->assertSame( 2, Wormiss_Event_Import::run()['remaining'] );
+		$this->assertSame( 1, $this->imis->count( '/api/Event?' ) );
+		$this->assertIsArray( get_option( Wormiss_Event_Import::LIST_OPTION ) );
+
+		$report = Wormiss_Event_Import::run_more();
+		$this->assertSame( 2, $report['created'] );
+		$this->assertSame( 1, $this->imis->count( '/api/Event?' ), 'No second read of every event.' );
+		$this->assertFalse( get_option( Wormiss_Event_Import::LIST_OPTION ), 'Cleared when the import ends.' );
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+	}
+
+	/**
+	 * At most MAX_IMAGES images are downloaded in one run; the rest wait for the next batch.
+	 *
+	 * @return void
+	 */
+	public function test_images_per_batch(): void {
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
+		$png       = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- A test image.
+		$downloads = 0;
+		$image     = static function ( $pre, $args, $url ) use ( $png, &$downloads ) {
+			if ( false === strpos( $url, '/images/pic' ) ) {
+				return $pre;
+			}
+			++$downloads;
+			if ( ! empty( $args['filename'] ) ) {
+				file_put_contents( $args['filename'], $png ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- The download's temporary file.
+			}
+			return [
+				'headers'  => [ 'content-type' => 'image/png' ],
+				'body'     => '',
+				'response' => [
+					'code'    => 200,
+					'message' => 'OK',
+				],
+				'cookies'  => [],
+				'filename' => $args['filename'] ?? null,
+			];
+		};
+		add_filter( 'pre_http_request', $image, 20, 3 );
+		$events = [];
+		for ( $i = 1; $i <= Wormiss_Event_Import::MAX_IMAGES + 1; $i++ ) {
+			$events[] = self::imis_event( 'PIC' . $i, [ 'ImageUrl' => '~/images/pic' . $i . '.png' ] );
+		}
+		$this->serve( $events );
+		$report = Wormiss_Event_Import::run();
+		$this->assertSame( Wormiss_Event_Import::MAX_IMAGES, $downloads );
+		$this->assertSame( Wormiss_Event_Import::MAX_IMAGES, $report['created'] );
+		$this->assertSame( 1, $report['remaining'] );
+
+		Wormiss_Event_Import::run_more();
+		$this->assertSame( Wormiss_Event_Import::MAX_IMAGES + 1, $downloads );
+		remove_filter( 'pre_http_request', $image, 20 );
+		wp_clear_scheduled_hook( Wormiss_Event_Import::MORE_HOOK );
 	}
 }

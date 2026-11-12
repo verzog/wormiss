@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.25.0
+Stable tag: 0.25.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -201,6 +201,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.25.1 =
+* A lighter iMIS event import, so it no longer slows the site while it runs: iMIS's event list is read once at the start of an import and kept for its later batches (each batch used to read every event again); each batch makes or changes at most 5 pages and downloads at most 2 images (each image is saved in several sizes), every 2 minutes. A kept list older than 30 minutes is read again.
 
 = 0.25.0 =
 * CPD hours on event pages (Wormiss > Settings > iMIS events > Show CPD hours, off by default): each event's rows from its iMIS CPD Hours panel (the EventCPD business object) are read, cached, and shown after the event's text as a "CPD information" table, with the Australian and New Zealand category names and the hours added up per category (decimals allowed), plus the program level requirements covered. The Event details box gets a CPD hours tab listing the rows as iMIS has them. Read only: CPD hours are still changed in iMIS.

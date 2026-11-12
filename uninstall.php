@@ -36,6 +36,7 @@ delete_option( 'wormiss_user_sync_offset' );
 delete_option( 'wormiss_event_import_report' );
 delete_option( 'wormiss_event_import_lock' );
 delete_option( 'wormiss_event_import_done' );
+delete_option( 'wormiss_event_import_list' );
 delete_option( 'wormiss_event_push_report' );
 delete_option( 'wormiss_event_push_done' );
 delete_option( 'wormiss_event_push_lock' );

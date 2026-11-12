@@ -634,7 +634,7 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'For historical records: finished events that started on or after this date are imported too,', 'wormiss' )
-					. ' ' . esc_html__( 'in batches of 20 pages a minute in the background. Blank imports upcoming events only.', 'wormiss' )
+					. ' ' . esc_html__( 'in small batches (5 pages, 2 images) every 2 minutes in the background. Blank imports upcoming events only.', 'wormiss' )
 					. '</p>';
 				return;
 			case 'user_sync_query':
