@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -169,6 +169,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.8.0 =
+* CPD points from Mark as done also go in the iMIS activity's Quantity/CEU, with the CEU type set in a new "CEU type for CPD points" setting (UF_4 keeps the points too).
+* The iMIS activity type and CEU type settings are limited to 10 characters, as in iMIS.
 
 = 0.7.0 =
 * Event types (Events > Event types), each with its own iMIS template event and optional iMIS event category; events without a type, or whose type has no template, use the default template. An event with more than one type is not sent until one is chosen.
