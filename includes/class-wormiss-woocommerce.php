@@ -35,6 +35,9 @@ class Wormiss_Woocommerce {
 	/** Order meta: when the order was recorded in iMIS, so it is recorded once. */
 	const META_RECORDED = '_wormiss_imis_recorded';
 
+	/** Payment methods paid outside the checkout: their "processing" orders may be unpaid. */
+	const OFFLINE_METHODS = [ 'cod', 'bacs', 'cheque' ];
+
 	/** Longest note sent (iMIS notes are long text, but keep it readable). */
 	const NOTE_LENGTH = 2000;
 
@@ -98,8 +101,16 @@ class Wormiss_Woocommerce {
 		if ( ! $user_id ) {
 			return false;
 		}
+		// Cash on delivery, bank transfer and cheque orders reach "processing" before they are
+		// paid: record them only once the shop marks them completed.
+		$offline = (array) apply_filters( 'wormiss_offline_payment_methods', self::OFFLINE_METHODS );
+		if ( in_array( (string) $order->get_payment_method(), $offline, true ) && 'completed' !== $order->get_status() ) {
+			return false;
+		}
 
 		$currency = strtoupper( (string) $order->get_currency() );
+		// The shop's own number of decimals (usually 2) for the note; the total is sent unrounded.
+		$decimals = function_exists( 'wc_get_price_decimals' ) ? (int) wc_get_price_decimals() : 2;
 		$number   = (string) $order->get_order_number();
 		$names    = [];
 		$lines    = [];
@@ -107,7 +118,7 @@ class Wormiss_Woocommerce {
 			$name    = wp_strip_all_tags( (string) $item->get_name() );
 			$qty     = (int) $item->get_quantity();
 			$names[] = sprintf( '%s × %d', $name, $qty );
-			$lines[] = sprintf( '%s × %d: %s %s', $name, $qty, $currency, number_format( (float) $item->get_total(), 2, '.', '' ) );
+			$lines[] = sprintf( '%s × %d: %s %s', $name, $qty, $currency, number_format( (float) $item->get_total(), $decimals, '.', '' ) );
 		}
 		$total = (float) $order->get_total();
 
@@ -119,7 +130,7 @@ class Wormiss_Woocommerce {
 			$number,
 			implode( "\n", $lines ),
 			$currency,
-			number_format( $total, 2, '.', '' )
+			number_format( $total, $decimals, '.', '' )
 		);
 
 		$recorded = Wormiss_Activity::record(

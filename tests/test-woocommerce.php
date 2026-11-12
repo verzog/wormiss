@@ -188,6 +188,35 @@ class Test_Wormiss_Woocommerce extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Offline payments (cash on delivery, bank transfer, cheque) wait for "completed".
+	 *
+	 * @return void
+	 */
+	public function test_offline_payment_waits_for_completed(): void {
+		$this->turn_on();
+		$order                 = self::order( $this->member() );
+		$order->payment_method = 'cod';
+		$this->assertFalse( Wormiss_Woocommerce::record_order( $order ) );
+		$this->assertSame( [], $this->queued() );
+
+		$order->status = 'completed';
+		$this->assertTrue( Wormiss_Woocommerce::record_order( $order ) );
+		$this->assertCount( 1, $this->queued() );
+	}
+
+	/**
+	 * The total is sent as WooCommerce gives it, not rounded.
+	 *
+	 * @return void
+	 */
+	public function test_total_not_rounded(): void {
+		$this->turn_on();
+		$order = new Wormiss_Test_Order( $this->member(), [ new Wormiss_Test_Order_Item( 'Pen', 1, 12.345 ) ], 12.345 );
+		$this->assertTrue( Wormiss_Woocommerce::record_order( $order ) );
+		$this->assertSame( 12.345, $this->queued()[0]['amount'] );
+	}
+
+	/**
 	 * Records queued before amounts were recorded still send (Amount 0).
 	 *
 	 * @return void

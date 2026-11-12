@@ -114,7 +114,7 @@ class Wormiss_Activity {
 			'note'        => wp_strip_all_tags( (string) ( $args['note'] ?? '' ) ),
 			'points'      => (float) ( $args['points'] ?? 0 ),
 			'post_id'     => (int) ( $args['post_id'] ?? 0 ),
-			'amount'      => round( (float) ( $args['amount'] ?? 0 ), 2 ),
+			'amount'      => (float) ( $args['amount'] ?? 0 ),
 			'date'        => wp_date( 'Y-m-d\TH:i:s' ),
 		];
 

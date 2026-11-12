@@ -52,6 +52,38 @@ class Wormiss_Test_Order {
 	}
 
 	/**
+	 * Payment method ID.
+	 *
+	 * @var string
+	 */
+	public string $payment_method = 'stripe';
+
+	/**
+	 * Order status (without wc-).
+	 *
+	 * @var string
+	 */
+	public string $status = 'processing';
+
+	/**
+	 * Payment method ID.
+	 *
+	 * @return string
+	 */
+	public function get_payment_method(): string {
+		return $this->payment_method;
+	}
+
+	/**
+	 * Status.
+	 *
+	 * @return string
+	 */
+	public function get_status(): string {
+		return $this->status;
+	}
+
+	/**
 	 * Buyer's user ID.
 	 *
 	 * @return int
