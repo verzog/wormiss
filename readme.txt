@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.27.0
+Stable tag: 0.27.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -201,6 +201,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.27.1 =
+* "Open Event details" button in the sidebar's iMIS event panel: newer WordPress folds the boxes under the content into a closed "Meta Boxes" panel at the bottom of the editor, which is easy to miss. The button opens that panel (and the Event details box, if collapsed) and scrolls to it.
 
 = 0.27.0 =
 * Set CPD hours in WordPress: on an Event made in WordPress, editors and administrators fill in the CPD hours tab of Event details, one line per program level requirement (hours in each category, decimals allowed; Add line, Remove). When the event is sent, its CPD Hours panel in iMIS is made to match: lines changed (by their iMIS row number), added (keeping the number iMIS gives them) and removed. The tab starts from the lines already in iMIS, so a first save keeps them, and nothing in iMIS changes until someone saves the tab. A dry run logs what would change. Events linked to or imported from iMIS still show their CPD read only.
