@@ -29,6 +29,7 @@ global $wpdb;
 delete_option( 'wormiss_settings' );
 delete_option( 'wormiss_password' );
 delete_option( 'wormiss_db_version' );
+delete_option( 'wormiss_rewrite_version' );
 wp_clear_scheduled_hook( 'wormiss_cleanup_log' );
 
 // Cached IQA results are transients named wormiss_iqa_*.

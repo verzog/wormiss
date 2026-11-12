@@ -49,6 +49,7 @@ class Wormiss_Plugin {
 		Wormiss_Members_Only::init();
 		Wormiss_Activity::init();
 		Wormiss_Completion::init();
+		Wormiss_Event_Sync::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
 		}
@@ -115,6 +116,11 @@ class Wormiss_Plugin {
 		wp_clear_scheduled_hook( self::CLEANUP_HOOK );
 		// Unsent activity records are dropped: nothing is sent while the plugin is inactive.
 		wp_unschedule_hook( Wormiss_Activity::SEND_HOOK );
+		wp_unschedule_hook( Wormiss_Event_Sync::SYNC_HOOK );
+		wp_unschedule_hook( Wormiss_Event_Sync::CANCEL_HOOK );
+		// The Events post type goes away with the plugin: rebuild permalinks next time.
+		delete_option( 'wormiss_rewrite_version' );
+		flush_rewrite_rules( false );
 	}
 
 	/**

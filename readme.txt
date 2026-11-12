@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.5.0
+Stable tag: 0.6.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -139,6 +139,10 @@ edit their iMIS ID.
 
 Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wormiss_events limit="3" category="Workshop" button_text="Register"]). It reads events from the iMIS Events API, so the service account needs read access to events. Under Settings > iMIS Bridge > iMIS events, choose which event status codes count as open (default A) and where each event links (default /iCore/Events/Event_display.aspx?EventKey={EventId}, on the iMIS site). Event templates, unpublished events and events that have finished are never listed.
 
+= How do I create iMIS events from WordPress? =
+
+In iMIS, set up a template event with your usual prices, registration options and sessions. Under Settings > iMIS Bridge > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the iMIS event panel in the sidebar (event code, start, end, place, online link, capacity) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
+
 = How do I make content members only? =
 
 For a whole post or page, open the *Members only* panel in the editor sidebar
@@ -161,6 +165,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.6.0 =
+* Events post type sent to iMIS: a new event copies an iMIS template event (CloneEvent) and saves the WordPress title, description, dates, place, online link and capacity over it; later saves update it. Off and a dry run (iMIS _validate only) by default; optional cancel in iMIS when trashed; the event page shows when, where and a Register button.
 
 = 0.5.0 =
 * Upcoming iMIS events block and [wormiss_events] shortcode: events read from the iMIS Events API, soonest first, as cards or a list, each linking to its iMIS page; templates, unpublished, closed and finished events left out; cached with a fallback copy.

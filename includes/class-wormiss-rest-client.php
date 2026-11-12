@@ -159,19 +159,19 @@ class Wormiss_Rest_Client {
 	/**
 	 * Perform an authenticated request, refreshing the token once on a 401.
 	 *
-	 * @param string      $method       GET, POST, PUT or DELETE.
-	 * @param string      $path         Path beginning with '/', appended to the base URL.
-	 * @param array|null  $json         Body to send as JSON, or null.
-	 * @param string|null $imis_id      The contact the call is about, for the audit log.
-	 * @param bool        $capture_body Whether a successful response body may be kept in the log.
-	 *                                  False for bulk reads that hold many contacts' data.
+	 * @param string            $method       GET, POST, PUT or DELETE.
+	 * @param string            $path         Path beginning with '/', appended to the base URL.
+	 * @param array|object|null $json   Body to send as JSON, or null.
+	 * @param string|null       $imis_id      The contact the call is about, for the audit log.
+	 * @param bool              $capture_body Whether a successful response body may be kept in the log.
+	 *                                        False for bulk reads that hold many contacts' data.
 	 * @return object {code:int, body:mixed, raw:string}
 	 * @throws Wormiss_Exception On a non-2xx response or transport failure.
 	 */
 	public function request(
 		string $method,
 		string $path,
-		?array $json = null,
+		array|object|null $json = null,
 		?string $imis_id = null,
 		bool $capture_body = true
 	): object {
@@ -206,13 +206,13 @@ class Wormiss_Rest_Client {
 	/**
 	 * One HTTP request with the given token (no retry).
 	 *
-	 * @param string     $method Method.
-	 * @param string     $path   Path beginning with '/'.
-	 * @param array|null $json   JSON body or null.
-	 * @param string     $token  Bearer token.
+	 * @param string            $method Method.
+	 * @param string            $path   Path beginning with '/'.
+	 * @param array|object|null $json JSON body or null.
+	 * @param string            $token Bearer token.
 	 * @return object {code:int, body:mixed, raw:string, error:string}
 	 */
-	private function raw_request( string $method, string $path, ?array $json, string $token ): object {
+	private function raw_request( string $method, string $path, array|object|null $json, string $token ): object {
 		$args = [
 			'method'  => strtoupper( $method ),
 			'timeout' => $this->timeout,
@@ -324,6 +324,134 @@ class Wormiss_Rest_Client {
 			throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
 		}
 		return $result->body;
+	}
+
+	/**
+	 * Copy an event (normally a template) to a new event with its own code and name
+	 * (CloneEvent). iMIS copies the prices, registration options and program items.
+	 *
+	 * @param string $template_id EventId of the event to copy.
+	 * @param string $code        The new event's code.
+	 * @param string $name        The new event's name.
+	 * @return string The new event's EventId (from the response, else the code).
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function clone_event( string $template_id, string $code, string $name ): string {
+		if ( ! self::is_event_id( $template_id ) || ! self::is_event_id( $code ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		$result = $this->request(
+			'POST',
+			'/api/Event/_execute',
+			[
+				'$type'          => 'Asi.Soa.Events.DataContracts.EventCloneRequest, Asi.Contracts',
+				'EntityTypeName' => 'Event',
+				'OperationName'  => 'CloneEvent',
+				'EventId'        => $template_id,
+				'EventCode'      => $code,
+				'EventName'      => $name,
+			]
+		);
+		$id     = self::response_event_id( $result->body );
+		return '' !== $id ? $id : $code;
+	}
+
+	/**
+	 * Save a whole event (PUT /api/Event/{EventId}).
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @param object $event    The full EventData, as read and then changed.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function update_event( string $event_id, object $event ): object {
+		if ( ! self::is_event_id( $event_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		return $this->request( 'PUT', '/api/Event/' . rawurlencode( $event_id ), $event );
+	}
+
+	/**
+	 * Ask iMIS whether an event would be accepted, without saving it (POST /api/Event/_validate).
+	 *
+	 * @param object $event EventData.
+	 * @return string[] Problems iMIS reported (empty when it accepted the event).
+	 * @throws Wormiss_Exception If iMIS could not be asked.
+	 */
+	public function validate_event( object $event ): array {
+		$result = $this->request( 'POST', '/api/Event/_validate', $event );
+		$body   = $result->body;
+		$errors = [];
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		if ( is_object( $body ) && isset( $body->ValidationResults ) && is_object( $body->ValidationResults ) ) {
+			foreach ( self::values( $body->ValidationResults->Errors ?? null ) as $error ) {
+				$message  = is_object( $error ) ? (string) ( $error->Message ?? '' ) : (string) $error;
+				$errors[] = '' !== trim( $message ) ? trim( $message ) : __( 'iMIS reported a problem.', 'wormiss' );
+			}
+		}
+		if ( ! $errors && is_object( $body ) && isset( $body->IsValid ) && false === $body->IsValid ) {
+			$errors[] = __( 'iMIS did not accept the event.', 'wormiss' );
+		}
+		// phpcs:enable
+		return $errors;
+	}
+
+	/**
+	 * Cancel an event in iMIS (CancelEvent). Its registrations stay in iMIS.
+	 *
+	 * @param string $event_id iMIS event ID.
+	 * @return object The response.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function cancel_event( string $event_id ): object {
+		if ( ! self::is_event_id( $event_id ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS event ID.', 'wormiss' ) );
+		}
+		return $this->request(
+			'POST',
+			'/api/Event/_execute',
+			[
+				'$type'             => 'Asi.Soa.Core.DataContracts.GenericExecuteRequest, Asi.Contracts',
+				'OperationName'     => 'CancelEvent',
+				'EntityTypeName'    => 'Event',
+				'Parameters'        => [
+					'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.Object, mscorlib]], mscorlib',
+					'$values' => [
+						[
+							'$type'  => 'System.String',
+							'$value' => $event_id,
+						],
+					],
+				],
+				'ParameterTypeName' => [
+					'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
+					'$values' => [ 'System.String' ],
+				],
+				'UseJson'           => false,
+			]
+		);
+	}
+
+	/**
+	 * The new EventId in a CloneEvent response, which may be the event itself, a result
+	 * wrapper, or the bare ID.
+	 *
+	 * @param mixed $body Decoded response.
+	 * @return string '' if none is found.
+	 */
+	public static function response_event_id( $body ): string {
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		foreach ( [ $body, is_object( $body ) ? ( $body->Result ?? null ) : null ] as $candidate ) {
+			if ( is_string( $candidate ) && self::is_event_id( $candidate ) ) {
+				return $candidate;
+			}
+			if ( is_object( $candidate ) && isset( $candidate->EventId ) && is_string( $candidate->EventId )
+				&& self::is_event_id( $candidate->EventId ) ) {
+				return $candidate->EventId;
+			}
+		}
+		// phpcs:enable
+		return '';
 	}
 
 	/**

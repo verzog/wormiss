@@ -115,6 +115,13 @@ class Wormiss_Admin {
 		self::field( 'event_statuses', __( 'Event statuses to show', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
 
+		$title = __( 'Send WordPress events to iMIS', 'wormiss' );
+		add_settings_section( 'wormiss_event_sync', $title, [ __CLASS__, 'event_sync_intro' ], self::PAGE );
+		self::field( 'event_sync_enabled', __( 'Send events to iMIS', 'wormiss' ), 'wormiss_event_sync' );
+		self::field( 'event_sync_dry_run', __( 'Dry run (check only)', 'wormiss' ), 'wormiss_event_sync' );
+		self::field( 'event_template_id', __( 'iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
+		self::field( 'event_cancel_on_trash', __( 'Cancel in iMIS when trashed', 'wormiss' ), 'wormiss_event_sync' );
+
 		$title = __( 'Record activity in iMIS', 'wormiss' );
 		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
 		self::field( 'activity_enabled', __( 'Record activity', 'wormiss' ), 'wormiss_activity' );
@@ -230,6 +237,22 @@ class Wormiss_Admin {
 			. esc_html__( 'The Upcoming iMIS events block lists events from the iMIS Events API, soonest first.', 'wormiss' )
 			. ' ' . esc_html__( 'The service account needs read access to events.', 'wormiss' )
 			. ' ' . esc_html__( 'Templates and unpublished events are left out.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the event sending section (and the marker that its checkboxes were shown).
+	 *
+	 * @return void
+	 */
+	public static function event_sync_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[event_sync_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'When an editor publishes or updates an Event, it is sent to iMIS in the background.', 'wormiss' )
+			. ' ' . esc_html__( 'A new event is a copy of the template event (prices, registration options and sessions),', 'wormiss' )
+			. ' ' . esc_html__( 'with the title, description, dates, place, online link and capacity from WordPress.', 'wormiss' )
+			. ' ' . esc_html__( 'The service account needs rights to create and edit events.', 'wormiss' )
+			. ' ' . esc_html__( 'Keep the dry run on until it works: iMIS only checks the event, and nothing is created.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -361,6 +384,17 @@ class Wormiss_Admin {
 					. esc_html__( 'iMIS event status codes, comma-separated (default A, for active). Blank shows any status.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'event_template_id':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" placeholder="TEMPLATE" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'The event code of an iMIS event template set up with your usual prices and options.', 'wormiss' )
+					. '</p>';
+				return;
 			case 'event_url':
 				printf(
 					'<input type="text" class="large-text code" id="%1$s" name="%2$s" value="%3$s" />',
@@ -388,12 +422,20 @@ class Wormiss_Admin {
 			case 'record_reads':
 			case 'record_downloads':
 			case 'record_forms':
+			case 'event_sync_enabled':
+			case 'event_sync_dry_run':
+			case 'event_cancel_on_trash':
 				printf(
 					'<input type="checkbox" id="%1$s" name="%2$s" value="1" %3$s />',
 					esc_attr( $id ),
 					esc_attr( $name ),
 					checked( (bool) $value, true, false )
 				);
+				if ( 'event_cancel_on_trash' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Off by default: cancelling affects registrants. Registrations stay in iMIS.', 'wormiss' )
+						. '</span>';
+				}
 				if ( 'log_capture' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'For troubleshooting only: bodies can hold members\' personal details.', 'wormiss' )
