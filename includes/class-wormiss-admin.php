@@ -808,6 +808,19 @@ class Wormiss_Admin {
 		submit_button( __( 'Test connection', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
+		echo '<h2 id="wormiss-event-push">' . esc_html__( 'Send events to iMIS now', 'wormiss' ) . '</h2>';
+		echo '<p class="description">'
+			. esc_html__( 'Sends every published Event made here that iMIS does not have up to date (never sent, edited', 'wormiss' )
+			. ' ' . esc_html__( 'since, or last sent with a problem), 10 a minute in the background; also once a day. Uses the', 'wormiss' )
+			. ' ' . esc_html__( 'sending switch and dry run above. Events linked to iMIS are never sent.', 'wormiss' ) . '</p>';
+		$summary = Wormiss_Event_Push::summary();
+		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'Events have not been sent this way yet.', 'wormiss' ) ) . '</p>';
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		echo '<input type="hidden" name="action" value="wormiss_event_push_now" />';
+		wp_nonce_field( 'wormiss_event_push_now' );
+		submit_button( __( 'Send events to iMIS now', 'wormiss' ), 'secondary', 'submit', false );
+		echo '</form>';
+
 		echo '<h2 id="wormiss-event-import">' . esc_html__( 'Import iMIS events now', 'wormiss' ) . '</h2>';
 		$summary = Wormiss_Event_Import::summary();
 		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The event import has not run yet.', 'wormiss' ) ) . '</p>';
