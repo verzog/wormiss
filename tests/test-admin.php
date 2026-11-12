@@ -156,6 +156,7 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 	 */
 	public function test_settings_saved_notice(): void {
 		require_once ABSPATH . 'wp-admin/includes/template.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
 		add_settings_error( 'general', 'settings_updated', 'Settings saved.', 'success' );
 		ob_start();
