@@ -471,4 +471,113 @@ class Test_Wormiss_Event_Sync extends Wormiss_Test_Case {
 		$this->assertSame( 'A1', Wormiss_Rest_Client::response_event_id( (object) [ 'Result' => (object) [ 'EventId' => 'A1' ] ] ) );
 		$this->assertSame( '', Wormiss_Rest_Client::response_event_id( (object) [ 'EventId' => '../x' ] ) );
 	}
+
+	/**
+	 * The address goes into iMIS's fullAddressAttribute (other attributes kept); a blank state
+	 * or country keeps the template's; with no address at all nothing there changes.
+	 *
+	 * @return void
+	 */
+	public function test_address(): void {
+		$event   = json_decode(
+			(string) wp_json_encode(
+				[
+					'AdditionalAttributes' => [
+						'$type'   => 'Asi.Soa.Core.DataContracts.GenericPropertyDataCollection, Asi.Contracts',
+						'$values' => [
+							[
+								'Name'  => 'fullAddressAttribute',
+								'Value' => [
+									'$type'   => 'Asi.Soa.Membership.DataContracts.FullAddressData, Asi.Contracts',
+									'Address' => [
+										'AddressLines' => [ '$values' => [ '', '', '' ] ],
+										'CityName'     => '',
+										'CountryCode'  => 'Australia',
+										'CountrySubEntityCode' => 'QLD',
+										'PostalCode'   => '',
+									],
+								],
+							],
+							[
+								'Name'  => 'WebEnabled',
+								'Value' => true,
+							],
+						],
+					],
+				]
+			)
+		);
+		$address = [
+			'line1'    => 'Merivale St',
+			'line2'    => '',
+			'city'     => 'South Brisbane',
+			'state'    => '',
+			'postcode' => '4101',
+			'country'  => '',
+		];
+		Wormiss_Event_Sync::apply_address( $event, $address );
+		$saved = json_decode( (string) wp_json_encode( $event ), true );
+		$this->assertCount( 2, $saved['AdditionalAttributes']['$values'] );
+		$to = $saved['AdditionalAttributes']['$values'][0]['Value']['Address'];
+		$this->assertSame( [ 'Merivale St', '', '' ], $to['AddressLines']['$values'] );
+		$this->assertSame( 'South Brisbane', $to['CityName'] );
+		$this->assertSame( '4101', $to['PostalCode'] );
+		$this->assertSame( 'QLD', $to['CountrySubEntityCode'] );
+		$this->assertSame( 'Australia', $to['CountryCode'] );
+		$this->assertSame( "Merivale St\rSouth Brisbane QLD  4101\rAUSTRALIA", $to['FullAddress'] );
+		$this->assertSame( 'WebEnabled', $saved['AdditionalAttributes']['$values'][1]['Name'] );
+		$this->assertSame( 'Merivale St, South Brisbane 4101', Wormiss_Event_Sync::address_text( $address ) );
+
+		// No fullAddressAttribute yet: one is added.
+		$bare = (object) [];
+		Wormiss_Event_Sync::apply_address(
+			$bare,
+			[
+				'state'   => 'NSW',
+				'country' => 'Australia',
+			] + $address
+		);
+		$added = json_decode( (string) wp_json_encode( $bare ), true )['AdditionalAttributes']['$values'][0];
+		$this->assertSame( 'fullAddressAttribute', $added['Name'] );
+		$this->assertSame( 'NSW', $added['Value']['Address']['CountrySubEntityCode'] );
+
+		$this->assertFalse( Wormiss_Event_Sync::has_address( array_fill_keys( array_keys( $address ), '' ) ) );
+	}
+
+	/**
+	 * The address typed on the event is cleaned, sent with the event, and shown on its page.
+	 *
+	 * @return void
+	 */
+	public function test_address_sent_and_shown(): void {
+		$this->turn_on();
+		$post_id = $this->event(
+			[
+				Wormiss_Event_Sync::META_ADDRESS1 => ' 1 Grey St <b>x</b> ',
+				Wormiss_Event_Sync::META_CITY     => 'South Brisbane',
+				Wormiss_Event_Sync::META_STATE    => 'qld',
+				Wormiss_Event_Sync::META_POSTCODE => '4101!',
+				Wormiss_Event_Sync::META_COUNTRY  => 'Narnia',
+			]
+		);
+		$this->assertSame( '1 Grey St x', get_post_meta( $post_id, Wormiss_Event_Sync::META_ADDRESS1, true ) );
+		$this->assertSame( 'QLD', get_post_meta( $post_id, Wormiss_Event_Sync::META_STATE, true ) );
+		$this->assertSame( '4101', get_post_meta( $post_id, Wormiss_Event_Sync::META_POSTCODE, true ) );
+		$this->assertSame( '', get_post_meta( $post_id, Wormiss_Event_Sync::META_COUNTRY, true ) );
+
+		$this->imis->token()
+			->reply( '/api/Event/_execute', 200, [ 'EventId' => 'CONF27' ] )
+			->reply( '/api/Event/CONF27', 200, self::imis_event( 'CONF27' ) )
+			->reply( '/api/Event/CONF27', 200, '{}' );
+		$this->assertSame( 'synced', Wormiss_Event_Sync::sync( $post_id ) );
+		$attribute = $this->body( 3 )['AdditionalAttributes']['$values'][0];
+		$this->assertSame( 'fullAddressAttribute', $attribute['Name'] );
+		$this->assertSame( 'South Brisbane', $attribute['Value']['Address']['CityName'] );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$GLOBALS['wp_query']->the_post();
+		$html = apply_filters( 'the_content', get_the_content() );
+		wp_reset_postdata();
+		$this->assertStringContainsString( 'Brisbane Convention Centre<br />1 Grey St x, South Brisbane QLD 4101', $html );
+	}
 }

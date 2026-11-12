@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.22.2)
+## What it does (0.23.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -48,7 +48,7 @@ whose iMIS REST client and audit log it reuses.
   templates are left out. Optional category filter. Cached like the data block.
 
 * **Events sent to iMIS:** an Events post type (with a sidebar panel for the event
-  code, start, end, place, online link, capacity, attendance and waitlist). When an editor publishes or
+  code, start, end, place, address, online link, capacity, attendance and waitlist). When an editor publishes or
   updates one, it is sent in the background: a new event is a copy of an iMIS
   template event (CloneEvent, bringing its prices, registration options and program
   items) with the WordPress details saved over it; later saves update it. Off and a
