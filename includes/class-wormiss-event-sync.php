@@ -278,11 +278,13 @@ class Wormiss_Event_Sync {
 	 */
 	private static function rest_cpd( int $post_id ): array {
 		$owned    = Wormiss_Event_Cpd::owned( $post_id );
+		$editable = Wormiss_Event_Cpd::editable( $post_id );
 		$event_id = Wormiss_Event_Cpd::event_id( $post_id );
 		return [
 			'owned'    => $owned,
-			'editable' => Wormiss_Event_Cpd::editable( $post_id ),
-			'imis'     => ! $owned && '' !== $event_id ? Wormiss_Event_Cpd::rows( $event_id ) : [],
+			'editable' => $editable,
+			// Only for an editor to start from (a linked event's CPD is shown as iMIS has it).
+			'imis'     => $editable && ! $owned && '' !== $event_id ? Wormiss_Event_Cpd::rows( $event_id ) : [],
 		];
 	}
 
