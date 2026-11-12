@@ -359,6 +359,7 @@ class Wormiss_Event_Sync {
 		$html = wp_kses_post( do_blocks( $post->post_content ) );
 		$type = Wormiss_Event_Types::for_event( $post->ID );
 		return [
+			'imis_id'      => (string) $meta( self::META_IMIS_ID ),
 			'template'     => $type['template'],
 			'category'     => $type['category'],
 			'type_problem' => $type['problem'],
@@ -383,7 +384,8 @@ class Wormiss_Event_Sync {
 		if ( '' !== ( $details['type_problem'] ?? '' ) ) {
 			return $details['type_problem'];
 		}
-		if ( '' === ( $details['template'] ?? '' ) ) {
+		// A template is only used to create the event; one already in iMIS is just updated.
+		if ( '' === ( $details['template'] ?? '' ) && '' === ( $details['imis_id'] ?? '' ) ) {
 			return __( 'No iMIS template event: give this event type one, or set the default in Settings > iMIS Bridge.', 'wormiss' );
 		}
 		if ( '' === $details['code'] ) {

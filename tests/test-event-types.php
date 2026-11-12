@@ -197,6 +197,28 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An event already in iMIS is still updated when it no longer has a template (no type, a
+	 * type without one, and no default), with the new type's category.
+	 *
+	 * @return void
+	 */
+	public function test_update_needs_no_template(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_template_id' => '' ] ) );
+		$post_id = $this->event( [ $this->type( 'Category only', '', 'SEMINAR' ) ] );
+		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $post_id ) );
+		$this->assertSame( [], $this->imis->requests );
+
+		update_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, 'DERM27' );
+		$this->imis->token()
+			->reply( '/api/Event/DERM27', 200, [ 'EventId' => 'DERM27' ] )
+			->reply( '/api/Event/DERM27', 200, '{}' );
+		$this->assertSame( 'synced', Wormiss_Event_Sync::sync( $post_id ) );
+		$saved = json_decode( (string) $this->imis->requests[2]['body'], true );
+		$this->assertSame( 'SEMINAR', $saved['Category']['EventCategoryId'] );
+		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
+	}
+
+	/**
 	 * The type form saves cleaned IDs with a valid nonce, and nothing without one.
 	 *
 	 * @return void
