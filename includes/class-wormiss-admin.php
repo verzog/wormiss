@@ -119,7 +119,7 @@ class Wormiss_Admin {
 		add_settings_section( 'wormiss_event_sync', $title, [ __CLASS__, 'event_sync_intro' ], self::PAGE );
 		self::field( 'event_sync_enabled', __( 'Send events to iMIS', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_sync_dry_run', __( 'Dry run (check only)', 'wormiss' ), 'wormiss_event_sync' );
-		self::field( 'event_template_id', __( 'iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
+		self::field( 'event_template_id', __( 'Default iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_cancel_on_trash', __( 'Cancel in iMIS when trashed', 'wormiss' ), 'wormiss_event_sync' );
 
 		$title = __( 'Record activity in iMIS', 'wormiss' );
@@ -393,6 +393,7 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'The event code of an iMIS event template set up with your usual prices and options.', 'wormiss' )
+					. ' ' . esc_html__( 'Used for events with no type, or whose type has no template (Events > Event types).', 'wormiss' )
 					. '</p>';
 				return;
 			case 'event_url':

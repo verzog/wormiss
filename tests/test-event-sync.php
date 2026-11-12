@@ -37,6 +37,7 @@ class Test_Wormiss_Event_Sync extends Wormiss_Test_Case {
 	 */
 	public function set_up(): void {
 		parent::set_up();
+		Wormiss_Event_Types::register();
 		Wormiss_Event_Sync::register();
 		wp_unschedule_hook( Wormiss_Event_Sync::SYNC_HOOK );
 		wp_unschedule_hook( Wormiss_Event_Sync::CANCEL_HOOK );

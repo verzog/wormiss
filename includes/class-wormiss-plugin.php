@@ -49,6 +49,7 @@ class Wormiss_Plugin {
 		Wormiss_Members_Only::init();
 		Wormiss_Activity::init();
 		Wormiss_Completion::init();
+		Wormiss_Event_Types::init();
 		Wormiss_Event_Sync::init();
 		if ( is_admin() ) {
 			Wormiss_Admin::init();
