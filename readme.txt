@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.23.0
+Stable tag: 0.24.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -141,7 +141,7 @@ Add the Upcoming iMIS events block (or the [wormiss_events] shortcode, e.g. [wor
 
 = How do I create iMIS events from WordPress? =
 
-In iMIS, set up a template event with your usual prices, registration options and sessions. Under Wormiss > Settings > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the iMIS event panel in the sidebar (event code, start, end, place, address, online link, capacity) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
+In iMIS, set up a template event with your usual prices, registration options and sessions. Under Wormiss > Settings > Send WordPress events to iMIS, enter its event code, and turn sending on with the dry run still ticked. Then add an Event (Events > Add New Event), fill in the "Event details" box under the content (dates, place and address, places, waitlist, and the event code on the iMIS tab) and publish. The panel shows what iMIS said. When dry runs are accepted, untick the dry run and update the event: it is copied from the template and saved in iMIS, and later updates change it there. Only editors and administrators can send events. The service account needs rights to create and edit events.
 
 = Can different kinds of event use different iMIS templates? =
 
@@ -197,6 +197,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.24.0 =
+* "Event details": a full-width box under an Event's content, with tabs for When, Where (place, address, online link), Places (capacity and attendance), Waitlist and iMIS (event code, existing iMIS event ID), in place of the long list of fields in the sidebar. It saves the same details, cleaned the same way, before the event is sent to iMIS. The sidebar's "iMIS event" panel now just shows whether the event is sent, what happened last time and places left. A linked event shows only its link.
 
 = 0.23.0 =
 * Event address: street (two lines), suburb or city, state, postcode and country (Australia or New Zealand) in the iMIS event panel. iMIS keeps an event's address with the event (its "fullAddressAttribute"), so with any part filled in, the whole address is saved there when the event is sent (a blank state or country keeps the template's); with none, the template's address stays. The event page shows the address under the place. Before, only the place name was sent, and iMIS kept the template's address.

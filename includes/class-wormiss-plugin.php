@@ -55,6 +55,7 @@ class Wormiss_Plugin {
 		Wormiss_User_Sync::init();
 		Wormiss_Member_Push::init();
 		Wormiss_Event_Sync::init();
+		Wormiss_Event_Editor::init();
 		Wormiss_Event_Import::init();
 		Wormiss_Event_Push::init();
 		if ( is_admin() ) {
