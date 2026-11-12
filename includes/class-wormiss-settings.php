@@ -57,6 +57,9 @@ class Wormiss_Settings {
 			'timeout'                    => 15,
 			'cache_minutes'              => 15,
 			'allowed_queries'            => [],
+			// For each approved query: who may see it, which of its columns may show, and whether
+			// it lists people (then it is never shown on the website). See query_rule().
+			'query_rules'                => [],
 			'log_enabled'                => true,
 			'log_capture'                => false,
 			'log_retention_days'         => 30,
@@ -220,6 +223,45 @@ class Wormiss_Settings {
 		return '' !== $query && in_array( $query, self::member_queries(), true );
 	}
 
+	/** Who may see an approved query on the website. */
+	const AUDIENCES = [ 'staff', 'members', 'everyone' ];
+
+	/**
+	 * An approved query's rules: audience (staff, members or everyone; staff until an
+	 * administrator chooses), the only columns that may show (none until chosen), and whether
+	 * it lists people.
+	 *
+	 * @param string $query IQA path.
+	 * @return array{audience: string, columns: string[], people: bool}
+	 */
+	public static function query_rule( string $query ): array {
+		$rules = self::get( 'query_rules' );
+		$rule  = is_array( $rules ) && is_array( $rules[ $query ] ?? null ) ? $rules[ $query ] : [];
+		return [
+			'audience' => in_array( $rule['audience'] ?? '', self::AUDIENCES, true ) ? $rule['audience'] : 'staff',
+			'columns'  => is_array( $rule['columns'] ?? null ) ? array_values( array_map( 'strval', $rule['columns'] ) ) : [],
+			'people'   => ! empty( $rule['people'] ),
+		];
+	}
+
+	/**
+	 * Column names from text: comma or line separated, letters, digits, _ and spaces only.
+	 *
+	 * @param mixed $text Raw text, or an already-cleaned list.
+	 * @return string[]
+	 */
+	public static function parse_columns( $text ): array {
+		$text    = is_array( $text ) ? implode( ',', $text ) : (string) $text;
+		$columns = [];
+		foreach ( preg_split( '/[,\n]+/', $text ) as $column ) {
+			$column = trim( (string) $column );
+			if ( 1 === preg_match( '/^[A-Za-z0-9_ ]{1,64}$/', $column ) ) {
+				$columns[ $column ] = $column;
+			}
+		}
+		return array_values( $columns );
+	}
+
 	/**
 	 * Whether a query is on the approved list (exact match).
 	 *
@@ -345,6 +387,27 @@ class Wormiss_Settings {
 			// so accept the already-cleaned list as well as the text box.
 			$queries                  = $input['allowed_queries'];
 			$clean['allowed_queries'] = self::parse_queries( is_array( $queries ) ? implode( "\n", $queries ) : (string) $queries );
+		}
+		if ( isset( $input['query_rules'] ) && is_array( $input['query_rules'] ) ) {
+			// Only for approved queries (as just saved, else as stored).
+			$approved             = $clean['allowed_queries'] ?? self::allowed_queries();
+			$clean['query_rules'] = [];
+			// The form keys each rule by md5( path ) (paths can hold [ and ]); a saved list by path.
+			$by_hash = [];
+			foreach ( $approved as $path ) {
+				$by_hash[ md5( $path ) ] = $path;
+			}
+			foreach ( $input['query_rules'] as $key => $rule ) {
+				$query = in_array( (string) $key, $approved, true ) ? (string) $key : ( $by_hash[ (string) $key ] ?? '' );
+				if ( '' === $query || ! is_array( $rule ) ) {
+					continue;
+				}
+				$clean['query_rules'][ (string) $query ] = [
+					'audience' => in_array( $rule['audience'] ?? '', self::AUDIENCES, true ) ? $rule['audience'] : 'staff',
+					'columns'  => self::parse_columns( $rule['columns'] ?? '' ),
+					'people'   => ! empty( $rule['people'] ),
+				];
+			}
 		}
 		if ( isset( $input['member_queries'] ) ) {
 			$queries                 = $input['member_queries'];

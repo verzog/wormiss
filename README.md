@@ -5,13 +5,17 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.25.1)
+## What it does (0.26.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
   (DD/MM/YYYY on an Australian site) and an optional link per row.
 * **Approved queries only:** an administrator lists the IQA queries pages may show;
-  blocks and shortcodes cannot run anything else.
+  blocks and shortcodes cannot run anything else. For each one the administrator
+  sets who may see it (staff, signed-in members or everyone) and the only columns
+  that may show. A query that lists people, or whose columns look personal, is never
+  shown on the website. Only administrators can add the iMIS data block or shortcode,
+  and the settings list the pages that show each query.
 * **Caching with a fallback:** results are kept for a set time (default 15 minutes);
   if iMIS fails, the last good copy (up to a week old) is shown.
 * **Connection test** on the settings page, and an **audit log** of every call

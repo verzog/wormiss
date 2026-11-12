@@ -61,12 +61,20 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The editor gets the approved queries, but never the connection details.
+	 * Administrators get the approved queries in the editor (editors do not: only administrators
+	 * place iMIS data), but never the connection details.
 	 *
 	 * @return void
 	 */
 	public function test_editor_data_has_no_secrets(): void {
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		wp_register_script( 'wormiss-iqa-editor-script', 'x.js', [], '1', false );
+		Wormiss_Plugin::editor_data();
+		$inline = implode( '', (array) wp_scripts()->get_data( 'wormiss-iqa-editor-script', 'before' ) );
+		$this->assertStringContainsString( '"queries":[]', $inline );
+
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+		wp_deregister_script( 'wormiss-iqa-editor-script' );
 		wp_register_script( 'wormiss-iqa-editor-script', 'x.js', [], '1', false );
 		Wormiss_Plugin::editor_data();
 		$inline = implode( '', (array) wp_scripts()->get_data( 'wormiss-iqa-editor-script', 'before' ) );

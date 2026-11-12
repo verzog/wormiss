@@ -71,6 +71,8 @@ class Wormiss_Plugin {
 	 */
 	public static function register_content(): void {
 		// The iqa block registers the shared display stylesheet, so it comes first.
+		// Only administrators can add the iMIS data block (it can show any approved query).
+		add_filter( 'block_type_metadata', [ __CLASS__, 'iqa_block_admins_only' ] );
 		register_block_type( WORMISS_DIR . '/blocks/iqa' );
 		register_block_type( WORMISS_DIR . '/blocks/member' );
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
@@ -79,6 +81,21 @@ class Wormiss_Plugin {
 		add_shortcode( 'wormiss_iqa', [ 'Wormiss_Iqa_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_member', [ 'Wormiss_Member_Display', 'shortcode' ] );
 		add_shortcode( 'wormiss_events', [ 'Wormiss_Events', 'shortcode' ] );
+	}
+
+	/**
+	 * Hide the iMIS data block from the inserter for anyone but administrators. (Pages they make
+	 * with it anyway show nothing: see Wormiss_Iqa_Display::placed_by_admin().)
+	 *
+	 * @param array $metadata Block metadata.
+	 * @return array
+	 */
+	public static function iqa_block_admins_only( $metadata ) {
+		if ( is_array( $metadata ) && 'wormiss/iqa' === ( $metadata['name'] ?? '' ) && ! current_user_can( 'manage_options' ) ) {
+			$metadata['supports']             = is_array( $metadata['supports'] ?? null ) ? $metadata['supports'] : [];
+			$metadata['supports']['inserter'] = false;
+		}
+		return $metadata;
 	}
 
 	/**
@@ -91,7 +108,8 @@ class Wormiss_Plugin {
 			return;
 		}
 		$data = [
-			'queries'    => Wormiss_Settings::allowed_queries(),
+			// Only administrators place iMIS data, so only they get the list of approved queries.
+			'queries'    => current_user_can( 'manage_options' ) ? Wormiss_Settings::allowed_queries() : [],
 			'configured' => Wormiss_Settings::is_configured(),
 		];
 		wp_add_inline_script( 'wormiss-iqa-editor-script', 'window.wormissIqa = ' . wp_json_encode( $data ) . ';', 'before' );

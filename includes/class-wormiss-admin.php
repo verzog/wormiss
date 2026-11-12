@@ -551,6 +551,9 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'One IQA document path per line, e.g. $/Events/UpcomingEvents.', 'wormiss' ) . '</p>';
+				if ( 'allowed_queries' === $key ) {
+					self::query_rules_table( $queries );
+				}
 				return;
 			case 'member_id_source':
 				printf( '<select id="%1$s" name="%2$s">', esc_attr( $id ), esc_attr( $name ) );
@@ -953,6 +956,69 @@ class Wormiss_Admin {
 			$result['ok'] ? 'success' : 'error',
 			esc_html( (string) $result['message'] )
 		);
+	}
+
+	/**
+	 * Each approved query's rules: who may see it, the only columns that may show, whether it
+	 * lists people (then never on the website), and the pages that show it.
+	 *
+	 * @param string[] $queries Approved queries.
+	 * @return void
+	 */
+	private static function query_rules_table( array $queries ): void {
+		if ( ! $queries ) {
+			return;
+		}
+		$used      = Wormiss_Iqa_Display::where_used();
+		$audiences = [
+			'staff'    => __( 'Staff only (signed-in editors and administrators)', 'wormiss' ),
+			'members'  => __( 'Signed-in members', 'wormiss' ),
+			'everyone' => __( 'Everyone', 'wormiss' ),
+		];
+		echo '<h4>' . esc_html__( 'What each approved query may show', 'wormiss' ) . '</h4>';
+		echo '<p class="description">' . esc_html__( 'Only the columns listed here are ever shown, whatever a page asks for, and only to the audience chosen.', 'wormiss' )
+			. ' ' . esc_html__( 'A query that lists people (or whose columns look personal: names, emails, phones, addresses, birth dates, IDs) is never shown on the website.', 'wormiss' )
+			. ' ' . esc_html__( 'Only administrators can add iMIS data to pages. Save the list above first to set up a newly approved query.', 'wormiss' ) . '</p>';
+		echo '<table class="widefat striped"><thead><tr><th scope="col">' . esc_html__( 'Query', 'wormiss' ) . '</th><th scope="col">'
+			. esc_html__( 'Who may see it', 'wormiss' ) . '</th><th scope="col">' . esc_html__( 'Columns that may show (comma-separated)', 'wormiss' )
+			. '</th><th scope="col">' . esc_html__( 'Lists people', 'wormiss' ) . '</th><th scope="col">' . esc_html__( 'Used on', 'wormiss' )
+			. '</th></tr></thead><tbody>';
+		foreach ( $queries as $query ) {
+			$rule = Wormiss_Settings::query_rule( $query );
+			// Keyed by a hash: a path can hold [ and ], which form field names cannot.
+			$base = Wormiss_Settings::OPTION . '[query_rules][' . md5( $query ) . ']';
+			echo '<tr><td><code>' . esc_html( $query ) . '</code></td><td><select name="' . esc_attr( $base . '[audience]' ) . '" aria-label="'
+				. esc_attr__( 'Who may see it', 'wormiss' ) . '">';
+			foreach ( $audiences as $audience => $label ) {
+				printf( '<option value="%1$s"%2$s>%3$s</option>', esc_attr( $audience ), selected( $rule['audience'], $audience, false ), esc_html( $label ) );
+			}
+			echo '</select></td><td><input type="text" class="regular-text code" name="' . esc_attr( $base . '[columns]' ) . '" value="'
+				. esc_attr( implode( ', ', $rule['columns'] ) ) . '" aria-label="' . esc_attr__( 'Columns that may show', 'wormiss' ) . '" />';
+			$personal = array_values( array_filter( $rule['columns'], [ 'Wormiss_Iqa_Display', 'is_personal_column' ] ) );
+			if ( $personal ) {
+				echo '<p class="description" style="color:#b32d2e"><strong>' . esc_html__( 'Personal data:', 'wormiss' ) . '</strong> '
+					. esc_html( implode( ', ', $personal ) ) . ' — ' . esc_html__( 'so this query is never shown on the website.', 'wormiss' ) . '</p>';
+			} elseif ( ! $rule['columns'] ) {
+				echo '<p class="description">' . esc_html__( 'None yet, so nothing shows.', 'wormiss' ) . '</p>';
+			}
+			printf(
+				'</td><td><label><input type="checkbox" name="%1$s" value="1"%2$s /> %3$s</label></td><td>',
+				esc_attr( $base . '[people]' ),
+				checked( $rule['people'], true, false ),
+				esc_html__( 'Yes: never on the website', 'wormiss' )
+			);
+			$pages = $used[ $query ] ?? [];
+			if ( ! $pages ) {
+				echo esc_html__( 'Not used', 'wormiss' );
+			}
+			foreach ( $pages as $page ) {
+				$link = get_edit_post_link( $page->ID );
+				echo '<a href="' . esc_url( (string) $link ) . '">' . esc_html( '' !== $page->post_title ? $page->post_title : '#' . $page->ID ) . '</a> ('
+					. esc_html( $page->post_status ) . ')<br />';
+			}
+			echo '</td></tr>';
+		}
+		echo '</tbody></table>';
 	}
 
 	/**
