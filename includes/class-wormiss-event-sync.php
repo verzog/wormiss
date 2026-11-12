@@ -453,6 +453,10 @@ class Wormiss_Event_Sync {
 			$message = '' !== $imis_id
 				? __( 'Dry run: iMIS accepted the changes. Nothing was sent.', 'wormiss' )
 				: __( 'Dry run: iMIS accepted the new event. Nothing was created.', 'wormiss' );
+			if ( '' !== $imis_id && Wormiss_Event_Cpd::owned( $post->ID ) ) {
+				// What would change in its CPD hours (logged, nothing sent).
+				$message = trim( $message . ' ' . Wormiss_Event_Cpd::push( $post->ID, $imis_id, true, $client ) );
+			}
 			return [ 'dry_run', $message ];
 		}
 
@@ -477,7 +481,18 @@ class Wormiss_Event_Sync {
 		}
 		$client->update_event( $imis_id, self::apply( $client->get_event( $imis_id ), $details ) );
 		/* translators: %s: iMIS event ID. */
-		return [ 'synced', sprintf( __( 'Saved in iMIS as event %s.', 'wormiss' ), $imis_id ) ];
+		$message = sprintf( __( 'Saved in iMIS as event %s.', 'wormiss' ), $imis_id );
+		if ( Wormiss_Event_Cpd::owned( $post->ID ) ) {
+			// The CPD hours set here, after the event itself (a CPD failure is reported, and the
+			// next send tries again: lines already saved keep their iMIS row numbers).
+			try {
+				$message = trim( $message . ' ' . Wormiss_Event_Cpd::push( $post->ID, $imis_id, false, $client ) );
+			} catch ( Wormiss_Exception $e ) {
+				/* translators: 1: iMIS event ID, 2: reason. */
+				return [ 'error', sprintf( __( 'Saved in iMIS as event %1$s, but its CPD hours were not: %2$s', 'wormiss' ), $imis_id, $e->getMessage() ) ];
+			}
+		}
+		return [ 'synced', $message ];
 	}
 
 	/**

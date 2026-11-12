@@ -222,8 +222,10 @@ class Wormiss_Event_Editor {
 		if ( $linked ) {
 			echo '<p class="description">' . esc_html__( 'Linked to an iMIS event: its dates, place, places and registration come from iMIS.', 'wormiss' ) . '</p>';
 		}
-		// Shown, not edited: the event's CPD hours as its iMIS CPD Hours panel has them.
-		$extra = Wormiss_Event_Cpd::is_on() ? [ 'cpd' => __( 'CPD hours', 'wormiss' ) ] : [];
+		// The event's CPD hours: set here for an event made in WordPress (by editors and
+		// administrators), else shown as its iMIS CPD Hours panel has them.
+		$cpd   = Wormiss_Event_Cpd::is_on() || Wormiss_Event_Cpd::editable( (int) $post->ID );
+		$extra = $cpd ? [ 'cpd' => __( 'CPD hours', 'wormiss' ) ] : [];
 		echo '<div class="wormiss-tabs__list" role="tablist" hidden>';
 		$first = true;
 		foreach ( array_merge( array_map( static fn( $tab ) => $tab[0], $tabs ), $extra ) as $key => $label ) {
@@ -259,7 +261,8 @@ class Wormiss_Event_Editor {
 				'<div class="wormiss-tabs__panel" role="tabpanel" id="wormiss-panel-%1$s" aria-labelledby="wormiss-tab-%1$s"><h3 class="wormiss-tabs__heading">%2$s</h3>%3$s</div>',
 				esc_attr( $key ),
 				esc_html( $label ),
-				Wormiss_Event_Cpd::admin_html( (int) $post->ID ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in admin_html().
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in form_html() and admin_html().
+				Wormiss_Event_Cpd::editable( (int) $post->ID ) ? Wormiss_Event_Cpd::form_html( (int) $post->ID ) : Wormiss_Event_Cpd::admin_html( (int) $post->ID )
 			);
 		}
 		echo '</div>';
@@ -344,6 +347,7 @@ class Wormiss_Event_Editor {
 				update_post_meta( (int) $post_id, $meta_key, (string) wp_unslash( $_POST[ $meta_key ] ) );
 			}
 		}
+		Wormiss_Event_Cpd::save( (int) $post_id );
 		// Send now: a block editor save waits a minute for this box (see maybe_queue()).
 		wp_clear_scheduled_hook( Wormiss_Event_Sync::SYNC_HOOK, [ (int) $post_id ] );
 	}

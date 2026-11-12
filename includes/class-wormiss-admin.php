@@ -742,7 +742,7 @@ class Wormiss_Admin {
 				if ( 'event_cpd' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'Event pages show the hours from each event\'s CPD Hours panel in iMIS (EventCPD), added up', 'wormiss' )
-						. ' ' . esc_html__( 'per category, with its program level requirements. Read only.', 'wormiss' )
+						. ' ' . esc_html__( 'per category, with its program level requirements.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'event_publish_dates' === $key ) {

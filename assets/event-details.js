@@ -76,6 +76,34 @@
 		document.querySelectorAll('.wormiss-tabs:not(.wormiss-tabs--ready)').forEach(setUp);
 	}
 
+	/**
+	 * "Add line" in the CPD hours tab: a copy of the blank line, with the next free index.
+	 */
+	document.addEventListener('click', (event) => {
+		const button = event.target.closest('.wormiss-cpd-add');
+		if (!button) {
+			return;
+		}
+		const panel = button.closest('.wormiss-tabs__panel') || document;
+		const template = panel.querySelector('.wormiss-cpd-template');
+		const body = panel.querySelector('.wormiss-cpd-rows tbody');
+		if (!template || !body) {
+			return;
+		}
+		const next = parseInt(button.dataset.next || '0', 10);
+		const max = parseInt(button.dataset.max || '0', 10);
+		if (max && body.children.length >= max) {
+			button.disabled = true;
+			return;
+		}
+		body.insertAdjacentHTML('beforeend', template.innerHTML.replace(/__i__/g, String(next)));
+		button.dataset.next = String(next + 1);
+		const first = body.lastElementChild && body.lastElementChild.querySelector('input');
+		if (first) {
+			first.focus();
+		}
+	});
+
 	if (document.readyState === 'loading') {
 		document.addEventListener('DOMContentLoaded', start);
 	} else {

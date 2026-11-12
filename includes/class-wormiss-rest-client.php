@@ -837,6 +837,68 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * The address of one row of a business object with several key parts, e.g. an EventCPD row
+	 * (event key and row number): /api/EventCPD/~CSCM_JUL26|28.
+	 *
+	 * @param string   $entity Business object name.
+	 * @param string[] $keys   Key parts, in order.
+	 * @return string
+	 * @throws Wormiss_Exception On an unusable name or key.
+	 */
+	public static function entity_path( string $entity, array $keys ): string {
+		if ( 1 !== preg_match( '/^[A-Za-z][A-Za-z0-9_]{0,63}$/', $entity ) ) {
+			throw new Wormiss_Exception( __( 'That is not a valid iMIS business object name.', 'wormiss' ) );
+		}
+		foreach ( $keys as $key ) {
+			if ( 1 !== preg_match( '/^[A-Za-z0-9_-]{1,64}$/', (string) $key ) ) {
+				throw new Wormiss_Exception( __( 'That is not a valid iMIS record key.', 'wormiss' ) );
+			}
+		}
+		return '/api/' . $entity . ( $keys ? '/~' . implode( '|', array_map( 'strval', $keys ) ) : '' );
+	}
+
+	/**
+	 * Add a row to a business object (POST /api/{entity}).
+	 *
+	 * @param string $entity Business object name.
+	 * @param array  $body   GenericEntityData.
+	 * @return object The row as iMIS saved it.
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function create_entity( string $entity, array $body ): object {
+		$result = $this->request( 'POST', self::entity_path( $entity, [] ), $body );
+		if ( ! is_object( $result->body ) ) {
+			throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
+		}
+		return $result->body;
+	}
+
+	/**
+	 * Change one row of a business object (PUT /api/{entity}/~{keys}).
+	 *
+	 * @param string   $entity Business object name.
+	 * @param string[] $keys   Key parts.
+	 * @param array    $body   GenericEntityData.
+	 * @return void
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function update_entity( string $entity, array $keys, array $body ): void {
+		$this->request( 'PUT', self::entity_path( $entity, $keys ), $body );
+	}
+
+	/**
+	 * Remove one row of a business object (DELETE /api/{entity}/~{keys}).
+	 *
+	 * @param string   $entity Business object name.
+	 * @param string[] $keys   Key parts.
+	 * @return void
+	 * @throws Wormiss_Exception On failure.
+	 */
+	public function delete_entity( string $entity, array $keys ): void {
+		$this->request( 'DELETE', self::entity_path( $entity, $keys ) );
+	}
+
+	/**
 	 * Create an activity record in iMIS.
 	 *
 	 * @param array  $body    Body from build_activity_body().
