@@ -528,7 +528,8 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 				'filename' => $args['filename'] ?? null,
 			];
 		};
-		add_filter( 'pre_http_request', $image, 5, 3 );
+		// After the fake iMIS, which answers every request it was not told about with an error.
+		add_filter( 'pre_http_request', $image, 20, 3 );
 		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
 		$report  = Wormiss_Event_Import::run();
 		$post_id = self::pages( 'IMG26' )[0];
@@ -537,7 +538,7 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 		$this->serve( [ self::imis_event( 'IMG26', [ 'ImageUrl' => '~/images/ev1.png' ] ) ] );
 		Wormiss_Event_Import::run();
 		$this->assertSame( 1, $downloads );
-		remove_filter( 'pre_http_request', $image, 5 );
+		remove_filter( 'pre_http_request', $image, 20 );
 	}
 
 	/**
