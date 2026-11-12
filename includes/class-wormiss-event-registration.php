@@ -89,23 +89,25 @@ class Wormiss_Event_Registration {
 	 * @return string HTML.
 	 */
 	public static function button( array $event, bool $show_status = false ): string {
-		if ( ! self::is_on() || ! self::is_open( $event, time() ) ) {
-			return '';
-		}
 		$id = (string) $event['id'];
+		// A waiting result message shows even when the button no longer does (e.g. it closed meanwhile).
+		$notice = is_user_logged_in() ? self::take_notice( $id ) : '';
+		if ( ! self::is_on() || ! self::is_open( $event, time() ) ) {
+			return $notice;
+		}
 		if ( ! is_user_logged_in() ) {
-			$login = wp_login_url( self::current_url() );
+			$login = wp_login_url( self::return_url() );
 			return '<p class="wormiss-register"><a href="' . esc_url( $login ) . '">'
 				. esc_html__( 'Sign in to register', 'wormiss' ) . '</a></p>';
 		}
 		$imis_id = Wormiss_Member::imis_id();
 		if ( '' === $imis_id ) {
-			return '';
+			return $notice;
 		}
 		// A member's view of their own registration must not be stored by page caches.
 		Wormiss_Members_Only::no_page_cache();
 
-		$html   = self::take_notice( $id );
+		$html   = $notice;
 		$status = $show_status ? self::cached_status( $id, $imis_id ) : null;
 		if ( null !== $status && self::is_registered( $status ) ) {
 			return $html . '<div class="wormiss-register wormiss-register--done"><p>'
@@ -213,7 +215,7 @@ class Wormiss_Event_Registration {
 	 * Cancel the current member's registration for an event.
 	 *
 	 * @param string $event_id iMIS event ID.
-	 * @return string Result: cancelled, not_registered, dry_run, not_member, off or error.
+	 * @return string Result: cancelled, not_registered, cannot_cancel, dry_run, not_member, off or error.
 	 */
 	public static function cancel( string $event_id ): string {
 		$imis_id = Wormiss_Member::imis_id();
@@ -223,6 +225,11 @@ class Wormiss_Event_Registration {
 		}
 		$client = new Wormiss_Rest_Client();
 		try {
+			// Only free events are cancelled here (with no fee): re-read it, as a page may be out of date.
+			$event = Wormiss_Events::normalise( $client->get_event( $event_id ) );
+			if ( null === $event || self::FREE_TYPE !== ( $event['reg_type'] ?? '' ) ) {
+				return 'cannot_cancel';
+			}
 			$status = $client->get_registration( $event_id, $imis_id );
 			if ( null === $status || ! self::is_registered( $status ) || '' === $status['id'] ) {
 				self::forget_status( $event_id, $imis_id );
@@ -380,6 +387,7 @@ class Wormiss_Event_Registration {
 			'not_registered' => __( "You're not registered for this event.", 'wormiss' ),
 			'dry_run'        => __( 'Test mode: nothing was sent to iMIS. The request is in the iMIS Bridge log.', 'wormiss' ),
 			'closed'         => __( 'Registration for this event is closed.', 'wormiss' ),
+			'cannot_cancel'  => __( "This registration can't be cancelled here. Please contact us.", 'wormiss' ),
 			'not_member'     => __( 'Only signed-in members can register here.', 'wormiss' ),
 			'off'            => __( 'Registering here is not available at the moment.', 'wormiss' ),
 			'error'          => __( "Sorry, that didn't work. Please try again later, or contact us.", 'wormiss' ),
@@ -398,12 +406,17 @@ class Wormiss_Event_Registration {
 	}
 
 	/**
-	 * The current page's address, to come back to after signing in.
+	 * The current page's address, to come back to after signing in. REQUEST_URI already holds
+	 * the site's own folder (e.g. /community/…), so that is taken off before home_url() adds it.
 	 *
 	 * @return string
 	 */
-	private static function current_url(): string {
-		$uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
-		return home_url( $uri );
+	public static function return_url(): string {
+		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+		$base = rtrim( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ), '/' );
+		if ( '' !== $base && ( $uri === $base || 0 === strpos( $uri, $base . '/' ) || 0 === strpos( $uri, $base . '?' ) ) ) {
+			$uri = substr( $uri, strlen( $base ) );
+		}
+		return home_url( '' !== $uri ? $uri : '/' );
 	}
 }

@@ -239,6 +239,7 @@ class Test_Wormiss_Event_Registration extends Wormiss_Test_Case {
 	 */
 	public function test_cancel(): void {
 		$this->imis->token()
+			->reply( '/api/Event/FREE1', 200, self::imis_event() )
 			->reply(
 				'/api/EventRegistration?',
 				200,
@@ -249,12 +250,20 @@ class Test_Wormiss_Event_Registration extends Wormiss_Test_Case {
 			)
 			->reply( '/api/EventRegistration/_execute', 200, '{}' );
 		$this->assertSame( 'cancelled', Wormiss_Event_Registration::cancel( 'FREE1' ) );
-		$body = $this->body( 2 );
+		$body = $this->body( 3 );
 		$this->assertSame( 'CancelEventRegistration', $body['OperationName'] );
 		$this->assertSame( 'R1', $body['Parameters']['$values'][0]['$value'] );
 
-		$this->imis->token()->reply( '/api/EventRegistration?', 404, '{}' );
+		$this->imis->token()
+			->reply( '/api/Event/FREE1', 200, self::imis_event() )
+			->reply( '/api/EventRegistration?', 404, '{}' );
 		$this->assertSame( 'not_registered', Wormiss_Event_Registration::cancel( 'FREE1' ) );
+
+		// An event that has become paid is not cancelled here, whatever an old page shows.
+		$this->imis->requests = [];
+		$this->imis->token()->reply( '/api/Event/FREE1', 200, self::imis_event( 'FeeRegistrationRequired' ) );
+		$this->assertSame( 'cannot_cancel', Wormiss_Event_Registration::cancel( 'FREE1' ) );
+		$this->assertSame( 0, $this->imis->count( '/_execute' ) );
 	}
 
 	/**
@@ -295,5 +304,25 @@ class Test_Wormiss_Event_Registration extends Wormiss_Test_Case {
 		$first = Wormiss_Event_Registration::button( self::event() );
 		$this->assertStringContainsString( 'You&#039;re registered. A confirmation', $first );
 		$this->assertStringNotContainsString( 'A confirmation', Wormiss_Event_Registration::button( self::event() ) );
+
+		// Shown even when the event can no longer be registered for (it closed meanwhile).
+		Wormiss_Event_Registration::set_notice( 'FREE1', 'closed' );
+		$closed = self::event( 'RegistrationRequired', [ 'RegistrationEndDate' => '2020-01-01T00:00:00' ] );
+		$this->assertStringContainsString( 'Registration for this event is closed.', Wormiss_Event_Registration::button( $closed ) );
+	}
+
+	/**
+	 * The sign-in return address keeps a site folder once, not twice.
+	 *
+	 * @return void
+	 */
+	public function test_return_url_in_a_site_folder(): void {
+		update_option( 'home', 'http://example.org/community' );
+		$_SERVER['REQUEST_URI'] = '/community/events/webinar/?x=1';
+		$this->assertSame( 'http://example.org/community/events/webinar/?x=1', Wormiss_Event_Registration::return_url() );
+
+		update_option( 'home', 'http://example.org' );
+		$_SERVER['REQUEST_URI'] = '/events/webinar/';
+		$this->assertSame( 'http://example.org/events/webinar/', Wormiss_Event_Registration::return_url() );
 	}
 }
