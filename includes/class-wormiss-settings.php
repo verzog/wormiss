@@ -98,6 +98,8 @@ class Wormiss_Settings {
 			// The IQA that counts an event's places taken ('' shows no places), and iMIS publish dates.
 			'event_places_query'         => '',
 			'event_publish_dates'        => false,
+			// Show each event's CPD hours from its iMIS CPD Hours panel (EventCPD): off until turned on.
+			'event_cpd'                  => false,
 			// Members registering for free events here: off, and a dry run, until turned on.
 			'event_registration_enabled' => false,
 			'event_registration_dry_run' => true,
@@ -407,7 +409,7 @@ class Wormiss_Settings {
 				add_settings_error( self::OPTION, 'event_template_id', $message );
 			}
 		}
-		foreach ( [ 'event_registration_enabled', 'event_registration_dry_run', 'event_publish_dates' ] as $box ) {
+		foreach ( [ 'event_registration_enabled', 'event_registration_dry_run', 'event_publish_dates', 'event_cpd' ] as $box ) {
 			if ( isset( $input['events_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {

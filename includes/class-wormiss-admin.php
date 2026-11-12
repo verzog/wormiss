@@ -211,14 +211,15 @@ class Wormiss_Admin {
 			return $dry_run ? __( 'On (dry run: nothing is sent)', 'wormiss' ) : __( 'On', 'wormiss' );
 		};
 		$rows  = [
-			__( 'iMIS connection', 'wormiss' )         => Wormiss_Settings::is_configured()
+			__( 'iMIS connection', 'wormiss' )          => Wormiss_Settings::is_configured()
 				? Wormiss_Settings::base_url() : __( 'Not set up', 'wormiss' ),
-			__( 'Record activity', 'wormiss' )         => $state( $on( 'activity_enabled' ), $on( 'activity_dry_run' ) ),
-			__( 'Send events to iMIS', 'wormiss' )     => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
-			__( 'Free event registration', 'wormiss' ) => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
-			__( 'Member sync', 'wormiss' )             => $state( $on( 'user_sync_enabled' ), $on( 'user_sync_dry_run' ) ),
-			__( 'Member changes to iMIS', 'wormiss' )  => $state( $on( 'member_push_enabled' ), $on( 'member_push_dry_run' ) ),
-			__( 'iMIS event import', 'wormiss' )       => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
+			__( 'Record activity', 'wormiss' )          => $state( $on( 'activity_enabled' ), $on( 'activity_dry_run' ) ),
+			__( 'Send events to iMIS', 'wormiss' )      => $state( $on( 'event_sync_enabled' ), $on( 'event_sync_dry_run' ) ),
+			__( 'Free event registration', 'wormiss' )  => $state( $on( 'event_registration_enabled' ), $on( 'event_registration_dry_run' ) ),
+			__( 'Member sync', 'wormiss' )              => $state( $on( 'user_sync_enabled' ), $on( 'user_sync_dry_run' ) ),
+			__( 'Member changes to iMIS', 'wormiss' )   => $state( $on( 'member_push_enabled' ), $on( 'member_push_dry_run' ) ),
+			__( 'iMIS event import', 'wormiss' )        => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
+			__( 'CPD hours on event pages', 'wormiss' ) => $on( 'event_cpd' ) ? __( 'On (read from iMIS)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
@@ -288,6 +289,7 @@ class Wormiss_Admin {
 		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_places_query', __( 'Places count IQA', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_publish_dates', __( 'Follow iMIS publish dates', 'wormiss' ), 'wormiss_events' );
+		self::field( 'event_cpd', __( 'Show CPD hours', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_registration_enabled', __( 'Members register for free events here', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_registration_dry_run', __( 'Registration dry run (log only)', 'wormiss' ), 'wormiss_events' );
 
@@ -718,6 +720,7 @@ class Wormiss_Admin {
 			case 'event_registration_enabled':
 			case 'event_registration_dry_run':
 			case 'event_publish_dates':
+			case 'event_cpd':
 			case 'event_sync_enabled':
 			case 'event_sync_dry_run':
 			case 'event_cancel_on_trash':
@@ -731,6 +734,12 @@ class Wormiss_Admin {
 					echo ' <span class="description">'
 						. esc_html__( 'Free events (registration required, no fee) get Register and Cancel buttons for', 'wormiss' )
 						. ' ' . esc_html__( 'signed-in members. Paid events still link to iMIS.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'event_cpd' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Event pages show the hours from each event\'s CPD Hours panel in iMIS (EventCPD), added up', 'wormiss' )
+						. ' ' . esc_html__( 'per category, with its program level requirements. Read only.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'event_publish_dates' === $key ) {

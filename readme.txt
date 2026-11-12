@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.24.0
+Stable tag: 0.25.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -167,6 +167,10 @@ Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events dai
 
 Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
 
+= How do I show CPD hours on event pages? =
+
+Tick "Show CPD hours" under Wormiss > Settings > iMIS events. Each event page then shows the hours from its CPD Hours panel in iMIS, added up per category, with the program level requirements. The service account needs read access to the EventCPD business object.
+
 = How do I show places left on an event? =
 
 The iMIS Events API reads registrations one member at a time, so the count comes from an IQA. Build one with a single prompt, the event ID, that returns one row per place taken (leave out cancelled and waitlisted registrations), or one row with a numeric Registered column. Tick "Available via REST API". Enter its path under Wormiss > Settings > iMIS events > Places count IQA. Event pages then show places left; the capacity comes from the iMIS event, and 1000 or more shows as "Places available".
@@ -197,6 +201,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.25.0 =
+* CPD hours on event pages (Wormiss > Settings > iMIS events > Show CPD hours, off by default): each event's rows from its iMIS CPD Hours panel (the EventCPD business object) are read, cached, and shown after the event's text as a "CPD information" table, with the Australian and New Zealand category names and the hours added up per category (decimals allowed), plus the program level requirements covered. The Event details box gets a CPD hours tab listing the rows as iMIS has them. Read only: CPD hours are still changed in iMIS.
 
 = 0.24.0 =
 * "Event details": a full-width box under an Event's content, with tabs for When, Where (place, address, online link), Places (capacity and attendance), Waitlist and iMIS (event code, existing iMIS event ID), in place of the long list of fields in the sidebar. It saves the same details, cleaned the same way, before the event is sent to iMIS. The sidebar's "iMIS event" panel now just shows whether the event is sent, what happened last time and places left. A linked event shows only its link.

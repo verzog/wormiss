@@ -222,9 +222,11 @@ class Wormiss_Event_Editor {
 		if ( $linked ) {
 			echo '<p class="description">' . esc_html__( 'Linked to an iMIS event: its dates, place, places and registration come from iMIS.', 'wormiss' ) . '</p>';
 		}
+		// Shown, not edited: the event's CPD hours as its iMIS CPD Hours panel has them.
+		$extra = Wormiss_Event_Cpd::is_on() ? [ 'cpd' => __( 'CPD hours', 'wormiss' ) ] : [];
 		echo '<div class="wormiss-tabs__list" role="tablist" hidden>';
 		$first = true;
-		foreach ( $tabs as $key => [ $label ] ) {
+		foreach ( array_merge( array_map( static fn( $tab ) => $tab[0], $tabs ), $extra ) as $key => $label ) {
 			printf(
 				'<button type="button" role="tab" class="wormiss-tabs__tab" id="wormiss-tab-%1$s" aria-controls="wormiss-panel-%1$s" aria-selected="%2$s" tabindex="%3$s">%4$s</button>',
 				esc_attr( $key ),
@@ -251,6 +253,14 @@ class Wormiss_Event_Editor {
 				self::field( $meta_key, $field, get_post_meta( $post->ID, $meta_key, true ), $locked );
 			}
 			echo '</div></div>';
+		}
+		foreach ( $extra as $key => $label ) {
+			printf(
+				'<div class="wormiss-tabs__panel" role="tabpanel" id="wormiss-panel-%1$s" aria-labelledby="wormiss-tab-%1$s"><h3 class="wormiss-tabs__heading">%2$s</h3>%3$s</div>',
+				esc_attr( $key ),
+				esc_html( $label ),
+				Wormiss_Event_Cpd::admin_html( (int) $post->ID ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in admin_html().
+			);
 		}
 		echo '</div>';
 	}
