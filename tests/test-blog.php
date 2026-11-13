@@ -230,6 +230,109 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A grid keeps its columns (dividing lines are not cells), a poll shows its question and
+	 * choices without the template wording, and untouched template text is left out.
+	 *
+	 * @return void
+	 */
+	public function test_convert_grids_polls(): void {
+		$image = static fn( string $name ): array => [
+			'type'  => 'Image',
+			'props' => [ 'imageSrc' => '$/images/b/' . $name . '.jpg' ],
+		];
+		$text  = static fn( string $words, string $id = '' ): array => [
+			'type'  => 'Text',
+			'props' => [
+				'text' => $words,
+				'id'   => $id,
+			],
+		];
+		$parts = Wormiss_Blog_Import::convert(
+			[
+				'content' => [
+					[
+						'type'  => 'Separator',
+						'props' => [ 'orientation' => 'horizontal' ],
+					],
+					[
+						'type'  => 'Grid',
+						'props' => [
+							'numColumns' => 2,
+							'id'         => 'Grid-3942ecb2',
+							'items'      => [
+								[
+									'type'  => 'Flex',
+									'props' => [ 'items' => [ $text( 'Text' ) ] ],
+								],
+								$image( 'a' ),
+								[
+									'type'  => 'Separator',
+									'props' => [ 'orientation' => 'horizontal' ],
+								],
+								$image( 'b' ),
+								$image( 'c' ),
+							],
+						],
+					],
+					$text( 'Lorem ipsum dolor, sit amet consectetur.' ),
+					[
+						'type'  => 'Poll',
+						'props' => [
+							'id'       => 'Poll-1dbdb643',
+							'question' => 'Your question  so  what  is  this  lesion?',
+							'options'  => [
+								[ 'text' => 'Option 1  leave  it  alone' ],
+								[ 'text' => '' ],
+								[ 'text' => 'monitor' ],
+							],
+						],
+					],
+					[
+						'type'  => 'Poll',
+						'props' => [
+							'question' => 'Your question',
+							'options'  => [ [ 'text' => 'Option 1' ], [ 'text' => 'Option 2' ] ],
+						],
+					],
+				],
+			]
+		);
+		$body  = $parts['body'];
+		$this->assertStringContainsString( '<div class="wormiss-blog-grid wormiss-blog-grid--cols-2">', $body );
+		$this->assertSame( 3, substr_count( $body, 'wormiss-blog-grid__item' ), 'Three pictures; no line or empty text as cells.' );
+		$this->assertStringNotContainsString( '<p>Text</p>', $body );
+		$this->assertStringNotContainsString( 'Lorem ipsum', $body );
+		$this->assertSame( 1, substr_count( $body, 'wormiss-blog-poll' ) - substr_count( $body, 'wormiss-blog-poll__' ), 'The untouched poll shows nothing.' );
+		$this->assertStringContainsString( '<p class="wormiss-blog-poll__question">so what is this lesion?</p>', $body );
+		$this->assertStringContainsString( '<li>leave it alone</li><li>monitor</li>', $body );
+		$this->assertSame( [], $parts['unknown'] );
+		$this->assertContains( 'Poll-1dbdb643', $parts['ids'] );
+		$this->assertContains( 'Grid-3942ecb2', $parts['ids'] );
+	}
+
+	/**
+	 * A post is matched to the template whose own blocks it shares most; blocks every template
+	 * copied are no help; old HTML posts are "Legacy", others "Other".
+	 *
+	 * @return void
+	 */
+	public function test_template_for(): void {
+		$own = Wormiss_Blog_Import::unique_ids(
+			[
+				'Basic Template' => [ 'Category-03a1', 'Title-f097', 'Grid-328b', 'Text-c8cb' ],
+				'Template 3'     => [ 'Category-03a1', 'Title-f097', 'Grid-328b', 'Grid-3942', 'Poll-1dbd' ],
+				'Template 2'     => [ 'Category-03a1', 'Title-f097', 'ImageShowcase-ead0' ],
+			]
+		);
+		$this->assertSame( [ 'Text-c8cb' ], $own['Basic Template'] );
+		$this->assertSame( 'Template 3', Wormiss_Blog_Import::template_for( [ 'Category-03a1', 'Grid-328b', 'Grid-3942', 'Poll-1dbd' ], false, $own ) );
+		$this->assertSame( 'Template 2', Wormiss_Blog_Import::template_for( [ 'Title-f097', 'ImageShowcase-ead0' ], false, $own ) );
+		$this->assertSame( 'Other', Wormiss_Blog_Import::template_for( [ 'Category-03a1', 'Title-f097' ], false, $own ) );
+		$this->assertSame( 'Legacy', Wormiss_Blog_Import::template_for( [], true, $own ) );
+		$this->assertSame( 'Other', Wormiss_Blog_Import::template_for( [ 'Poll-1dbd' ], false, [] ) );
+	}
+
+	/**
 	 * Old posts' tidied HTML gets Bootstrap-style classes, and spacing done with empty
 	 * paragraphs or runs of line breaks is taken out.
 	 *
@@ -438,6 +541,22 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 					]
 				)
 			)
+			->reply(
+				'/api/Smart_Blogs_Template',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'Name'         => 'Template 9',
+							'TemplateData' => [
+								'$type'  => 'System.Byte[], mscorlib',
+								// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+								'$value' => base64_encode( (string) wp_json_encode( [ 'content' => [ [ 'props' => [ 'id' => 'Text-case' ] ] ] ] ) ),
+							],
+						],
+					]
+				)
+			)
 			->reply( '/api/Smart_Blogs_Blog_Post?BlogKey', 200, Wormiss_Fake_Imis::page( [ $full ] ) )
 			->reply(
 				'/api/Smart_Blogs_Comment',
@@ -482,6 +601,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertStringContainsString( 'Members only part.', $post->post_content );
 		$this->assertStringContainsString( 'welcome.', get_post_meta( $post_id, Wormiss_Blog::META_INTRO, true ) );
 		$this->assertSame( '<p>It was a BCC.</p>', get_post_meta( $post_id, Wormiss_Blog::META_SOLUTION, true ) );
+		$this->assertSame( 'Other', get_post_meta( $post_id, Wormiss_Blog_Import::META_TEMPLATE, true ), 'No template block in it.' );
 		$categories = wp_get_object_terms( $post_id, Wormiss_Blog::TAX_CATEGORY );
 		$this->assertEqualsCanonicalizing( [ 'Management', 'Surgery' ], wp_list_pluck( $categories, 'name' ) );
 		$surgery = get_term_by( 'name', 'Surgery', Wormiss_Blog::TAX_CATEGORY );

@@ -200,7 +200,9 @@ class Wormiss_Blog {
 			$html = self::link_old_addresses( (string) $content ) . self::solution_html( $post_id );
 		}
 		// In an excerpt just the text; on the page, in a wrapper the blog styles hang off.
-		return doing_filter( 'get_the_excerpt' ) ? $html : '<div class="wormiss-blog-post">' . $html . '</div>';
+		$template = (string) get_post_meta( $post_id, Wormiss_Blog_Import::META_TEMPLATE, true );
+		$class    = '' !== $template ? ' wormiss-blog-post--' . sanitize_html_class( sanitize_title( $template ) ) : '';
+		return doing_filter( 'get_the_excerpt' ) ? $html : '<div class="wormiss-blog-post' . esc_attr( $class ) . '">' . $html . '</div>';
 	}
 
 	/**
