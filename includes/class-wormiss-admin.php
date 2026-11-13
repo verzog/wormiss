@@ -327,6 +327,7 @@ class Wormiss_Admin {
 		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_posts', __( 'Blog posts per batch', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_minutes', __( 'Minutes between blog batches', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_batch_seconds', __( 'Seconds per blog batch', 'wormiss' ), 'wormiss_blog' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -907,8 +908,25 @@ class Wormiss_Admin {
 					$posts ? (int) Wormiss_Blog_Import::BATCH_MAX : (int) Wormiss_Blog_Import::GAP_MAX,
 					esc_html(
 						$posts
-							? __( 'Up to 20. Each batch also stops after about 20 seconds, so a busy or slow site does less.', 'wormiss' )
+							? __( 'Up to 20. Each batch also stops when its seconds (below) are up, so a busy or slow site does less.', 'wormiss' )
 							: __( '1 to 10. Lower is faster; raise it if the site slows down while importing.', 'wormiss' )
+					)
+				);
+				return;
+			case 'blog_batch_seconds':
+				printf(
+					'<input type="number" class="small-text" id="%1$s" name="%2$s" value="%3$d" min="%4$d" max="%5$d" /> <span class="description">%6$s</span>',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					(int) $value,
+					(int) Wormiss_Blog_Import::SECONDS_MIN,
+					(int) Wormiss_Blog_Import::SECONDS_MAX,
+					esc_html(
+						sprintf(
+							/* translators: %d: PHP's time limit in seconds. */
+							__( '10 to 60. Each batch asks PHP for the time it needs (PHP allows %d seconds a request here); page views keep their limit.', 'wormiss' ),
+							(int) ini_get( 'max_execution_time' )
+						)
 					)
 				);
 				return;

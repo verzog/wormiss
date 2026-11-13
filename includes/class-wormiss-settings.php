@@ -134,6 +134,7 @@ class Wormiss_Settings {
 			'blog_import_dry_run'        => true,
 			'blog_batch_posts'           => 10,
 			'blog_batch_minutes'         => 1,
+			'blog_batch_seconds'         => 40,
 		];
 	}
 
@@ -532,6 +533,9 @@ class Wormiss_Settings {
 		}
 		if ( isset( $input['blog_batch_posts'] ) ) {
 			$clean['blog_batch_posts'] = min( Wormiss_Blog_Import::BATCH_MAX, max( 1, absint( $input['blog_batch_posts'] ) ) );
+		}
+		if ( isset( $input['blog_batch_seconds'] ) ) {
+			$clean['blog_batch_seconds'] = min( Wormiss_Blog_Import::SECONDS_MAX, max( Wormiss_Blog_Import::SECONDS_MIN, absint( $input['blog_batch_seconds'] ) ) );
 		}
 		if ( isset( $input['blog_batch_minutes'] ) ) {
 			$clean['blog_batch_minutes'] = min( Wormiss_Blog_Import::GAP_MAX, max( 1, absint( $input['blog_batch_minutes'] ) ) );

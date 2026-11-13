@@ -819,6 +819,8 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 			]
 		);
 		$this->assertSame( Wormiss_Blog_Import::BATCH_MAX, $clean['blog_batch_posts'] );
+		$this->assertSame( Wormiss_Blog_Import::SECONDS, Wormiss_Blog_Import::seconds() );
+		$this->assertSame( Wormiss_Blog_Import::SECONDS_MAX, Wormiss_Settings::sanitize( [ 'blog_batch_seconds' => '999' ] )['blog_batch_seconds'] );
 		$this->assertSame( 1, $clean['blog_batch_minutes'] );
 		$saved = [
 			'blog_batch_posts'   => 4,
@@ -846,6 +848,13 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$limit = ini_get( 'max_execution_time' );
 		set_time_limit( 12 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restored below.
 		$this->assertSame( 6, Wormiss_Batch::seconds() );
+		set_time_limit( (int) $limit ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restoring.
+
+		// A batch wanting 40 seconds where PHP allows 30 asks PHP for more, then gets its 40.
+		set_time_limit( 30 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restored below.
+		Wormiss_Batch::start( 40 );
+		$this->assertSame( 110, (int) ini_get( 'max_execution_time' ) );
+		$this->assertSame( 40, Wormiss_Batch::seconds() );
 		set_time_limit( (int) $limit ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restoring.
 
 		Wormiss_Batch::start();

@@ -62,23 +62,49 @@ class Wormiss_Batch {
 	private static $progress = false;
 
 	/**
-	 * Start a batch's clock.
+	 * Seconds this batch asked for (0: SECONDS).
 	 *
+	 * @var int
+	 */
+	private static $wanted = 0;
+
+	/**
+	 * Start a batch's clock. A batch that wants more time than PHP's limit allows asks PHP for
+	 * more for this request (twice its seconds and a margin); where PHP will not, it keeps to
+	 * half of the limit there is.
+	 *
+	 * @param int $seconds Seconds to start new work for (0: SECONDS).
 	 * @return void
 	 */
-	public static function start(): void {
+	public static function start( int $seconds = 0 ): void {
 		self::$started = microtime( true );
 		self::$stopped = false;
+		self::$wanted  = max( 0, $seconds );
+		$limit         = (int) ini_get( 'max_execution_time' );
+		$needed        = 2 * self::wanted() + 30;
+		if ( $limit > 0 && $limit < $needed && function_exists( 'set_time_limit' ) ) {
+			set_time_limit( $needed ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- This request only, for the batch it runs.
+		}
 	}
 
 	/**
-	 * Seconds this batch may start new work for: SECONDS, or half of PHP's time limit if less.
+	 * Seconds the batch asked for.
+	 *
+	 * @return int
+	 */
+	private static function wanted(): int {
+		return self::$wanted > 0 ? self::$wanted : self::SECONDS;
+	}
+
+	/**
+	 * Seconds this batch may start new work for: what it asked for (SECONDS by default), or half
+	 * of PHP's time limit if less.
 	 *
 	 * @return int
 	 */
 	public static function seconds(): int {
 		$limit   = (int) ini_get( 'max_execution_time' );
-		$seconds = $limit > 0 ? max( 5, min( self::SECONDS, intdiv( $limit, 2 ) ) ) : self::SECONDS;
+		$seconds = $limit > 0 ? max( 5, min( self::wanted(), intdiv( $limit, 2 ) ) ) : self::wanted();
 		/**
 		 * Seconds a background import batch starts new work for.
 		 *

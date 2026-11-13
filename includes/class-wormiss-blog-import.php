@@ -161,6 +161,21 @@ class Wormiss_Blog_Import {
 	const GAP_MAX = 10;
 
 	/**
+	 * Seconds each batch works for, by default (Settings > Members' blog).
+	 */
+	const SECONDS = 40;
+
+	/**
+	 * Fewest seconds per batch the setting allows.
+	 */
+	const SECONDS_MIN = 10;
+
+	/**
+	 * Most seconds per batch the setting allows.
+	 */
+	const SECONDS_MAX = 60;
+
+	/**
 	 * How long the post list is used by later batches.
 	 */
 	const LIST_MAX_AGE = 6 * HOUR_IN_SECONDS;
@@ -265,6 +280,15 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
+	 * Seconds each batch works for (Settings > Members' blog).
+	 *
+	 * @return int
+	 */
+	public static function seconds(): int {
+		return min( self::SECONDS_MAX, max( self::SECONDS_MIN, (int) Wormiss_Settings::get( 'blog_batch_seconds' ) ) );
+	}
+
+	/**
 	 * Seconds between batches (Settings > Members' blog).
 	 *
 	 * @return int
@@ -310,7 +334,7 @@ class Wormiss_Blog_Import {
 			}
 			return $report;
 		}
-		Wormiss_Batch::start();
+		Wormiss_Batch::start( self::seconds() );
 		try {
 			return self::import( $report, $done, true === $carry_on );
 		} finally {
