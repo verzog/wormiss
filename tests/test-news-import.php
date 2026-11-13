@@ -318,6 +318,14 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 		$this->assertSame( '', $built['feature'] );
 		$this->assertStringContainsString( 'b.png', $built['html'] );
 
+		// A linked single image keeps its link.
+		$content['items'][] = [
+			'name' => 'Banner',
+			'html' => '<p><a href="https://example.org/register"><img src="https://cdn.example.org/c.png" alt="Register"></a></p>',
+		];
+		$built              = Wormiss_News_Import::build( 'Title', $content );
+		$this->assertMatchesRegularExpression( '#<figure class="wormiss-news-image wormiss-news-feature"><a href="https://example.org/register"><img[^>]*c\.png#', $built['html'] );
+
 		$long = str_repeat( 'x', Wormiss_Content_Check::MAX_SHOWN + 100 );
 		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
 		$this->assertSame( $long, Wormiss_Content_Check::decode_blob( base64_encode( $long ), false ) );

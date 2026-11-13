@@ -664,7 +664,8 @@ class Wormiss_News_Import {
 				if ( $first ) {
 					$feature = html_entity_decode( $match[1][0], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 				}
-				preg_match( '/<img\b[^>]*>/i', $html, $tag );
+				// The image with its link, if it has one (a banner or a link to the full picture).
+				preg_match( '#<a\b[^>]*>\s*<img\b[^>]*>\s*</a>|<img\b[^>]*>#i', $html, $tag );
 				$last = count( $parts ) - 1;
 				if ( $first && ! $lead && $last >= 0 && $is_text[ $last ] ) {
 					$parts[ $last ]   = '<div class="wormiss-news-lead"><div class="wormiss-news-lead__text">' . $parts[ $last ]
@@ -682,7 +683,7 @@ class Wormiss_News_Import {
 				continue;
 			}
 			$parts[]   = $html;
-			$is_text[] = true;
+			$is_text[] = '' !== $text; // A gallery is not text to sit beside.
 		}
 		if ( '' === $feature && '' !== (string) ( $content['image'] ?? '' ) ) {
 			$feature = (string) $content['image'];
