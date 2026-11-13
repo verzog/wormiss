@@ -255,8 +255,8 @@ class Wormiss_Blog_Lock {
 		$taxonomies = array_values( array_diff( (array) ( $args['taxonomy'] ?? [] ), [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] ) );
 		if ( ! $taxonomies ) {
 			// Only blog taxonomies were asked for: nothing to find.
-			$taxonomies      = [ 'category' ];
-			$args['include'] = [ 0 ];
+			$taxonomies   = [ 'category' ];
+			$args['slug'] = [ 'wormiss-no-such-term' ];
 		}
 		$args['taxonomy'] = $taxonomies;
 		return $args;
