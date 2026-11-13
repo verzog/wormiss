@@ -135,7 +135,7 @@ class Wormiss_Content_Check {
 	 * @param string              $key    The key it is made with.
 	 * @return array label, method, path, ok, status, body, decoded, document_key.
 	 */
-	private static function lookup( Wormiss_Rest_Client $client, array $lookup, string $key ): array {
+	public static function lookup( Wormiss_Rest_Client $client, array $lookup, string $key ): array {
 		$path   = str_replace( '{key}', $key, (string) $lookup['path'] );
 		$json   = isset( $lookup['execute'] ) ? self::execute_body( (string) $lookup['execute'], $key ) : null;
 		$result = [
@@ -428,7 +428,7 @@ class Wormiss_Content_Check {
 	 * @param array $result Error, or key and lookups.
 	 * @return void
 	 */
-	private static function render_result( array $result ): void {
+	public static function render_result( array $result ): void {
 		if ( isset( $result['error'] ) ) {
 			echo '<div class="notice notice-error inline"><p>' . esc_html( (string) $result['error'] ) . '</p></div>';
 			return;
