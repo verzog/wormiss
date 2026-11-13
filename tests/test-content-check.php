@@ -45,8 +45,9 @@ class Test_Wormiss_Content_Check extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The Document is found by its version key, then read by its own key; its Blob is decoded
-	 * (plain or compressed) and kept out of the reply shown. Every lookup is a GET.
+	 * The document is found by its version ID (FindByVersionId, a POST to _Execute), then read by
+	 * its document ID; its content, sent as binary, is decoded (plain or compressed) and kept out
+	 * of the reply shown. Nothing but the token and _Execute is a POST.
 	 *
 	 * @return void
 	 */
@@ -54,61 +55,60 @@ class Test_Wormiss_Content_Check extends Wormiss_Test_Case {
 		$key      = '6fdbde19-109c-43f8-b008-8b95e69f1704';
 		$doc      = '11111111-2222-3333-4444-555555555555';
 		$xml      = '<ContentItem><Html>&lt;p&gt;Vale Professor&lt;/p&gt;</Html></ContentItem>';
-		$document = static function ( string $blob ) use ( $doc ): array {
+		$document = static function ( string $data ) use ( $doc, $key ): array {
 			return [
-				'$type'      => 'Asi.Soa.Core.DataContracts.GenericEntityData',
-				'Properties' => [
-					'$values' => [
-						[
-							'Name'  => 'DocumentKey',
-							'Value' => $doc,
-						],
-						[
-							'Name'  => 'Blob',
-							'Value' => [
-								'$type'  => 'System.Byte[], mscorlib',
-								'$value' => $blob,
-							],
-						],
-					],
+				'$type'             => 'Asi.Soa.Core.DataContracts.DocumentData, Asi.Contracts',
+				'DocumentId'        => $doc,
+				'DocumentVersionId' => $key,
+				'Data'              => [
+					'$type'  => 'System.Byte[], mscorlib',
+					'$value' => $data,
 				],
 			];
 		};
 		// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Test data as iMIS sends it.
 		$this->imis->token()
-			->reply( '/api/Document?DocumentVersionKey=' . $key, 200, [ 'Items' => [ '$values' => [ $document( base64_encode( $xml ) ) ] ] ] )
-			->reply( '/api/DocumentPath', 404, '' )
+			->reply( '/api/Document/_Execute', 200, [ 'Result' => $document( base64_encode( $xml ) ) ] )
+			->reply( '/api/Document?DocumentVersionId=' . $key, 400, [ 'Message' => 'Not a known property name.' ] )
 			->reply( '/api/Document/' . $doc, 200, $document( base64_encode( gzencode( $xml ) ) ) );
 		// phpcs:enable
 		$results = Wormiss_Content_Check::run( strtoupper( $key ) );
 		$this->assertCount( 3, $results );
 		$this->assertTrue( $results[0]['ok'] );
-		$this->assertSame( '/api/Document?DocumentVersionKey=' . $key, $results[0]['path'] );
+		$this->assertSame( 'POST', $results[0]['method'] );
 		$this->assertSame( $doc, $results[0]['document_key'] );
 		$this->assertSame( [ $xml ], $results[0]['decoded'] );
 		$this->assertStringContainsString( 'decoded below', $results[0]['body'] );
-		$this->assertStringContainsString( '404', $results[1]['status'] );
+		$this->assertStringContainsString( '400', $results[1]['status'] );
 		$this->assertSame( '/api/Document/' . $doc, $results[2]['path'] );
 		$this->assertSame( [ $xml ], $results[2]['decoded'], 'Compressed content is unzipped.' );
+
+		$execute = null;
 		foreach ( $this->imis->requests as $request ) {
-			if ( 'POST' === $request['method'] ) {
-				$this->assertStringContainsString( '/token', $request['url'] );
-			} else {
+			if ( 'POST' !== $request['method'] ) {
 				$this->assertSame( 'GET', $request['method'] );
+			} elseif ( false !== strpos( $request['url'], '_Execute' ) ) {
+				$execute = json_decode( (string) $request['body'], true );
+			} else {
+				$this->assertStringContainsString( '/token', $request['url'] );
 			}
 		}
+		$this->assertSame( 'FindByVersionId', $execute['OperationName'] ?? '' );
+		$this->assertSame( 'Document', $execute['EntityTypeName'] ?? '' );
+		$this->assertSame( $key, $execute['Parameters']['$values'][0]['$value'] ?? '' );
 	}
 
 	/**
-	 * No Document found: no lookup by a document key.
+	 * Nothing found: no lookup by a document ID (and not by the version key itself).
 	 *
 	 * @return void
 	 */
 	public function test_not_found(): void {
+		$key = '6fdbde19-109c-43f8-b008-8b95e69f1704';
 		$this->imis->token()
-			->reply( '/api/Document', 404, '' )
-			->reply( '/api/DocumentPath', 404, '' );
-		$this->assertCount( 2, Wormiss_Content_Check::run( '6fdbde19-109c-43f8-b008-8b95e69f1704' ) );
+			->reply( '/api/Document/_Execute', 200, [ 'Result' => [ 'DocumentVersionId' => $key ] ] )
+			->reply( '/api/Document?', 404, '' );
+		$this->assertCount( 2, Wormiss_Content_Check::run( $key ) );
 	}
 
 	/**

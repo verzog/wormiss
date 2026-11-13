@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.29.1
+Stable tag: 0.29.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -201,6 +201,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.29.2 =
+* Check a news article uses iMIS's Document service as iMIS documents it: the document is found by its version ID (the news view's Document Version Key) with the FindByVersionId operation, which only reads, then read by its document ID. Its content, sent as binary, is decoded and shown as text. The business-object style lookups, which the Document service does not accept, are gone.
 
 = 0.29.1 =
 * Check a news article now looks where iMIS keeps an article: the Document found by its Document Version Key, then read by its own Document Key, and its web address (DocumentPath). The Document's content (Blob) is decoded and shown as text, unzipped if compressed. The content item and content lookups, which iMIS does not answer for news, are gone.
