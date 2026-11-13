@@ -26,7 +26,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Before news articles can be imported, find out how iMIS gives out an article's text. An
- * administrator enters an article's Document Version Key; a few fixed read-only lookups are made
+ * administrator enters an article's Document Version Key; a few fixed lookups that only read are made
  * and their replies shown (and kept in the audit log). Nothing is changed in iMIS, and only a
  * key in the expected form is accepted, so nothing else can be asked of iMIS this way.
  */
@@ -38,24 +38,48 @@ class Wormiss_Content_Check {
 	public const ACTION = 'wormiss_content_check';
 
 	/**
-	 * The lookups made by the article's key, label => path ({key} is the article's key). The
-	 * Document object holds a content page, its text in Blob; it is keyed by DocumentKey, so it is
-	 * found by DocumentVersionKey first, then read by its own key.
+	 * The lookups made by the article's key ({key}). iMIS's Document service finds a document by
+	 * its version ID with the FindByVersionId operation (a POST to _Execute that only reads), or
+	 * reads it by its document ID; the version ID is the news view's Document Version Key. The
+	 * services' own descriptions (metadata) show their fields and operations.
 	 */
 	public const LOOKUPS = [
-		'Document by version key' => '/api/Document?DocumentVersionKey={key}',
-		'Document path'           => '/api/DocumentPath?DocumentVersionKey={key}',
+		[
+			'label'   => 'Document found by version ID (FindByVersionId)',
+			'method'  => 'POST',
+			'path'    => '/api/Document/_Execute',
+			'execute' => 'FindByVersionId',
+		],
+		[
+			'label'  => 'Documents with this version ID',
+			'method' => 'GET',
+			'path'   => '/api/Document?DocumentVersionId={key}',
+		],
+		[
+			'label'  => 'Document service description (fields and operations)',
+			'method' => 'GET',
+			'path'   => '/api/metadata/Document',
+		],
+		[
+			'label'  => 'DocumentSummary service description (fields and operations)',
+			'method' => 'GET',
+			'path'   => '/api/metadata/DocumentSummary',
+		],
 	];
 
 	/**
-	 * The lookup by the Document's own key, once found.
+	 * The lookup by the document's own ID, once found.
 	 */
-	public const BY_DOCUMENT_KEY = [ 'Document by its document key' => '/api/Document/{key}' ];
+	public const BY_DOCUMENT_KEY = [
+		'label'  => 'Document by its document ID',
+		'method' => 'GET',
+		'path'   => '/api/Document/{key}',
+	];
 
 	/**
 	 * Longest reply or decoded text kept for showing, in characters.
 	 */
-	public const MAX_SHOWN = 20000;
+	public const MAX_SHOWN = 50000;
 
 	/**
 	 * Hook the button.
@@ -90,32 +114,33 @@ class Wormiss_Content_Check {
 		$client       = new Wormiss_Rest_Client();
 		$results      = [];
 		$document_key = '';
-		foreach ( self::LOOKUPS as $label => $path ) {
-			$result    = self::lookup( $client, $label, str_replace( '{key}', $key, $path ) );
+		foreach ( self::LOOKUPS as $lookup ) {
+			$result    = self::lookup( $client, $lookup, $key );
 			$results[] = $result;
-			if ( '' === $document_key && '' !== $result['document_key'] ) {
+			if ( '' === $document_key && '' !== $result['document_key'] && $result['document_key'] !== $key ) {
 				$document_key = $result['document_key'];
 			}
 		}
 		if ( '' !== $document_key ) {
-			foreach ( self::BY_DOCUMENT_KEY as $label => $path ) {
-				$results[] = self::lookup( $client, $label, str_replace( '{key}', $document_key, $path ) );
-			}
+			$results[] = self::lookup( $client, self::BY_DOCUMENT_KEY, $document_key );
 		}
 		return $results;
 	}
 
 	/**
-	 * One read-only lookup.
+	 * One lookup that only reads.
 	 *
 	 * @param Wormiss_Rest_Client $client Client.
-	 * @param string              $label  Label.
-	 * @param string              $path   Path.
-	 * @return array label, path, ok, status, body, decoded, document_key.
+	 * @param array               $lookup label, method, path, and for _Execute the operation.
+	 * @param string              $key    The key it is made with.
+	 * @return array label, method, path, ok, status, body, decoded, document_key.
 	 */
-	private static function lookup( Wormiss_Rest_Client $client, string $label, string $path ): array {
+	private static function lookup( Wormiss_Rest_Client $client, array $lookup, string $key ): array {
+		$path   = str_replace( '{key}', $key, (string) $lookup['path'] );
+		$json   = isset( $lookup['execute'] ) ? self::execute_body( (string) $lookup['execute'], $key ) : null;
 		$result = [
-			'label'        => $label,
+			'label'        => (string) $lookup['label'],
+			'method'       => (string) $lookup['method'],
 			'path'         => $path,
 			'ok'           => false,
 			'status'       => '',
@@ -124,13 +149,13 @@ class Wormiss_Content_Check {
 			'document_key' => '',
 		];
 		try {
-			$reply            = $client->request( 'GET', $path );
+			$reply            = $client->request( (string) $lookup['method'], $path, $json );
 			$result['ok']     = true;
 			$result['status'] = 'HTTP ' . $reply->code;
 			$body             = json_decode( (string) $reply->raw );
-			if ( is_object( $body ) ) {
-				$result['decoded']      = self::take_blobs( $body );
+			if ( is_object( $body ) || is_array( $body ) ) {
 				$result['document_key'] = self::document_key( $body );
+				$result['decoded']      = self::take_blobs( $body );
 				$result['body']         = self::pretty( (string) wp_json_encode( $body ) );
 			} else {
 				$result['body'] = self::pretty( (string) $reply->raw );
@@ -142,23 +167,76 @@ class Wormiss_Content_Check {
 	}
 
 	/**
-	 * The DocumentKey of the first Document in a reply (one entity or a page of them), if it is a key.
+	 * The body of a Document _Execute operation with the key as its one parameter.
 	 *
-	 * @param object $body Decoded reply.
-	 * @return string
+	 * @param string $operation Operation, e.g. FindByVersionId.
+	 * @param string $key       Key.
+	 * @return array
 	 */
-	public static function document_key( object $body ): string {
-		$rows = Wormiss_Rest_Client::items( $body );
-		$row  = $rows ? $rows[0] : $body;
-		if ( ! is_object( $row ) ) {
-			return '';
-		}
-		$key = (string) ( Wormiss_Rest_Client::properties( $row )['DocumentKey'] ?? '' );
-		return self::is_key( $key ) ? strtolower( $key ) : '';
+	public static function execute_body( string $operation, string $key ): array {
+		return [
+			'$type'             => 'Asi.Soa.Core.DataContracts.GenericExecuteRequest, Asi.Contracts',
+			'OperationName'     => $operation,
+			'EntityTypeName'    => 'Document',
+			'Parameters'        => [
+				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.Object, mscorlib]], mscorlib',
+				'$values' => [
+					[
+						'$type'  => 'System.String',
+						'$value' => $key,
+					],
+				],
+			],
+			'ParameterTypeName' => [
+				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
+				'$values' => [ 'System.String' ],
+			],
+			'UseJson'           => false,
+		];
 	}
 
 	/**
-	 * Replace each Blob value in a reply with a short note, and return the Blobs decoded to text.
+	 * The first document ID in a reply: a DocumentId field, or a DocumentKey or DocumentId
+	 * property of a generic entity, anywhere in it; only if it is a key.
+	 *
+	 * @param mixed $node Decoded reply.
+	 * @return string
+	 */
+	public static function document_key( $node ): string {
+		if ( is_array( $node ) ) {
+			foreach ( $node as $child ) {
+				$found = self::document_key( $child );
+				if ( '' !== $found ) {
+					return $found;
+				}
+			}
+			return '';
+		}
+		if ( ! is_object( $node ) ) {
+			return '';
+		}
+		$candidates = [ $node->DocumentId ?? null ]; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		if ( isset( $node->Name, $node->Value ) && in_array( $node->Name, [ 'DocumentKey', 'DocumentId' ], true ) ) {
+			$candidates[] = $node->Value; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+		}
+		foreach ( $candidates as $candidate ) {
+			if ( is_string( $candidate ) && self::is_key( $candidate ) ) {
+				return strtolower( $candidate );
+			}
+		}
+		foreach ( get_object_vars( $node ) as $child ) {
+			$found = self::document_key( $child );
+			if ( '' !== $found ) {
+				return $found;
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Replace each Blob value and binary value in a reply with a short note, and return them decoded
+	 * to text.
 	 *
 	 * @param mixed $node Decoded reply, changed in place.
 	 * @return string[]
@@ -173,6 +251,13 @@ class Wormiss_Content_Check {
 			return $found;
 		}
 		if ( ! is_object( $node ) ) {
+			return $found;
+		}
+		// Binary sent as a typed value, e.g. a document's content: {"$type":"System.Byte[], …","$value":"…"}.
+		if ( isset( $node->{'$type'}, $node->{'$value'} ) && is_string( $node->{'$value'} ) && '' !== $node->{'$value'}
+			&& str_contains( (string) $node->{'$type'}, 'System.Byte[]' ) ) {
+			$found[] = self::decode_blob( $node->{'$value'} );
+			$node    = sprintf( '[%d characters of encoded content: decoded below]', strlen( $node->{'$value'} ) );
 			return $found;
 		}
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
@@ -370,7 +455,7 @@ class Wormiss_Content_Check {
 		) . '</strong></p>';
 		foreach ( (array) ( $result['lookups'] ?? [] ) as $lookup ) {
 			echo '<h3>' . esc_html( (string) $lookup['label'] ) . '</h3>';
-			echo '<p><code>GET ' . esc_html( (string) $lookup['path'] ) . '</code> — '
+			echo '<p><code>' . esc_html( (string) ( $lookup['method'] ?? 'GET' ) . ' ' . (string) $lookup['path'] ) . '</code> — '
 				. esc_html( (string) $lookup['status'] ) . '</p>';
 			if ( '' !== (string) $lookup['body'] ) {
 				echo '<textarea class="large-text code" rows="12" readonly>' . esc_textarea( (string) $lookup['body'] ) . '</textarea>';
