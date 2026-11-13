@@ -208,6 +208,7 @@ the Media Library can still be opened directly by anyone with their address.
 
 = 0.30.4 =
 * Imported news: links iMIS writes to its own pages as [@]path (e.g. "become a member") now go to the iMIS site instead of a page that does not exist here.
+* Imported news: every link in an article opens in a new tab.
 * Imported news: a heading that repeats the title is left out even when the title has an ampersand or similar character (it showed twice).
 
 = 0.30.3 =

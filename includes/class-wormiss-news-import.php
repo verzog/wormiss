@@ -697,7 +697,8 @@ class Wormiss_News_Import {
 	/**
 	 * Article HTML tidied for the theme: fonts, styles and classes gone; h1 becomes h2 (the post
 	 * title is the h1); runs of line breaks become paragraphs; empty paragraphs and emphasis gone;
-	 * tags balanced; links and images on the iMIS site made full addresses.
+	 * tags balanced; links and images on the iMIS site made full addresses; every link opens in a
+	 * new tab.
 	 *
 	 * @param string $html HTML from iMIS.
 	 * @return string
@@ -722,6 +723,15 @@ class Wormiss_News_Import {
 			static function ( array $found ): string {
 				$url = Wormiss_Events::absolute_url( html_entity_decode( $found[2], ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 				return '' === $url ? $found[0] : $found[1] . '="' . esc_attr( $url ) . '"';
+			},
+			$html
+		);
+		// Every link opens in a new tab (noopener: the new page cannot reach back into this one).
+		$html = (string) preg_replace_callback(
+			'#<a\b([^>]*)>#i',
+			static function ( array $found ): string {
+				$attributes = (string) preg_replace( '#\s(?:target|rel)="[^"]*"#i', '', $found[1] );
+				return '<a' . $attributes . ' target="_blank" rel="noopener noreferrer">';
 			},
 			$html
 		);
