@@ -72,7 +72,8 @@ whose iMIS REST client and audit log it reuses.
 * **iMIS news import:** daily (or on demand), each news article an IQA lists becomes a
   post in a News category, with its iMIS tags, publication date, summary and full text,
   read from the article's iMIS content page (Document `FindByVersionId`) and tidied
-  (fonts and inline styles removed), with its pictures where iMIS shows them. Feature and in-text images on the iMIS site are
+  (fonts and inline styles removed), with its pictures where iMIS shows them.
+  Feature and in-text images on the iMIS site are
   copied into the Media Library. Members-only articles stay members-only. Later imports
   update the post unless "Stop updating from iMIS" is ticked on it. Batches of 5 posts,
   a dry run, and nothing is ever changed in iMIS.
