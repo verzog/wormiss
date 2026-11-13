@@ -766,7 +766,9 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$html = Wormiss_Blog::filter_content( '<p>Full text.</p>' );
 		$this->assertStringContainsString( 'The answer.', $html );
 		$this->assertStringStartsWith( '<div class="wormiss-blog-post">', $html );
-		$this->assertStringContainsString( '<section class="card wormiss-blog-solution">', $html );
+		$this->assertStringContainsString( '<details class="card wormiss-blog-solution">', $html, 'Closed until opened.' );
+		$this->assertStringContainsString( 'Show the solution', $html );
+		$this->assertStringNotContainsString( '<details open', $html );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
 		$this->assertTrue( Wormiss_Blog::can_read(), 'Staff can always read.' );

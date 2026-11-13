@@ -227,7 +227,7 @@ class Wormiss_Blog {
 		$reveal = (int) get_post_meta( $post_id, self::META_REVEAL, true );
 		$due    = $reveal <= time();
 		if ( ! $due && ! current_user_can( 'edit_post', $post_id ) ) {
-			return '<div class="alert alert-info wormiss-blog-solution wormiss-blog-solution--waiting"><p>' . esc_html(
+			return '<div class="alert alert-info wormiss-blog-solution wormiss-blog-solution--waiting">' . self::eye_icon() . '<p>' . esc_html(
 				sprintf(
 					/* translators: %s: date and time. */
 					__( 'The solution will be published on %s.', 'wormiss' ),
@@ -242,9 +242,27 @@ class Wormiss_Blog {
 				wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $reveal )
 			)
 		) . '</p>';
-		return '<section class="card wormiss-blog-solution"><div class="card-header"><h2 class="h5 mb-0">'
-			. esc_html__( 'Solution', 'wormiss' ) . '</h2></div><div class="card-body">'
-			. $note . self::link_old_addresses( $solution ) . '</div></section>';
+		// Closed until the reader chooses to see it, as on the iMIS blog (no script needed).
+		return '<details class="card wormiss-blog-solution"><summary class="card-header wormiss-blog-solution__reveal">'
+			. self::eye_icon()
+			. '<span class="wormiss-blog-solution__title h5">' . esc_html__( 'Solution', 'wormiss' ) . '</span>'
+			. '<span class="wormiss-blog-solution__hint">' . esc_html__( 'Think it through first: the solution is hidden until you choose to see it.', 'wormiss' ) . '</span>'
+			. '<span class="btn wormiss-blog-solution__button">'
+			. '<span class="wormiss-blog-solution__show">' . esc_html__( 'Show the solution', 'wormiss' ) . '</span>'
+			. '<span class="wormiss-blog-solution__hide">' . esc_html__( 'Hide the solution', 'wormiss' ) . '</span>'
+			. '</span></summary><div class="card-body">'
+			. $note . self::link_old_addresses( $solution ) . '</div></details>';
+	}
+
+	/**
+	 * An eye icon (decorative).
+	 *
+	 * @return string SVG.
+	 */
+	private static function eye_icon(): string {
+		return '<svg class="wormiss-blog-solution__icon" aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24"'
+			. ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+			. '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 	}
 
 	/**
