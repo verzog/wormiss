@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.31.1
+Stable tag: 0.32.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.32.0 =
+* Members' blog: a new "Members' blog" section at /blogs/ with its own categories (and subcategories) and topics. Readers are the roles you tick in Wormiss > Settings > Members' blog (e.g. a paid membership role), plus staff; everyone else sees each post's intro and a sign-in message, never the full text, the solution or the discussion (on the page, in feeds or through the REST API). Each post's solution shows to readers from its reveal time; staff see it earlier, marked with that time.
+* Import the iMIS blog (Smart Blogs): every published post with its text (old posts' HTML tidied; new posts' text, pictures and dividing lines), its intro (what iMIS shows to non-members; old posts get their first paragraph), its solution and reveal time, header picture, category, subcategory, tags and author (the member's WordPress account by iMIS ID). Every comment comes too, with replies under their parents, linked to the commenter's account or named from iMIS. Pictures are copied into the Media Library. Links to old iMIS blog addresses go to the post here. Small batches every minute, a dry run, and "Stop updating from iMIS" per post. No CPD is recorded for imported activity; nothing is changed in iMIS.
 
 = 0.31.1 =
 * Audit log: "Download as text" saves the newest 20, 50, 200 or 1000 entries as a plain text file (time, call, result, error, user, iMIS ID and, if ticked, what was sent and what iMIS replied, laid out for reading), for keeping or sending to support. Administrators only; passwords and tokens are never in it.

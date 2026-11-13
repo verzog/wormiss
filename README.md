@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.31.1)
+## What it does (0.32.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -77,6 +77,11 @@ whose iMIS REST client and audit log it reuses.
   copied into the Media Library. Members-only articles stay members-only. Later imports
   update the post unless "Stop updating from iMIS" is ticked on it. Batches of 5 posts,
   a dry run, and nothing is ever changed in iMIS.
+
+* **Members' blog** (at `/blogs/`): imported from iMIS Smart Blogs with all posts, intros,
+  solutions (shown from their reveal time), categories, topics, authors, threaded comments
+  and pictures. Readers are the roles chosen in settings (e.g. a paid membership role) plus
+  staff; others see intros only. Links to old iMIS blog addresses go to the posts here.
 
 * **Event types** (Events > Event types): each type has its own iMIS template
   event, and optionally an iMIS event category (its ID in iMIS, up to 5 characters, e.g. COUR) given to its events on every send.
