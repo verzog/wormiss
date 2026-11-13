@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.37.1
+Stable tag: 0.38.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.38.0 =
+* Members' blog filters: a "Blog filters" block for the blog home, category and topic pages, with Category, Level, Topic, Author, Published from/to and a keyword search. Choosing a level (for example All Levels) finds it under every category. For visitors who cannot read the blog, the keyword search looks at titles and summaries only, so members-only text cannot be found by searching.
 
 = 0.37.1 =
 * Blog import: "Seconds per blog batch" in Settings > Members' blog (10 to 60, default 40). Each batch asks PHP for the time it needs for that request only (twice its seconds plus 30), so a site with PHP's usual 30-second limit no longer cuts batches to 15 seconds; page views keep their limit. Where PHP will not allow more, a batch keeps to half the limit there is, as before.

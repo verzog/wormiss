@@ -61,6 +61,7 @@ class Wormiss_Plugin {
 		Wormiss_News_Import::init();
 		Wormiss_Images::init();
 		Wormiss_Blog::init();
+		Wormiss_Blog_Filters::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();
 		if ( is_admin() ) {
@@ -81,7 +82,9 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/member' );
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		register_block_type( WORMISS_DIR . '/blocks/complete' );
+		wp_register_style( 'wormiss-blog-filters', plugins_url( 'assets/blog-filters.css', WORMISS_FILE ), [], WORMISS_VERSION );
 		register_block_type( WORMISS_DIR . '/blocks/events' );
+		register_block_type( WORMISS_DIR . '/blocks/blog-filters' );
 		// The event blocks share one editor script and style.
 		wp_register_script(
 			'wormiss-event-blocks',
