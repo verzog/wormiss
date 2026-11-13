@@ -171,4 +171,33 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		Wormiss_Admin::render_settings();
 		$this->assertStringContainsString( 'Settings saved.', (string) ob_get_clean() );
 	}
+
+	/**
+	 * The audit log as text: each entry's details, and bodies (JSON laid out) only when asked.
+	 *
+	 * @return void
+	 */
+	public function test_log_text(): void {
+		$rows = [
+			[
+				'created'  => '2026-11-13 03:41:00',
+				'endpoint' => 'GET /api/iqa?QueryName=x',
+				'status'   => 'error',
+				'error'    => 'HTTP 400: Not comparable.',
+				'user_id'  => 0,
+				'imis_id'  => '10012',
+				'request'  => '',
+				'response' => '{"Errors":{"$values":[{"Message":"Not comparable."}]}}',
+			],
+		];
+		$text = Wormiss_Admin::log_text( $rows, true );
+		$this->assertStringContainsString( '1 entries', $text );
+		$this->assertStringContainsString( 'Call: GET /api/iqa?QueryName=x', $text );
+		$this->assertStringContainsString( 'Error: HTTP 400: Not comparable.', $text );
+		$this->assertStringContainsString( 'iMIS ID: 10012', $text );
+		$this->assertStringContainsString( 'Time: 13/11/2026', $text, 'Site time and date format.' );
+		$this->assertStringContainsString( "iMIS replied:\n{\n", $text );
+		$this->assertStringNotContainsString( 'Sent to iMIS:', $text, 'No empty sections.' );
+		$this->assertStringNotContainsString( 'iMIS replied:', Wormiss_Admin::log_text( $rows, false ) );
+	}
 }
