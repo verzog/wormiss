@@ -38,16 +38,22 @@ class Wormiss_Content_Check {
 	public const ACTION = 'wormiss_content_check';
 
 	/**
-	 * The lookups made, label => path ({key} is the article's key).
+	 * The lookups made by the article's key, label => path ({key} is the article's key). The
+	 * Document object holds a content page, its text in Blob; it is keyed by DocumentKey, so it is
+	 * found by DocumentVersionKey first, then read by its own key.
 	 */
 	public const LOOKUPS = [
-		'Content items by content key' => '/api/ContentItem?ContentKey={key}',
-		'Content by key'               => '/api/Content/{key}',
-		'Document by key'              => '/api/Document/{key}',
+		'Document by version key' => '/api/Document?DocumentVersionKey={key}',
+		'Document path'           => '/api/DocumentPath?DocumentVersionKey={key}',
 	];
 
 	/**
-	 * Longest reply kept for showing, in characters.
+	 * The lookup by the Document's own key, once found.
+	 */
+	public const BY_DOCUMENT_KEY = [ 'Document by its document key' => '/api/Document/{key}' ];
+
+	/**
+	 * Longest reply or decoded text kept for showing, in characters.
 	 */
 	public const MAX_SHOWN = 20000;
 
@@ -74,40 +80,185 @@ class Wormiss_Content_Check {
 	 * Make the lookups for one article.
 	 *
 	 * @param string $key The article's Document Version Key.
-	 * @return array[] One per lookup: label, path, ok, status, body.
+	 * @return array[] One per lookup: label, path, ok, status, body, decoded (Blob text found).
 	 */
 	public static function run( string $key ): array {
 		$key = strtolower( trim( $key ) );
 		if ( ! self::is_key( $key ) ) {
 			return [];
 		}
-		$client  = new Wormiss_Rest_Client();
-		$results = [];
+		$client       = new Wormiss_Rest_Client();
+		$results      = [];
+		$document_key = '';
 		foreach ( self::LOOKUPS as $label => $path ) {
-			$path = str_replace( '{key}', $key, $path );
-			try {
-				$reply  = $client->request( 'GET', $path );
-				$result = [
-					'ok'     => true,
-					'status' => 'HTTP ' . $reply->code,
-					'body'   => self::pretty( (string) $reply->raw ),
-				];
-			} catch ( Wormiss_Exception $e ) {
-				$result = [
-					'ok'     => false,
-					'status' => $e->getMessage(),
-					'body'   => '',
-				];
+			$result    = self::lookup( $client, $label, str_replace( '{key}', $key, $path ) );
+			$results[] = $result;
+			if ( '' === $document_key && '' !== $result['document_key'] ) {
+				$document_key = $result['document_key'];
 			}
-			$results[] = array_merge(
-				[
-					'label' => $label,
-					'path'  => $path,
-				],
-				$result
-			);
+		}
+		if ( '' !== $document_key ) {
+			foreach ( self::BY_DOCUMENT_KEY as $label => $path ) {
+				$results[] = self::lookup( $client, $label, str_replace( '{key}', $document_key, $path ) );
+			}
 		}
 		return $results;
+	}
+
+	/**
+	 * One read-only lookup.
+	 *
+	 * @param Wormiss_Rest_Client $client Client.
+	 * @param string              $label  Label.
+	 * @param string              $path   Path.
+	 * @return array label, path, ok, status, body, decoded, document_key.
+	 */
+	private static function lookup( Wormiss_Rest_Client $client, string $label, string $path ): array {
+		$result = [
+			'label'        => $label,
+			'path'         => $path,
+			'ok'           => false,
+			'status'       => '',
+			'body'         => '',
+			'decoded'      => [],
+			'document_key' => '',
+		];
+		try {
+			$reply            = $client->request( 'GET', $path );
+			$result['ok']     = true;
+			$result['status'] = 'HTTP ' . $reply->code;
+			$body             = json_decode( (string) $reply->raw );
+			if ( is_object( $body ) ) {
+				$result['decoded']      = self::take_blobs( $body );
+				$result['document_key'] = self::document_key( $body );
+				$result['body']         = self::pretty( (string) wp_json_encode( $body ) );
+			} else {
+				$result['body'] = self::pretty( (string) $reply->raw );
+			}
+		} catch ( Wormiss_Exception $e ) {
+			$result['status'] = $e->getMessage();
+		}
+		return $result;
+	}
+
+	/**
+	 * The DocumentKey of the first Document in a reply (one entity or a page of them), if it is a key.
+	 *
+	 * @param object $body Decoded reply.
+	 * @return string
+	 */
+	public static function document_key( object $body ): string {
+		$rows = Wormiss_Rest_Client::items( $body );
+		$row  = $rows ? $rows[0] : $body;
+		if ( ! is_object( $row ) ) {
+			return '';
+		}
+		$key = (string) ( Wormiss_Rest_Client::properties( $row )['DocumentKey'] ?? '' );
+		return self::is_key( $key ) ? strtolower( $key ) : '';
+	}
+
+	/**
+	 * Replace each Blob value in a reply with a short note, and return the Blobs decoded to text.
+	 *
+	 * @param mixed $node Decoded reply, changed in place.
+	 * @return string[]
+	 */
+	public static function take_blobs( &$node ): array {
+		$found = [];
+		if ( is_array( $node ) ) {
+			foreach ( $node as &$child ) {
+				$found = array_merge( $found, self::take_blobs( $child ) );
+			}
+			unset( $child );
+			return $found;
+		}
+		if ( ! is_object( $node ) ) {
+			return $found;
+		}
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		if ( isset( $node->Name ) && 'Blob' === $node->Name && isset( $node->Value ) ) {
+			$value = is_object( $node->Value ) && property_exists( $node->Value, '$value' ) ? $node->Value->{'$value'} : $node->Value;
+			if ( is_string( $value ) && '' !== $value ) {
+				$text        = self::decode_blob( $value );
+				$found[]     = $text;
+				$node->Value = sprintf( '[%d characters of encoded content: decoded below]', strlen( $value ) );
+			}
+			// phpcs:enable
+			return $found;
+		}
+		foreach ( get_object_vars( $node ) as $name => $child ) {
+			$found       = array_merge( $found, self::take_blobs( $child ) );
+			$node->$name = $child;
+		}
+		return $found;
+	}
+
+	/**
+	 * A Blob (base 64) as readable text: unzipped if compressed, UTF-16 converted, cut to the
+	 * longest shown. Binary that is not text is reported as such.
+	 *
+	 * @param string $value Base 64.
+	 * @return string
+	 */
+	public static function decode_blob( string $value ): string {
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- iMIS sends binary as base 64.
+		$bytes = base64_decode( $value, true );
+		if ( false === $bytes ) {
+			return __( '(Not base 64: shown as sent.)', 'wormiss' ) . "\n" . self::cut( $value );
+		}
+		if ( str_starts_with( $bytes, "\x1f\x8b" ) && function_exists( 'gzdecode' ) ) {
+			$unzipped = @gzdecode( $bytes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Not compressed is an answer.
+			$bytes    = false === $unzipped ? $bytes : $unzipped;
+		} elseif ( ! self::is_utf8( $bytes ) && function_exists( 'gzinflate' ) ) {
+			$inflated = @gzinflate( $bytes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Not compressed is an answer.
+			$bytes    = false === $inflated ? $bytes : $inflated;
+		}
+		if ( str_starts_with( $bytes, "\xff\xfe" ) ) {
+			$bytes = self::from_utf16( substr( $bytes, 2 ), 'UTF-16LE' );
+		} elseif ( str_starts_with( $bytes, "\xfe\xff" ) ) {
+			$bytes = self::from_utf16( substr( $bytes, 2 ), 'UTF-16BE' );
+		} elseif ( str_starts_with( $bytes, "\xef\xbb\xbf" ) ) {
+			$bytes = substr( $bytes, 3 );
+		}
+		if ( ! self::is_utf8( $bytes ) ) {
+			return sprintf(
+				/* translators: %d: number of bytes. */
+				__( '(%d bytes that are not text; the first ones in hex follow.)', 'wormiss' ),
+				strlen( $bytes )
+			) . "\n" . bin2hex( substr( $bytes, 0, 64 ) );
+		}
+		return self::cut( $bytes );
+	}
+
+	/**
+	 * Whether bytes are valid UTF-8 (without needing the mbstring extension).
+	 *
+	 * @param string $bytes Bytes.
+	 * @return bool
+	 */
+	private static function is_utf8( string $bytes ): bool {
+		if ( function_exists( 'mb_check_encoding' ) ) {
+			return mb_check_encoding( $bytes, 'UTF-8' );
+		}
+		return 1 === preg_match( '//u', $bytes );
+	}
+
+	/**
+	 * UTF-16 text as UTF-8, with mbstring or iconv; unchanged (then shown as not text) without either.
+	 *
+	 * @param string $bytes    UTF-16 bytes, without the byte order mark.
+	 * @param string $encoding UTF-16LE or UTF-16BE.
+	 * @return string
+	 */
+	private static function from_utf16( string $bytes, string $encoding ): string {
+		if ( function_exists( 'mb_convert_encoding' ) ) {
+			return (string) mb_convert_encoding( $bytes, 'UTF-8', $encoding );
+		}
+		if ( function_exists( 'iconv' ) ) {
+			$converted = iconv( $encoding, 'UTF-8//IGNORE', $bytes );
+			return false === $converted ? $bytes : $converted;
+		}
+		return $bytes;
 	}
 
 	/**
@@ -121,10 +272,20 @@ class Wormiss_Content_Check {
 		if ( null !== $decoded ) {
 			$raw = (string) wp_json_encode( $decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 		}
-		if ( mb_strlen( $raw ) > self::MAX_SHOWN ) {
-			$raw = mb_substr( $raw, 0, self::MAX_SHOWN ) . "\n…";
+		return self::cut( $raw );
+	}
+
+	/**
+	 * Text cut to the longest shown.
+	 *
+	 * @param string $text Text.
+	 * @return string
+	 */
+	private static function cut( string $text ): string {
+		if ( mb_strlen( $text ) > self::MAX_SHOWN ) {
+			$text = mb_substr( $text, 0, self::MAX_SHOWN ) . "\n…";
 		}
-		return $raw;
+		return $text;
 	}
 
 	/**
@@ -213,6 +374,10 @@ class Wormiss_Content_Check {
 				. esc_html( (string) $lookup['status'] ) . '</p>';
 			if ( '' !== (string) $lookup['body'] ) {
 				echo '<textarea class="large-text code" rows="12" readonly>' . esc_textarea( (string) $lookup['body'] ) . '</textarea>';
+			}
+			foreach ( (array) ( $lookup['decoded'] ?? [] ) as $text ) {
+				echo '<p>' . esc_html__( 'Content (Blob) decoded:', 'wormiss' ) . '</p>';
+				echo '<textarea class="large-text code" rows="16" readonly>' . esc_textarea( (string) $text ) . '</textarea>';
 			}
 		}
 	}
