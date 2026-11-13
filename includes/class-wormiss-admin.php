@@ -221,6 +221,7 @@ class Wormiss_Admin {
 			__( 'Member changes to iMIS', 'wormiss' )   => $state( $on( 'member_push_enabled' ), $on( 'member_push_dry_run' ) ),
 			__( 'iMIS event import', 'wormiss' )        => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 			__( 'CPD hours on event pages', 'wormiss' ) => $on( 'event_cpd' ) ? __( 'On (read from iMIS)', 'wormiss' ) : __( 'Off', 'wormiss' ),
+			__( 'iMIS news import', 'wormiss' )         => $state( $on( 'news_import_enabled' ), $on( 'news_import_dry_run' ) ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
@@ -306,6 +307,14 @@ class Wormiss_Admin {
 		self::field( 'event_import_enabled', __( 'Import iMIS events daily', 'wormiss' ), 'wormiss_event_import' );
 		self::field( 'event_import_publish', __( 'Publish imported pages', 'wormiss' ), 'wormiss_event_import' );
 		self::field( 'event_import_since', __( 'Also import past events since', 'wormiss' ), 'wormiss_event_import' );
+
+		$title = __( 'Import iMIS news', 'wormiss' );
+		add_settings_section( 'wormiss_news_import', $title, [ __CLASS__, 'news_import_intro' ], self::PAGE );
+		self::field( 'news_import_enabled', __( 'Import iMIS news daily', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_dry_run', __( 'News import dry run (report only)', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_publish', __( 'Publish imported news', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_query', __( 'News query', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_category', __( 'Category for imported news', 'wormiss' ), 'wormiss_news_import' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -465,6 +474,21 @@ class Wormiss_Admin {
 			. ' ' . esc_html__( 'linked to it, with its iMIS description, image and event type, published or as a draft.', 'wormiss' )
 			. ' ' . esc_html__( 'Title and description follow iMIS; dates, place and places left always come from iMIS.', 'wormiss' )
 			. ' ' . esc_html__( 'Nothing is changed in iMIS, and pages are never removed.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the news import section (and the marker that its checkboxes were shown).
+	 *
+	 * @return void
+	 */
+	public static function news_import_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[news_import_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Once a day, each news article the query lists becomes a post in the category below, with its', 'wormiss' )
+			. ' ' . esc_html__( 'iMIS tags, publication date, summary, full text (formatting tidied) and images copied into the', 'wormiss' )
+			. ' ' . esc_html__( 'Media Library. Members-only articles stay members-only. Later imports update the post unless', 'wormiss' )
+			. ' ' . esc_html__( '"Stop updating from iMIS" is ticked on it. Nothing is changed in iMIS; posts are never removed.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -641,6 +665,26 @@ class Wormiss_Admin {
 					. ' ' . esc_html__( 'in small batches (5 pages, 2 images) every 2 minutes in the background. Blank imports upcoming events only.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'news_import_category':
+				printf(
+					'<input type="text" class="regular-text" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				return;
+			case 'news_import_query':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'An IQA path. One row per article and tag, with Document Version Key, and ideally Alternate', 'wormiss' )
+					. ' ' . esc_html__( 'Name, Document Description, Publication Date, Tag Name and Thumbnail Image. No prompts.', 'wormiss' )
+					. '</p>';
+				return;
 			case 'user_sync_query':
 				printf(
 					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
@@ -717,6 +761,9 @@ class Wormiss_Admin {
 			case 'record_purchases':
 			case 'event_import_enabled':
 			case 'event_import_publish':
+			case 'news_import_enabled':
+			case 'news_import_dry_run':
+			case 'news_import_publish':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
 			case 'member_push_enabled':
@@ -760,6 +807,16 @@ class Wormiss_Admin {
 					echo ' <span class="description">'
 						. esc_html__( 'Imported pages go live with their iMIS description, image and event type. Off: drafts.', 'wormiss' )
 						. ' ' . esc_html__( 'Drafts made earlier are published too; a page an editor unpublishes stays a draft.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'news_import_publish' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'New imported posts go live. Off: drafts. Posts already made keep their status.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'news_import_dry_run' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Reads iMIS and reports which posts would be made or updated, but saves nothing.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'member_push_enabled' === $key ) {
@@ -860,6 +917,23 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="action" value="wormiss_event_import_now" />';
 		wp_nonce_field( 'wormiss_event_import_now' );
 		submit_button( __( 'Import iMIS events now', 'wormiss' ), 'secondary', 'submit', false );
+		echo '</form>';
+
+		echo '<h2 id="wormiss-news-import">' . esc_html__( 'Import iMIS news now', 'wormiss' ) . '</h2>';
+		$summary = Wormiss_News_Import::summary();
+		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The news import has not run yet.', 'wormiss' ) ) . '</p>';
+		$notes = Wormiss_News_Import::notes();
+		if ( $notes ) {
+			echo '<ul class="ul-disc">';
+			foreach ( $notes as $note ) {
+				echo '<li>' . esc_html( $note ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		echo '<input type="hidden" name="action" value="wormiss_news_import_now" />';
+		wp_nonce_field( 'wormiss_news_import_now' );
+		submit_button( __( 'Import iMIS news now', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
 		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';

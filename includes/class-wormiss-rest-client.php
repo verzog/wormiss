@@ -289,6 +289,51 @@ class Wormiss_Rest_Client {
 	}
 
 	/**
+	 * The published version of a content document (e.g. a news article), found by its version
+	 * key with the Document service's FindByVersionId operation (a POST to _Execute that only
+	 * reads). Null when iMIS has no such document.
+	 *
+	 * @param string $version_key Document version key (a GUID).
+	 * @return object|null DocumentData as iMIS sent it (its content in Data, base 64).
+	 * @throws Wormiss_Exception On a failed request.
+	 */
+	public function find_document( string $version_key ): ?object {
+		$result = $this->request( 'POST', '/api/Document/_Execute', self::document_execute_body( 'FindByVersionId', $version_key ) );
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
+		$document = is_object( $result->body ) ? ( $result->body->Result ?? null ) : null;
+		return is_object( $document ) ? $document : null;
+	}
+
+	/**
+	 * The body of a Document _Execute operation with one string parameter.
+	 *
+	 * @param string $operation Operation, e.g. FindByVersionId.
+	 * @param string $value     Its parameter.
+	 * @return array
+	 */
+	public static function document_execute_body( string $operation, string $value ): array {
+		return [
+			'$type'             => 'Asi.Soa.Core.DataContracts.GenericExecuteRequest, Asi.Contracts',
+			'OperationName'     => $operation,
+			'EntityTypeName'    => 'Document',
+			'Parameters'        => [
+				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.Object, mscorlib]], mscorlib',
+				'$values' => [
+					[
+						'$type'  => 'System.String',
+						'$value' => $value,
+					],
+				],
+			],
+			'ParameterTypeName' => [
+				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
+				'$values' => [ 'System.String' ],
+			],
+			'UseJson'           => false,
+		];
+	}
+
+	/**
 	 * Read events from the iMIS Events API (GET /api/Event), all pages.
 	 *
 	 * Asks iMIS for events starting on or after $from; if that filter is refused (HTTP 400),

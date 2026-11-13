@@ -174,25 +174,7 @@ class Wormiss_Content_Check {
 	 * @return array
 	 */
 	public static function execute_body( string $operation, string $key ): array {
-		return [
-			'$type'             => 'Asi.Soa.Core.DataContracts.GenericExecuteRequest, Asi.Contracts',
-			'OperationName'     => $operation,
-			'EntityTypeName'    => 'Document',
-			'Parameters'        => [
-				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.Object, mscorlib]], mscorlib',
-				'$values' => [
-					[
-						'$type'  => 'System.String',
-						'$value' => $key,
-					],
-				],
-			],
-			'ParameterTypeName' => [
-				'$type'   => 'System.Collections.ObjectModel.Collection`1[[System.String, mscorlib]], mscorlib',
-				'$values' => [ 'System.String' ],
-			],
-			'UseJson'           => false,
-		];
+		return Wormiss_Rest_Client::document_execute_body( $operation, $key );
 	}
 
 	/**
