@@ -295,6 +295,54 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A block of several images stays in the text (only a single image is the feature image);
+	 * long content is decoded whole for the import.
+	 *
+	 * @return void
+	 */
+	public function test_gallery_and_long_content(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Gallery',
+					'html' => '<p><img src="https://cdn.example.org/a.png" alt=""><img src="https://cdn.example.org/b.png" alt=""></p>',
+				],
+			],
+			'image' => '',
+		];
+		$built   = Wormiss_News_Import::build( 'Title', $content );
+		$this->assertSame( '', $built['feature'] );
+		$this->assertStringContainsString( 'b.png', $built['html'] );
+
+		$long = str_repeat( 'x', Wormiss_Content_Check::MAX_SHOWN + 100 );
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+		$this->assertSame( $long, Wormiss_Content_Check::decode_blob( base64_encode( $long ), false ) );
+	}
+
+	/**
+	 * A batch checks at most MAX_CHECKS articles, even when none changes, and carries on later.
+	 *
+	 * @return void
+	 */
+	public function test_batch_checks_bounded(): void {
+		$rows = [];
+		for ( $i = 0; $i <= Wormiss_News_Import::MAX_CHECKS; $i++ ) {
+			$rows[] = [ 'DocumentVersionKey' => sprintf( '00000000-0000-0000-0000-%012d', $i ) ];
+		}
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( $rows ) );
+		for ( $i = 0; $i < Wormiss_News_Import::MAX_CHECKS; $i++ ) {
+			$this->imis->reply( '/api/Document/_Execute', 200, [ 'Result' => [ 'Status' => 'Archived' ] ] );
+		}
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( Wormiss_News_Import::MAX_CHECKS, $report['skipped'] );
+		$this->assertSame( 1, $report['remaining'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_News_Import::MORE_HOOK ) );
+		wp_clear_scheduled_hook( Wormiss_News_Import::MORE_HOOK );
+		delete_option( Wormiss_News_Import::LIST_OPTION );
+		delete_option( Wormiss_News_Import::DONE_OPTION );
+	}
+
+	/**
 	 * Off, or with no query, nothing is read.
 	 *
 	 * @return void

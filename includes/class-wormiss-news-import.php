@@ -99,6 +99,11 @@ class Wormiss_News_Import {
 	const BATCH = 5;
 
 	/**
+	 * Articles checked per batch (each is one iMIS read, changed or not).
+	 */
+	const MAX_CHECKS = 25;
+
+	/**
 	 * Images copied per batch.
 	 */
 	const MAX_IMAGES = 6;
@@ -348,15 +353,17 @@ class Wormiss_News_Import {
 	private static function write( Wormiss_Rest_Client $client, array $report, array $done, array $articles, int $read ): array {
 		$report['read'] = count( $articles );
 		$writes         = 0;
+		$checked        = 0;
 		$todo           = 0;
 		foreach ( $articles as $key => $article ) {
 			if ( isset( $done[ $key ] ) ) {
 				continue;
 			}
-			if ( $writes >= self::BATCH || self::$images >= self::MAX_IMAGES ) {
+			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || self::$images >= self::MAX_IMAGES ) {
 				++$todo;
 				continue;
 			}
+			++$checked;
 			$done[ $key ] = true;
 			$result       = self::one( $client, $article, $report );
 			if ( 'created' === $result || 'updated' === $result ) {
@@ -415,7 +422,7 @@ class Wormiss_News_Import {
 		}
 		$data    = $document->Data ?? '';
 		$data    = is_object( $data ) && property_exists( $data, '$value' ) ? $data->{'$value'} : $data;
-		$content = self::parse( Wormiss_Content_Check::decode_blob( is_string( $data ) ? $data : '' ) );
+		$content = self::parse( Wormiss_Content_Check::decode_blob( is_string( $data ) ? $data : '', false ) );
 		if ( null === $content ) {
 			/* translators: %s: article title. */
 			self::note( $report, sprintf( __( '%s: its iMIS content could not be read, so not imported.', 'wormiss' ), self::label( $article ) ) );
@@ -429,7 +436,9 @@ class Wormiss_News_Import {
 		// phpcs:enable
 		$built = self::build( $title, $content );
 		$date  = self::local_date( '' !== $content['date'] ? $content['date'] : $article['date'] );
-		$hash  = md5( (string) wp_json_encode( [ $title, $article['summary'], $date, $built['html'], $built['feature'], $article['tags'], $content['members'] ] ) );
+		// The featured image actually used (the page's, else the IQA thumbnail) is part of it.
+		$feature = '' !== $built['feature'] ? $built['feature'] : (string) $article['thumbnail'];
+		$hash    = md5( (string) wp_json_encode( [ $title, $article['summary'], $date, $built['html'], $feature, $article['tags'], $content['members'] ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash ) {
 			return 'skipped';
 		}
@@ -474,8 +483,8 @@ class Wormiss_News_Import {
 		update_post_meta( $saved, Wormiss_Access::META_ENABLED, $content['members'] );
 		update_post_meta( $saved, self::META_URL, self::page_url( $path ) );
 		$complete = self::images( $saved, $built, $article, $report );
-		// Kept only once every image is copied, so an import that ran out of image room finishes
-		// the post next time.
+		// Kept only once every image is copied, so an image that did not fit or failed is tried
+		// again next time.
 		if ( $complete ) {
 			update_post_meta( $saved, self::META_SOURCE, $hash );
 		} else {
@@ -561,7 +570,7 @@ class Wormiss_News_Import {
 
 	/**
 	 * The post's text from the page's blocks, and its feature image: a block that is only the
-	 * title as a heading is left out (the post has a title); the first block that is only an
+	 * title as a heading is left out (the post has a title); the first block that is only one
 	 * image becomes the featured image; the rest is tidied (see clean()) and joined.
 	 *
 	 * @param string $title   Post title.
@@ -577,8 +586,9 @@ class Wormiss_News_Import {
 				continue;
 			}
 			$text = trim( html_entity_decode( wp_strip_all_tags( $html ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
-			if ( '' === $text && '' === $feature && preg_match( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $match ) ) {
-				$feature = html_entity_decode( $match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			// Only a block of exactly one image (a gallery stays in the text).
+			if ( '' === $text && '' === $feature && 1 === preg_match_all( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $match ) ) {
+				$feature = html_entity_decode( $match[1][0], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 				continue;
 			}
 			if ( preg_match( '#^<h2>(.*)</h2>$#s', $html, $match )
@@ -636,7 +646,7 @@ class Wormiss_News_Import {
 	 * @param array $built   From build().
 	 * @param array $article From articles().
 	 * @param array $report  Report, for notes.
-	 * @return bool Whether every image is done (false when this run ran out of image room).
+	 * @return bool Whether every image is done (false when one was not copied: no room, or it failed).
 	 */
 	private static function images( int $post_id, array $built, array $article, array &$report ): bool {
 		/**
@@ -694,7 +704,7 @@ class Wormiss_News_Import {
 	 * @param string $url      Image address.
 	 * @param array  $article  From articles(), for its title.
 	 * @param array  $report   Report, for notes.
-	 * @param bool   $complete Set to false when there was no room to copy it.
+	 * @param bool   $complete Set to false when it was not copied (no room, or it failed).
 	 * @return int Attachment ID, or 0.
 	 */
 	private static function copy( int $post_id, string $url, array $article, array &$report, bool &$complete ): int {
@@ -724,6 +734,7 @@ class Wormiss_News_Import {
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 		$tmp = download_url( $url, 30 );
 		if ( is_wp_error( $tmp ) ) {
+			$complete = false; // Tried again next import.
 			/* translators: 1: article title, 2: reason. */
 			self::note( $report, sprintf( __( '%1$s: an image could not be copied (%2$s).', 'wormiss' ), self::label( $article ), $tmp->get_error_message() ) );
 			return 0;
@@ -738,6 +749,7 @@ class Wormiss_News_Import {
 			self::label( $article )
 		);
 		if ( is_wp_error( $attachment ) ) {
+			$complete = false; // Tried again next import.
 			wp_delete_file( $tmp );
 			/* translators: 1: article title, 2: reason. */
 			self::note( $report, sprintf( __( '%1$s: an image could not be added (%2$s).', 'wormiss' ), self::label( $article ), $attachment->get_error_message() ) );

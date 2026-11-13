@@ -262,16 +262,18 @@ class Wormiss_Content_Check {
 
 	/**
 	 * A Blob (base 64) as readable text: unzipped if compressed, UTF-16 converted, cut to the
-	 * longest shown. Binary that is not text is reported as such.
+	 * longest shown unless asked for the whole. Binary that is not text is reported as such ('' for
+	 * the whole).
 	 *
 	 * @param string $value Base 64.
+	 * @param bool   $cut   Cut to the longest shown (for showing); false for the whole text.
 	 * @return string
 	 */
-	public static function decode_blob( string $value ): string {
+	public static function decode_blob( string $value, bool $cut = true ): string {
 		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- iMIS sends binary as base 64.
 		$bytes = base64_decode( $value, true );
 		if ( false === $bytes ) {
-			return __( '(Not base 64: shown as sent.)', 'wormiss' ) . "\n" . self::cut( $value );
+			return $cut ? __( '(Not base 64: shown as sent.)', 'wormiss' ) . "\n" . self::cut( $value ) : '';
 		}
 		if ( str_starts_with( $bytes, "\x1f\x8b" ) && function_exists( 'gzdecode' ) ) {
 			$unzipped = @gzdecode( $bytes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Not compressed is an answer.
@@ -288,13 +290,16 @@ class Wormiss_Content_Check {
 			$bytes = substr( $bytes, 3 );
 		}
 		if ( ! self::is_utf8( $bytes ) ) {
+			if ( ! $cut ) {
+				return '';
+			}
 			return sprintf(
 				/* translators: %d: number of bytes. */
 				__( '(%d bytes that are not text; the first ones in hex follow.)', 'wormiss' ),
 				strlen( $bytes )
 			) . "\n" . bin2hex( substr( $bytes, 0, 64 ) );
 		}
-		return self::cut( $bytes );
+		return $cut ? self::cut( $bytes ) : $bytes;
 	}
 
 	/**
