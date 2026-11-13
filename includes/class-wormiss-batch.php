@@ -55,6 +55,13 @@ class Wormiss_Batch {
 	private static $stopped = false;
 
 	/**
+	 * Whether the item being worked on got further (a picture copied, a name looked up).
+	 *
+	 * @var bool
+	 */
+	private static $progress = false;
+
+	/**
 	 * Start a batch's clock.
 	 *
 	 * @return void
@@ -124,8 +131,9 @@ class Wormiss_Batch {
 	 * @return int How many earlier batches started it and never finished.
 	 */
 	public static function begin( string $option, string $key ): int {
-		$working = get_option( $option );
-		$tries   = is_array( $working ) && ( $working['key'] ?? '' ) === $key ? (int) ( $working['tries'] ?? 0 ) : 0;
+		self::$progress = false;
+		$working        = get_option( $option );
+		$tries          = is_array( $working ) && ( $working['key'] ?? '' ) === $key ? (int) ( $working['tries'] ?? 0 ) : 0;
 		update_option(
 			$option,
 			[
@@ -135,6 +143,28 @@ class Wormiss_Batch {
 			false
 		);
 		return $tries;
+	}
+
+	/**
+	 * Note that the item being worked on got further.
+	 *
+	 * @return void
+	 */
+	public static function progress(): void {
+		self::$progress = true;
+	}
+
+	/**
+	 * After an item: record it as finished, unless it was put off without getting any further,
+	 * which counts as a try (so an item that never gets further is skipped after MAX_TRIES).
+	 *
+	 * @param string $option Option holding the item being worked on.
+	 * @return void
+	 */
+	public static function done( string $option ): void {
+		if ( ! self::$stopped || self::$progress ) {
+			self::end( $option );
+		}
 	}
 
 	/**

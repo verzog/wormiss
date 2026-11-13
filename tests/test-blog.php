@@ -539,6 +539,8 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_list_over_batches(): void {
+		// Left by an earlier, unfinished import: a fresh import does not count it.
+		update_option( Wormiss_Blog_Import::DONE_OPTION, [ self::KEY => true ] );
 		// The first page has a draft and says there is more; the usual list is the second page.
 		$draft = [
 			'BlogKey' => self::OLDER,
@@ -555,6 +557,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertSame( 1, get_option( Wormiss_Blog_Import::LIST_OPTION )['offset'] );
 		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
 
+		// Started long ago, but still being read: carried on, not started again.
+		$list         = get_option( Wormiss_Blog_Import::LIST_OPTION );
+		$list['time'] = time() - DAY_IN_SECONDS;
+		update_option( Wormiss_Blog_Import::LIST_OPTION, $list );
 		$this->imis->token(); // Each batch signs in afresh.
 		$report = Wormiss_Blog_Import::run_more();
 		$this->assertSame( 1, $report['read'], implode( ' ', $report['notes'] ) );
@@ -580,7 +586,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$report = Wormiss_Blog_Import::run();
 		$this->assertSame( 1, $report['skipped'] );
 		$this->assertSame( 0, Wormiss_Blog_Import::post_for( self::KEY ) );
-		$this->assertStringContainsString( 'stopped the import twice', implode( ' ', $report['notes'] ) );
+		$this->assertStringContainsString( 'two batches could not finish it', implode( ' ', $report['notes'] ) );
 		$this->assertFalse( get_option( Wormiss_Blog_Import::WORKING_OPTION ) );
 
 		update_option( Wormiss_Blog_Import::LIST_OPTION, [ 'time' => time() ] );
@@ -616,6 +622,17 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertTrue( Wormiss_Batch::put_off() );
 		Wormiss_Batch::start();
 		$this->assertFalse( Wormiss_Batch::put_off() );
+
+		// Put off without getting further: a try. Put off after getting further: not.
+		$this->assertSame( 0, Wormiss_Batch::begin( $option, 'c' ) );
+		Wormiss_Batch::stop();
+		Wormiss_Batch::done( $option );
+		$this->assertSame( 1, Wormiss_Batch::begin( $option, 'c' ) );
+		Wormiss_Batch::progress();
+		Wormiss_Batch::done( $option );
+		$this->assertSame( 0, Wormiss_Batch::begin( $option, 'c' ) );
+		Wormiss_Batch::end( $option );
+		Wormiss_Batch::start();
 	}
 
 	/**

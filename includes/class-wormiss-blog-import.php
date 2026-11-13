@@ -296,9 +296,15 @@ class Wormiss_Blog_Import {
 		self::$images = 0;
 		$client       = new Wormiss_Rest_Client();
 		$kept         = $carry_on ? get_option( self::LIST_OPTION ) : false;
-		if ( is_array( $kept ) && (int) ( $kept['time'] ?? 0 ) > time() - self::LIST_MAX_AGE && is_array( $kept['posts'] ?? null ) ) {
+		// A list still being read stays in use while each batch adds to it; a finished one ages
+		// from when its last page was read.
+		$since = is_array( $kept ) ? (int) ( $kept['touched'] ?? $kept['time'] ?? 0 ) : 0;
+		if ( is_array( $kept ) && $since > time() - self::LIST_MAX_AGE && is_array( $kept['posts'] ?? null ) ) {
 			$listing = $kept;
 		} else {
+			// A fresh list: what an earlier, unfinished import did no longer counts.
+			delete_option( self::DONE_OPTION );
+			$done = [];
 			try {
 				$listing = [
 					'posts'         => [],
@@ -322,6 +328,7 @@ class Wormiss_Blog_Import {
 				$report['notes'][] = $e->getMessage();
 				return self::save( $report );
 			}
+			$listing['touched'] = time();
 			if ( null !== $listing['offset'] ) {
 				// A long list is read over several batches, a page at a time.
 				update_option( self::LIST_OPTION, $listing, false );
@@ -334,6 +341,7 @@ class Wormiss_Blog_Import {
 				return self::save( $report );
 			}
 			uasort( $listing['posts'], static fn( array $a, array $b ): int => strcmp( $b['published'], $a['published'] ) );
+			$listing['time'] = $listing['touched'];
 		}
 		return self::write( $client, $report, $done, $listing, (int) $listing['time'] );
 	}
@@ -482,13 +490,13 @@ class Wormiss_Blog_Import {
 				Wormiss_Batch::end( self::WORKING_OPTION );
 				++$report['skipped'];
 				/* translators: %s: title. */
-				self::note( $report, sprintf( __( '%s: skipped, as it stopped the import twice (too big or too slow for one go); tried again next import.', 'wormiss' ), $post['title'] ) );
+				self::note( $report, sprintf( __( '%s: skipped, as two batches could not finish it (too big or too slow for one go); tried again next import.', 'wormiss' ), $post['title'] ) );
 				update_option( self::DONE_OPTION, $done, false );
 				continue;
 			}
 			++$checked;
 			$result = self::one( $client, $post, $listing, $report );
-			Wormiss_Batch::end( self::WORKING_OPTION );
+			Wormiss_Batch::done( self::WORKING_OPTION );
 			if ( 'created' === $result || 'updated' === $result ) {
 				++$writes;
 				++$report[ $result ];
@@ -1152,6 +1160,7 @@ class Wormiss_Blog_Import {
 		}
 		$name            = '' !== trim( $name ) ? sanitize_text_field( $name ) : __( 'A member', 'wormiss' );
 		$people[ $imis ] = $name;
+		Wormiss_Batch::progress();
 		update_option( self::PEOPLE_OPTION, $people, false );
 		return $name;
 	}
@@ -1294,6 +1303,7 @@ class Wormiss_Blog_Import {
 			return 0;
 		}
 		update_post_meta( (int) $attachment, self::META_FROM, $url );
+		Wormiss_Batch::progress();
 		return (int) $attachment;
 	}
 

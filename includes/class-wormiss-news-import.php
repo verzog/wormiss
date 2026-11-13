@@ -428,13 +428,13 @@ class Wormiss_News_Import {
 				Wormiss_Batch::end( self::WORKING_OPTION );
 				++$report['skipped'];
 				/* translators: %s: title. */
-				self::note( $report, sprintf( __( '%s: skipped, as it stopped the import twice (too big or too slow for one go); tried again next import.', 'wormiss' ), $article['title'] ) );
+				self::note( $report, sprintf( __( '%s: skipped, as two batches could not finish it (too big or too slow for one go); tried again next import.', 'wormiss' ), $article['title'] ) );
 				update_option( self::DONE_OPTION, $done, false );
 				continue;
 			}
 			++$checked;
 			$result = self::one( $client, $article, $report );
-			Wormiss_Batch::end( self::WORKING_OPTION );
+			Wormiss_Batch::done( self::WORKING_OPTION );
 			if ( 'created' === $result || 'updated' === $result ) {
 				++$writes;
 				++$report[ $result ];
@@ -941,6 +941,7 @@ class Wormiss_News_Import {
 			return 0;
 		}
 		update_post_meta( (int) $attachment, self::META_FROM, $url );
+		Wormiss_Batch::progress();
 		return (int) $attachment;
 	}
 
