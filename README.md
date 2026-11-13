@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.30.1)
+## What it does (0.30.2)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -72,7 +72,8 @@ whose iMIS REST client and audit log it reuses.
 * **iMIS news import:** daily (or on demand), each news article an IQA lists becomes a
   post in a News category, with its iMIS tags, publication date, summary and full text,
   read from the article's iMIS content page (Document `FindByVersionId`) and tidied
-  (fonts and inline styles removed). Feature and in-text images on the iMIS site are
+  (fonts and inline styles removed), with its pictures where iMIS shows them.
+  Feature and in-text images on the iMIS site are
   copied into the Media Library. Members-only articles stay members-only. Later imports
   update the post unless "Stop updating from iMIS" is ticked on it. Batches of 5 posts,
   a dry run, and nothing is ever changed in iMIS.

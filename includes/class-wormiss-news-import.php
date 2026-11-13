@@ -196,6 +196,40 @@ class Wormiss_News_Import {
 		add_action( 'admin_post_wormiss_news_import_now', [ __CLASS__, 'handle_run_now' ] );
 		add_action( 'add_meta_boxes_post', [ __CLASS__, 'add_box' ] );
 		add_action( 'save_post_post', [ __CLASS__, 'save_box' ] );
+		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'styles' ] );
+		add_filter( 'render_block_core/post-featured-image', [ __CLASS__, 'hide_featured' ], 10, 3 );
+	}
+
+	/**
+	 * The article layout (text beside its image, stacked on phones) on an imported news post.
+	 *
+	 * @return void
+	 */
+	public static function styles(): void {
+		if ( is_singular( 'post' ) && '' !== (string) get_post_meta( (int) get_queried_object_id(), self::META_KEY, true ) ) {
+			wp_enqueue_style( 'wormiss-news', plugins_url( 'assets/news.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		}
+	}
+
+	/**
+	 * On an imported article's own page, leave out the featured image when the article already
+	 * shows it (beside the text or on its own), so it is not there twice. News cards elsewhere,
+	 * on that page too, keep it.
+	 *
+	 * @param string   $html     Block HTML.
+	 * @param array    $block    Block.
+	 * @param WP_Block $instance Block instance.
+	 * @return string
+	 */
+	public static function hide_featured( $html, $block, $instance ) {
+		unset( $block ); // The instance has the post.
+		$post_id = $instance instanceof WP_Block ? (int) ( $instance->context['postId'] ?? 0 ) : 0;
+		if ( ! $post_id || ! is_singular() || (int) get_queried_object_id() !== $post_id
+			|| '' === (string) get_post_meta( $post_id, self::META_KEY, true ) ) {
+			return $html;
+		}
+		$content = (string) get_post_field( 'post_content', $post_id );
+		return str_contains( $content, 'wormiss-news-lead' ) || str_contains( $content, 'wormiss-news-feature' ) ? '' : $html;
 	}
 
 	/**
@@ -603,8 +637,9 @@ class Wormiss_News_Import {
 
 	/**
 	 * The post's text from the page's blocks, and its feature image: a block that is only the
-	 * title as a heading is left out (the post has a title); the first block that is only one
-	 * image becomes the featured image; the rest is tidied (see clean()) and joined.
+	 * title as a heading is left out (the post has a title); a block that is only one image
+	 * stays where it is (the first beside the text before it, as iMIS shows it) and the first
+	 * becomes the featured image too; the rest is tidied (see clean()) and joined.
 	 *
 	 * @param string $title   Post title.
 	 * @param array  $content From parse().
@@ -612,23 +647,43 @@ class Wormiss_News_Import {
 	 */
 	public static function build( string $title, array $content ): array {
 		$parts   = [];
+		$is_text = [];
 		$feature = '';
+		$lead    = false;
 		foreach ( $content['items'] as $item ) {
 			$html = self::clean( (string) $item['html'] );
 			if ( '' === $html ) {
 				continue;
 			}
 			$text = trim( html_entity_decode( wp_strip_all_tags( $html ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
-			// Only a block of exactly one image (a gallery stays in the text).
-			if ( '' === $text && '' === $feature && 1 === preg_match_all( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $match ) ) {
-				$feature = html_entity_decode( $match[1][0], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			// A block of exactly one image (a gallery stays as it is) stays in the article where iMIS
+			// has it: beside the text before it, as on the iMIS page, or on its own line. The first
+			// such image is also the featured image (for news cards).
+			if ( '' === $text && 1 === preg_match_all( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $match ) ) {
+				$first = '' === $feature;
+				if ( $first ) {
+					$feature = html_entity_decode( $match[1][0], ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				// The image with its link, if it has one (a banner or a link to the full picture).
+				preg_match( '#<a\b[^>]*>\s*<img\b[^>]*>\s*</a>|<img\b[^>]*>#i', $html, $tag );
+				$last = count( $parts ) - 1;
+				if ( $first && ! $lead && $last >= 0 && $is_text[ $last ] ) {
+					$parts[ $last ]   = '<div class="wormiss-news-lead"><div class="wormiss-news-lead__text">' . $parts[ $last ]
+						. '</div><figure class="wormiss-news-lead__image">' . $tag[0] . '</figure></div>';
+					$is_text[ $last ] = false;
+					$lead             = true;
+					continue;
+				}
+				$parts[]   = '<figure class="wormiss-news-image' . ( $first ? ' wormiss-news-feature' : '' ) . '">' . $tag[0] . '</figure>';
+				$is_text[] = false;
 				continue;
 			}
 			if ( preg_match( '#^<h2>(.*)</h2>$#s', $html, $match )
 				&& 0 === strcasecmp( trim( wp_strip_all_tags( $match[1] ) ), trim( $title ) ) ) {
 				continue;
 			}
-			$parts[] = $html;
+			$parts[]   = $html;
+			$is_text[] = '' !== $text; // A gallery is not text to sit beside.
 		}
 		if ( '' === $feature && '' !== (string) ( $content['image'] ?? '' ) ) {
 			$feature = (string) $content['image'];
@@ -652,7 +707,7 @@ class Wormiss_News_Import {
 		$html = wp_kses( $html, self::ALLOWED );
 		// Emphasis around nothing but line breaks or spaces is decoration: gone.
 		$html = (string) preg_replace( '#<(i|em|b|strong|u)>(?:\s|&nbsp;|<br\s*/?>)*</\1>#iu', '', $html );
-		$html = (string) preg_replace( '#(?:\s*<br\s*/?>\s*){2,}#i', '</p><p>', $html );
+		$html = self::split_breaks( $html );
 		$html = (string) preg_replace( '#<(\w+)>(?:\s|&nbsp;|&\#160;|\xc2\xa0)*</\1>#u', '', $html );
 		$html = (string) preg_replace( '#<p>\s*<br\s*/?>#i', '<p>', $html );
 		$html = (string) preg_replace( '#<br\s*/?>\s*</p>#i', '</p>', $html );
@@ -669,6 +724,49 @@ class Wormiss_News_Import {
 			$html
 		);
 		return trim( $html );
+	}
+
+	/**
+	 * Runs of two or more line breaks as new paragraphs, keeping emphasis that was open across
+	 * them (closed before the break, opened again after), so italic text stays italic.
+	 *
+	 * @param string $html HTML.
+	 * @return string
+	 */
+	public static function split_breaks( string $html ): string {
+		$parts = preg_split( '#((?:\s*<br\s*/?>\s*){2,}|</?(?:i|em|b|strong|u)>)#i', $html, -1, PREG_SPLIT_DELIM_CAPTURE );
+		$out   = '';
+		$open  = [];
+		foreach ( (array) $parts as $part ) {
+			if ( preg_match( '#^<(/?)(i|em|b|strong|u)>$#i', $part, $tag ) ) {
+				$name = strtolower( $tag[2] );
+				if ( '' === $tag[1] ) {
+					$open[] = $name;
+				} else {
+					$at = array_search( $name, array_reverse( $open, true ), true );
+					if ( false !== $at ) {
+						unset( $open[ $at ] );
+						$open = array_values( $open );
+					}
+				}
+				$out .= $part;
+				continue;
+			}
+			if ( preg_match( '#^(?:\s*<br\s*/?>\s*){2,}$#i', $part ) ) {
+				$close = '';
+				foreach ( array_reverse( $open ) as $name ) {
+					$close .= '</' . $name . '>';
+				}
+				$reopen = '';
+				foreach ( $open as $name ) {
+					$reopen .= '<' . $name . '>';
+				}
+				$out .= $close . '</p><p>' . $reopen;
+				continue;
+			}
+			$out .= $part;
+		}
+		return $out;
 	}
 
 	/**
