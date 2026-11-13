@@ -59,6 +59,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Cpd::init();
 		Wormiss_Event_Import::init();
 		Wormiss_News_Import::init();
+		Wormiss_Images::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();

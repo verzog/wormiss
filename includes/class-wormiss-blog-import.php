@@ -713,7 +713,7 @@ class Wormiss_Blog_Import {
 			case 'LegacyHtml':
 				$html = (string) ( $props['html'] ?? '' );
 				$html = (string) preg_replace( '#</?(?:html|head|body)\b[^>]*>#i', '', $html );
-				return Wormiss_News_Import::clean( self::site_paths( $html ) );
+				return self::bootstrap( Wormiss_News_Import::clean( self::site_paths( $html ) ) );
 			case 'Text':
 				return self::text_html( (string) ( $props['text'] ?? '' ), (string) ( $props['align'] ?? '' ), ! empty( $props['bold'] ) );
 			case 'Image':
@@ -721,23 +721,30 @@ class Wormiss_Blog_Import {
 				if ( '' === $src ) {
 					return '';
 				}
-				return '<figure class="wormiss-blog-image"><img src="' . esc_url( $src ) . '" alt="' . esc_attr( (string) ( $props['alt'] ?? '' ) ) . '" /></figure>';
+				return '<figure class="figure wormiss-blog-image"><img class="img-fluid" src="' . esc_url( $src )
+					. '" alt="' . esc_attr( (string) ( $props['alt'] ?? '' ) ) . '" /></figure>';
 			case 'Separator':
 				return 'vertical' === ( $props['orientation'] ?? '' ) ? '' : '<hr />';
 		}
-		// Containers (e.g. Flex): their items, in order.
+		// Containers (e.g. Flex): their items, in order; side by side (a Bootstrap-style row of
+		// columns, stacked on phones) when the container lays out a row of two or more.
 		if ( is_array( $props['items'] ?? null ) ) {
 			$parts = [];
 			foreach ( $props['items'] as $item ) {
 				$html = is_array( $item ) ? self::block_html( $item, $unknown ) : '';
-				if ( '' !== $html ) {
+				if ( '' !== $html && '<hr />' !== $html ) {
 					$parts[] = $html;
 				}
+			}
+			if ( count( $parts ) > 1 && 'column' !== ( $props['direction'] ?? '' ) ) {
+				return '<div class="row wormiss-blog-row">' . "\n"
+					. implode( "\n", array_map( static fn( string $part ): string => '<div class="col-md">' . "\n" . $part . "\n</div>", $parts ) )
+					. "\n</div>";
 			}
 			return implode( "\n\n", $parts );
 		}
 		if ( isset( $props['html'] ) && is_string( $props['html'] ) ) {
-			return Wormiss_News_Import::clean( self::site_paths( $props['html'] ) );
+			return self::bootstrap( Wormiss_News_Import::clean( self::site_paths( $props['html'] ) ) );
 		}
 		if ( isset( $props['text'] ) && is_string( $props['text'] ) ) {
 			return self::text_html( $props['text'], (string) ( $props['align'] ?? '' ), ! empty( $props['bold'] ) );
@@ -761,14 +768,40 @@ class Wormiss_Blog_Import {
 		if ( '' === $text ) {
 			return '';
 		}
-		$class = in_array( $align, [ 'center', 'right' ], true ) ? ' class="has-text-align-' . $align . '"' : '';
-		$out   = [];
+		$aligns = [
+			'center' => 'text-center has-text-align-center',
+			'right'  => 'text-end has-text-align-right',
+		];
+		$class  = isset( $aligns[ $align ] ) ? ' class="' . $aligns[ $align ] . '"' : '';
+		$out    = [];
 		foreach ( preg_split( "/\n\s*\n/", $text ) as $paragraph ) {
 			$html  = nl2br( esc_html( trim( $paragraph ) ), false );
 			$html  = $bold ? '<strong>' . $html . '</strong>' : $html;
 			$out[] = '<p' . $class . '>' . $html . '</p>';
 		}
 		return implode( "\n", $out );
+	}
+
+	/**
+	 * Old posts' tidied HTML in simple Bootstrap-style markup: pictures that fit their column,
+	 * tables that scroll on phones, quotes styled as quotes, and no empty paragraphs or runs of
+	 * line breaks used as spacing.
+	 *
+	 * @param string $html Cleaned HTML (no classes or styles left).
+	 * @return string
+	 */
+	public static function bootstrap( string $html ): string {
+		$html = (string) preg_replace( '#<img\b(?![^>]*\bclass=)#i', '<img class="img-fluid"', $html );
+		$html = (string) preg_replace( '#<table\b[^>]*>#i', '<div class="table-responsive"><table class="table table-sm">', $html );
+		$html = (string) preg_replace( '#</table>#i', '</table></div>', $html );
+		$html = (string) preg_replace( '#<blockquote\b[^>]*>#i', '<blockquote class="blockquote">', $html );
+		// Spacing done with breaks: at most two in a row, and none at a paragraph's start or end.
+		$html = (string) preg_replace( '#(?:<br\s*/?>\s*){3,}#i', '<br /><br />', $html );
+		$html = (string) preg_replace( '#(<p\b[^>]*>)\s*(?:<br\s*/?>\s*)+#i', '$1', $html );
+		$html = (string) preg_replace( '#(?:<br\s*/?>\s*)+</p>#i', '</p>', $html );
+		// Empty paragraphs (nothing, spaces or non-breaking spaces) used as spacing.
+		$html = (string) preg_replace( '#<p\b[^>]*>(?:\s|&nbsp;|&\#160;|\x{00a0})*</p>\s*#iu', '', $html );
+		return trim( $html );
 	}
 
 	/**

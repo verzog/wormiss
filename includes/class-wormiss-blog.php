@@ -73,6 +73,7 @@ class Wormiss_Blog {
 		// Before the Events post type, which rebuilds permalinks after an update.
 		add_action( 'init', [ __CLASS__, 'register' ], 9 );
 		add_filter( 'the_content', [ __CLASS__, 'filter_content' ], 8 );
+		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'styles' ] );
 		add_filter( 'comments_open', [ __CLASS__, 'comments_open' ], 20, 2 );
 		add_filter( 'comments_array', [ __CLASS__, 'comments_array' ], 20, 2 );
 		add_filter( 'comment_text', [ __CLASS__, 'comment_text' ], 20, 2 );
@@ -192,9 +193,23 @@ class Wormiss_Blog {
 		// What shows depends on who is looking: never page-cached.
 		Wormiss_Members_Only::no_page_cache();
 		if ( ! self::can_read() ) {
-			return self::link_old_addresses( (string) get_post_meta( $post_id, self::META_INTRO, true ) ) . self::locked_notice();
+			$html = self::link_old_addresses( (string) get_post_meta( $post_id, self::META_INTRO, true ) ) . self::locked_notice();
+		} else {
+			$html = self::link_old_addresses( (string) $content ) . self::solution_html( $post_id );
 		}
-		return self::link_old_addresses( (string) $content ) . self::solution_html( $post_id );
+		// In an excerpt just the text; on the page, in a wrapper the blog styles hang off.
+		return doing_filter( 'get_the_excerpt' ) ? $html : '<div class="wormiss-blog-post">' . $html . '</div>';
+	}
+
+	/**
+	 * The blog's layout styles, on blog pages.
+	 *
+	 * @return void
+	 */
+	public static function styles(): void {
+		if ( is_singular( self::POST_TYPE ) || is_post_type_archive( self::POST_TYPE ) || is_tax( [ self::TAX_CATEGORY, self::TAX_TOPIC ] ) ) {
+			wp_enqueue_style( 'wormiss-blog', plugins_url( 'assets/blog.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		}
 	}
 
 	/**
@@ -212,7 +227,7 @@ class Wormiss_Blog {
 		$reveal = (int) get_post_meta( $post_id, self::META_REVEAL, true );
 		$due    = $reveal <= time();
 		if ( ! $due && ! current_user_can( 'edit_post', $post_id ) ) {
-			return '<div class="wormiss-blog-solution wormiss-blog-solution--waiting"><p>' . esc_html(
+			return '<div class="alert alert-info wormiss-blog-solution wormiss-blog-solution--waiting"><p>' . esc_html(
 				sprintf(
 					/* translators: %s: date and time. */
 					__( 'The solution will be published on %s.', 'wormiss' ),
@@ -220,15 +235,16 @@ class Wormiss_Blog {
 				)
 			) . '</p></div>';
 		}
-		$note = $due ? '' : '<p class="wormiss-blog-solution__note">' . esc_html(
+		$note = $due ? '' : '<p class="small text-muted wormiss-blog-solution__note">' . esc_html(
 			sprintf(
 				/* translators: %s: date and time. */
 				__( 'Shown to staff only until %s.', 'wormiss' ),
 				wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $reveal )
 			)
 		) . '</p>';
-		return '<section class="wormiss-blog-solution"><h2>' . esc_html__( 'Solution', 'wormiss' ) . '</h2>'
-			. $note . self::link_old_addresses( $solution ) . '</section>';
+		return '<section class="card wormiss-blog-solution"><div class="card-header"><h2 class="h5 mb-0">'
+			. esc_html__( 'Solution', 'wormiss' ) . '</h2></div><div class="card-body">'
+			. $note . self::link_old_addresses( $solution ) . '</div></section>';
 	}
 
 	/**
@@ -241,7 +257,7 @@ class Wormiss_Blog {
 			? __( 'The full blog post and its discussion are for members.', 'wormiss' )
 			: __( 'The full blog post and its discussion are for members. Sign in to read on.', 'wormiss' );
 		$link = is_user_logged_in() ? '' : ' <a href="' . esc_url( wp_login_url( (string) get_permalink() ) ) . '">' . esc_html__( 'Sign in', 'wormiss' ) . '</a>';
-		return '<div class="wormiss-blog-locked"><p>' . esc_html( $text ) . $link . '</p></div>';
+		return '<div class="alert alert-secondary wormiss-blog-locked"><p>' . esc_html( $text ) . $link . '</p></div>';
 	}
 
 	/**
