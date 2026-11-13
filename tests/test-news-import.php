@@ -344,7 +344,7 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 
 	/**
 	 * Posts made with no one signed in (background batches) get the chosen author, else the
-	 * first administrator; a post left without one gets it on its next update.
+	 * first administrator; a post left without one gets it on the next import, changed or not.
 	 *
 	 * @return void
 	 */
@@ -371,10 +371,10 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 				'post_author' => 0,
 			]
 		);
-		delete_post_meta( $post_id, Wormiss_News_Import::META_SOURCE );
 		$this->queue( $this->page() );
-		Wormiss_News_Import::run();
-		$this->assertGreaterThan( 0, (int) get_post_field( 'post_author', $post_id ) );
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( 1, $report['skipped'], 'Unchanged, so not updated.' );
+		$this->assertGreaterThan( 0, (int) get_post_field( 'post_author', $post_id ), 'But given an author.' );
 	}
 
 	/**

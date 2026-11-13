@@ -407,6 +407,15 @@ class Wormiss_News_Import {
 		if ( $post_id && ( 'trash' === get_post_status( $post_id ) || get_post_meta( $post_id, self::META_DETACHED, true ) ) ) {
 			return 'skipped';
 		}
+		// A post made in the background before authors were set gets one, changed or not.
+		if ( $post_id && empty( $report['dry_run'] ) && 0 === (int) get_post_field( 'post_author', $post_id ) ) {
+			wp_update_post(
+				[
+					'ID'          => $post_id,
+					'post_author' => self::author(),
+				]
+			);
+		}
 		try {
 			$document = $client->find_document( $article['key'] );
 		} catch ( Wormiss_Exception $e ) {
@@ -466,11 +475,7 @@ class Wormiss_News_Import {
 		}
 		if ( $post_id ) {
 			$fields['ID'] = $post_id;
-			// A post made in the background before authors were set gets one now.
-			if ( 0 === (int) get_post_field( 'post_author', $post_id ) ) {
-				$fields['post_author'] = self::author();
-			}
-			$saved = wp_update_post( wp_slash( $fields ), true );
+			$saved        = wp_update_post( wp_slash( $fields ), true );
 		} else {
 			$fields['post_status'] = Wormiss_Settings::get( 'news_import_publish' ) ? 'publish' : 'draft';
 			$fields['post_author'] = self::author();
