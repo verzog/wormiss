@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.32.0
+Stable tag: 0.33.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.33.0 =
+* Blog import: every iMIS blog category and subcategory is now made in WordPress (Blogs > Categories), with each subcategory under its parent, including ones no post uses yet, so the list matches iMIS. Each category remembers which iMIS category it is, so renaming or moving it in iMIS updates it here on the next import instead of making a new one. Categories made by 0.32.0 are matched by name and kept. A dry run only says how many it would make.
 
 = 0.32.0 =
 * Members' blog: a new "Members' blog" section at /blogs/ with its own categories (and subcategories) and topics. Readers are the roles you tick in Wormiss > Settings > Members' blog (e.g. a paid membership role), plus staff; everyone else sees each post's intro and a sign-in message, never the full text, the solution or the discussion (on the page, in feeds or through the REST API). Each post's solution shows to readers from its reveal time; staff see it earlier, marked with that time.
