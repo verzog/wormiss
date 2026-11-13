@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.30.0
+Stable tag: 0.30.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.30.1 =
+* Imported news always has an author: "Author for imported news" (Wormiss > Settings > Import iMIS news), or the first administrator if none is chosen. Posts made by the background batches (when no one is signed in) used to have none; those get the author on the next import, changed or not.
 
 = 0.30.0 =
 * Import iMIS news (Wormiss > Settings > Import iMIS news): once a day, or on "Import iMIS news now", each article your news IQA lists (one row per article and tag, with its Document Version Key) becomes a post in the News category (or the one you choose), with all its iMIS tags, its publication date, summary and full text. The text comes from the article's iMIS content page, in page order: the title heading is left out, the image-only block becomes the featured image, and old fonts, inline styles and stray line breaks are tidied away so posts take on the theme's look. Images on the iMIS site, featured and in the text, are copied into the Media Library (each once). Members-only iMIS articles are members-only here too.

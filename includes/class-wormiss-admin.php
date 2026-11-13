@@ -315,6 +315,7 @@ class Wormiss_Admin {
 		self::field( 'news_import_publish', __( 'Publish imported news', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_query', __( 'News query', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_category', __( 'Category for imported news', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_author', __( 'Author for imported news', 'wormiss' ), 'wormiss_news_import' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -663,6 +664,21 @@ class Wormiss_Admin {
 				echo '<p class="description">'
 					. esc_html__( 'For historical records: finished events that started on or after this date are imported too,', 'wormiss' )
 					. ' ' . esc_html__( 'in small batches (5 pages, 2 images) every 2 minutes in the background. Blank imports upcoming events only.', 'wormiss' )
+					. '</p>';
+				return;
+			case 'news_import_author':
+				wp_dropdown_users(
+					[
+						'name'              => $name,
+						'id'                => $id,
+						'selected'          => (int) $value,
+						'capability'        => [ 'edit_posts' ],
+						'show_option_none'  => __( 'First administrator', 'wormiss' ),
+						'option_none_value' => 0,
+					]
+				);
+				echo '<p class="description">'
+					. esc_html__( 'Imported posts are by this person, including those made in the background.', 'wormiss' )
 					. '</p>';
 				return;
 			case 'news_import_category':
