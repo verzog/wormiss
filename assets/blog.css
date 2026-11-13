@@ -117,3 +117,65 @@
 .wormiss-blog-post .text-muted {
 	opacity: 0.75;
 }
+
+/* The solution: closed, with an eye and a button, until the reader opens it. */
+.wormiss-blog-post details.wormiss-blog-solution > summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	align-items: center;
+	padding: 1.25rem;
+	cursor: pointer;
+	list-style: none;
+}
+
+.wormiss-blog-post details.wormiss-blog-solution > summary::-webkit-details-marker {
+	display: none;
+}
+
+.wormiss-blog-post .wormiss-blog-solution__icon {
+	flex: 0 0 auto;
+}
+
+.wormiss-blog-post .wormiss-blog-solution__title {
+	margin: 0;
+	font-weight: 700;
+}
+
+.wormiss-blog-post .wormiss-blog-solution__hint {
+	flex: 1 1 14rem;
+	font-size: 0.9em;
+}
+
+.wormiss-blog-post .btn {
+	display: inline-block;
+	padding: 0.5rem 1rem;
+	border-radius: 6px;
+	background: currentcolor;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.wormiss-blog-post .wormiss-blog-solution__button > span {
+	color: #fff;
+}
+
+.wormiss-blog-post .wormiss-blog-solution__hide,
+.wormiss-blog-post details[open] .wormiss-blog-solution__show {
+	display: none;
+}
+
+.wormiss-blog-post details[open] .wormiss-blog-solution__hide {
+	display: inline;
+}
+
+.wormiss-blog-post summary:focus-visible {
+	outline: 3px solid currentcolor;
+	outline-offset: 2px;
+}
+
+.wormiss-blog-post .wormiss-blog-solution--waiting {
+	display: flex;
+	gap: 0.75rem;
+	align-items: flex-start;
+}
