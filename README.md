@@ -123,7 +123,7 @@ whose iMIS REST client and audit log it reuses.
 ## Requirements
 
 * WordPress 6.6 or later. CI tests 6.6 and the latest release.
-* PHP 8.1 or later. CI tests 8.1 to 8.4.
+* PHP 8.1 or later. CI tests 8.1 to 8.5.
 * An iMIS site with the REST API, and a dedicated iMIS service account
   (RemoteService role, least privilege). Each iMIS API user may need a licence.
 
@@ -152,7 +152,7 @@ composer phpcs
 ```
 
 CI (`.github/workflows/ci.yml`) runs the static checks, then PHPUnit against the
-WordPress test suite on WordPress 6.6 and latest, PHP 8.1 to 8.4. Tests fake iMIS by
+WordPress test suite on WordPress 6.6 and latest, PHP 8.1 to 8.5. Tests fake iMIS by
 intercepting WordPress HTTP requests (`tests/class-wormiss-fake-imis.php`), so no
 iMIS site is needed.
 
