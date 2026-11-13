@@ -116,6 +116,11 @@ class Wormiss_Blog_Import {
 	const META_FROM = '_wormiss_blog_image_from';
 
 	/**
+	 * On a blog category: its iMIS category or subcategory key.
+	 */
+	const TERM_KEY = '_wormiss_blog_category_key';
+
+	/**
 	 * Posts changed per batch.
 	 */
 	const BATCH = 3;
@@ -292,6 +297,7 @@ class Wormiss_Blog_Import {
 			$report['notes'][] = $e->getMessage();
 			return self::save( $report );
 		}
+		self::categories( $listing, $report );
 		return self::write( $client, $report, $done, $listing, $listing['time'] );
 	}
 
@@ -725,24 +731,63 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
-	 * Category (with its subcategory beneath it) and topics.
+	 * Make every iMIS category, with its subcategories beneath it, so the list matches iMIS
+	 * before any post uses one; a rename in iMIS renames it here.
+	 *
+	 * @param array $listing The list.
+	 * @param array $report  Report.
+	 * @return void
+	 */
+	private static function categories( array $listing, array &$report ): void {
+		$dry  = ! empty( $report['dry_run'] );
+		$made = 0;
+		$ids  = [];
+		// Renames and moves first, so a name freed up in iMIS is free here before it is reused.
+		if ( ! $dry ) {
+			foreach ( $listing['categories'] as $key => $category ) {
+				self::follow( self::by_key( (string) $key ), $category['name'], 0 );
+			}
+			foreach ( $listing['subcategories'] as $key => $sub ) {
+				self::follow( self::by_key( (string) $key ), $sub['name'], self::by_key( $sub['parent'] ) );
+			}
+		}
+		foreach ( $listing['categories'] as $key => $category ) {
+			$ids[ $key ] = self::term( (string) $key, $category['name'], 0, $dry, $made );
+		}
+		foreach ( $listing['subcategories'] as $key => $sub ) {
+			self::term( (string) $key, $sub['name'], $ids[ $sub['parent'] ] ?? 0, $dry, $made );
+		}
+		if ( $made > 0 ) {
+			self::note(
+				$report,
+				$dry
+					/* translators: %d: number of categories. */
+					? sprintf( _n( 'Dry run: would make %d blog category.', 'Dry run: would make %d blog categories.', $made, 'wormiss' ), $made )
+					/* translators: %d: number of categories. */
+					: sprintf( _n( '%d blog category made.', '%d blog categories made.', $made, 'wormiss' ), $made )
+			);
+		}
+	}
+
+	/**
+	 * A post's category (with its subcategory beneath it) and topics.
 	 *
 	 * @param int   $post_id Post ID.
 	 * @param array $post    From post_list().
-	 * @param array $listing    The list.
+	 * @param array $listing The list.
 	 * @return void
 	 */
 	private static function terms( int $post_id, array $post, array $listing ): void {
 		$ids      = [];
-		$category = $listing['categories'][ $post['category'] ]['name'] ?? '';
-		$parent   = 0;
-		if ( '' !== $category ) {
-			$parent = self::term( $category, 0 );
-			$ids[]  = $parent;
-		}
-		$sub = $listing['subcategories'][ $post['subcategory'] ]['name'] ?? '';
-		if ( '' !== $sub ) {
-			$ids[] = self::term( $sub, $parent );
+		$made     = 0;
+		$category = $listing['categories'][ $post['category'] ] ?? null;
+		$parent   = $category ? self::term( $post['category'], $category['name'], 0, false, $made ) : 0;
+		$ids[]    = $parent;
+		$sub      = $listing['subcategories'][ $post['subcategory'] ] ?? null;
+		if ( $sub ) {
+			$own   = $listing['categories'][ $sub['parent'] ] ?? null;
+			$under = $own ? self::term( $sub['parent'], $own['name'], 0, false, $made ) : $parent;
+			$ids[] = self::term( $post['subcategory'], $sub['name'], $under, false, $made );
 		}
 		wp_set_object_terms( $post_id, array_values( array_filter( $ids ) ), Wormiss_Blog::TAX_CATEGORY );
 		$topics = array_filter( array_map( 'trim', array_map( 'sanitize_text_field', explode( ',', $post['tags'] ) ) ) );
@@ -750,19 +795,98 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
-	 * A blog category's term ID (made if missing).
+	 * A blog category's term ID, found by its iMIS key (or, the first time, the name of one
+	 * made before keys were kept) and made if missing; its name and parent follow iMIS.
 	 *
+	 * @param string $key       iMIS category or subcategory key.
 	 * @param string $name      Name.
 	 * @param int    $parent_id Parent term ID.
-	 * @return int
+	 * @param bool   $dry       Dry run: change nothing.
+	 * @param int    $made      Count of categories made (or that would be).
+	 * @return int 0 when there is none.
 	 */
-	private static function term( string $name, int $parent_id ): int {
-		$found = term_exists( $name, Wormiss_Blog::TAX_CATEGORY, $parent_id );
-		if ( is_array( $found ) ) {
-			return (int) $found['term_id'];
+	private static function term( string $key, string $name, int $parent_id, bool $dry, int &$made ): int {
+		if ( '' === $key || '' === $name ) {
+			return 0;
 		}
-		$made = wp_insert_term( $name, Wormiss_Blog::TAX_CATEGORY, [ 'parent' => $parent_id ] );
-		return is_wp_error( $made ) ? 0 : (int) $made['term_id'];
+		$id = self::by_key( $key );
+		if ( $id ) {
+			if ( ! $dry ) {
+				self::follow( $id, $name, $parent_id );
+			}
+			return $id;
+		}
+		// Only a category without a key is taken over by name: one with another key is
+		// another iMIS category.
+		$exists = term_exists( wp_slash( $name ), Wormiss_Blog::TAX_CATEGORY, $parent_id );
+		if ( is_array( $exists ) && '' === (string) get_term_meta( (int) $exists['term_id'], self::TERM_KEY, true ) ) {
+			$id = (int) $exists['term_id'];
+			if ( ! $dry ) {
+				update_term_meta( $id, self::TERM_KEY, $key );
+			}
+			return $id;
+		}
+		++$made;
+		if ( $dry ) {
+			return 0;
+		}
+		$new = wp_insert_term( wp_slash( $name ), Wormiss_Blog::TAX_CATEGORY, [ 'parent' => $parent_id ] );
+		if ( is_wp_error( $new ) ) {
+			--$made;
+			return 0;
+		}
+		update_term_meta( (int) $new['term_id'], self::TERM_KEY, $key );
+		return (int) $new['term_id'];
+	}
+
+	/**
+	 * The blog category with this iMIS key.
+	 *
+	 * @param string $key iMIS category or subcategory key.
+	 * @return int Term ID, or 0.
+	 */
+	private static function by_key( string $key ): int {
+		if ( '' === $key ) {
+			return 0;
+		}
+		$found = get_terms(
+			[
+				'taxonomy'   => Wormiss_Blog::TAX_CATEGORY,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+				'number'     => 1,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- A handful of categories.
+				'meta_query' => [
+					[
+						'key'   => self::TERM_KEY,
+						'value' => $key,
+					],
+				],
+			]
+		);
+		return is_array( $found ) && $found ? (int) $found[0] : 0;
+	}
+
+	/**
+	 * Give a blog category the name and parent it has in iMIS.
+	 *
+	 * @param int    $id        Term ID (0 for none).
+	 * @param string $name      Name.
+	 * @param int    $parent_id Parent term ID.
+	 * @return void
+	 */
+	private static function follow( int $id, string $name, int $parent_id ): void {
+		$term = $id && '' !== $name ? get_term( $id, Wormiss_Blog::TAX_CATEGORY ) : null;
+		if ( $term instanceof WP_Term && ( html_entity_decode( $term->name, ENT_QUOTES ) !== $name || (int) $term->parent !== $parent_id ) ) {
+			wp_update_term(
+				$id,
+				Wormiss_Blog::TAX_CATEGORY,
+				[
+					'name'   => wp_slash( $name ),
+					'parent' => $parent_id,
+				]
+			);
+		}
 	}
 
 	/**

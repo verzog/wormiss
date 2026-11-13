@@ -268,10 +268,12 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	/**
 	 * Queue one import: the post list, categories, the post and its comments, a name.
 	 *
-	 * @param array $data The post's blocks.
+	 * @param array  $data       The post's blocks.
+	 * @param string $management The first category's name in iMIS.
+	 * @param string $diagnosis  The second category's name in iMIS.
 	 * @return void
 	 */
-	private function queue( array $data ): void {
+	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis' ): void {
 		$post    = [
 			'ID'             => '13397',
 			'BlogKey'        => self::KEY,
@@ -315,7 +317,11 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 					[
 						[
 							'CategoryKey' => 'cat-1',
-							'Name'        => 'Management',
+							'Name'        => $management,
+						],
+						[
+							'CategoryKey' => 'cat-2',
+							'Name'        => $diagnosis,
 						],
 					]
 				)
@@ -329,6 +335,11 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 							'SubcategoryKey'    => 'sub-1',
 							'ParentCategoryKey' => 'cat-1',
 							'Name'              => 'Surgery',
+						],
+						[
+							'SubcategoryKey'    => 'sub-2',
+							'ParentCategoryKey' => 'cat-2',
+							'Name'              => 'Dermoscopy',
 						],
 					]
 				)
@@ -404,6 +415,51 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$report = Wormiss_Blog_Import::run();
 		$this->assertSame( 1, $report['skipped'] );
 		$this->assertCount( 2, get_comments( [ 'post_id' => $post_id ] ) );
+	}
+
+	/**
+	 * Every iMIS category and subcategory is made, even with no posts yet (none in a dry run);
+	 * one already here from an earlier import is kept, and a rename in iMIS renames it.
+	 *
+	 * @return void
+	 */
+	public function test_categories(): void {
+		$tax = Wormiss_Blog::TAX_CATEGORY;
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_import_dry_run' => true ] ) );
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertContains( 'Dry run: would make 4 blog categories.', $report['notes'] );
+		$this->assertSame( 0, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
+
+		// Made by 0.32.0, before categories had their iMIS key.
+		$old = wp_insert_term( 'Management', $tax );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_import_dry_run' => false ] ) );
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertContains( '3 blog categories made.', $report['notes'] );
+		$diagnosis = get_term_by( 'name', 'Diagnosis', $tax );
+		$this->assertSame( 0, $diagnosis->count, 'Made with no posts.' );
+		$this->assertSame( $diagnosis->term_id, get_term_by( 'name', 'Dermoscopy', $tax )->parent );
+		$this->assertSame( $old['term_id'], get_term_by( 'name', 'Management', $tax )->term_id, 'Kept.' );
+		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
+
+		$this->queue( $this->modern(), 'Practice management' );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['updated'], 'The new name reaches the post.' );
+		$renamed = get_term( $old['term_id'], $tax );
+		$this->assertSame( 'Practice management', $renamed->name );
+		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+		$this->assertContains( 'Practice management', wp_list_pluck( wp_get_object_terms( $post_id, $tax ), 'name' ) );
+
+		// The first takes the second's old name, which iMIS gave up in the same change: each
+		// keeps its own category here rather than taking over the other's.
+		$this->queue( $this->modern(), 'Diagnosis', 'Clinical' );
+		Wormiss_Blog_Import::run();
+		$this->assertSame( 'Diagnosis', get_term( $old['term_id'], $tax )->name );
+		$this->assertSame( 'Clinical', get_term( $diagnosis->term_id, $tax )->name );
+		$this->assertSame( $diagnosis->term_id, get_term_by( 'name', 'Dermoscopy', $tax )->parent );
+		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
 	}
 
 	/**
