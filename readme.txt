@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.34.0
+Stable tag: 0.34.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.34.1 =
+* Blog import: up to 3 posts per batch (was 1), still within each batch's 20-second limit and 8 pictures, so the first full import of a large blog takes about a third as long.
 
 = 0.34.0 =
 * Uploads: every picture uploaded to the site (imported news and blog pictures, and anything staff upload) is scaled down to 1600 pixels on its longest side, and that copy is used everywhere, for smaller files and faster pages. Pictures already in the Media Library are not changed. The size can be changed with the wormiss_image_max_size filter (0 for WordPress's own 2560).

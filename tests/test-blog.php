@@ -557,28 +557,23 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * One post per batch: progress is kept after each post and the next batch is booked at the
+	 * BATCH posts per batch: progress is kept after each post and the next batch is booked at the
 	 * start (so a batch the host stops is carried on), and the last batch tidies up.
 	 *
 	 * @return void
 	 */
 	public function test_batches(): void {
-		$older = [
-			'ID'          => '13397',
-			'BlogKey'     => self::OLDER,
-			'Title'       => 'An older case',
-			'Status'      => 'Published',
-			'PublishedOn' => '2025-02-01T09:00:00',
-		];
-		$this->queue( $this->modern(), 'Management', 'Diagnosis', [ $older ] );
-		$report = Wormiss_Blog_Import::run();
-		$this->assertSame( 1, $report['created'] );
-		$this->assertSame( 1, $report['remaining'] );
-		$this->assertSame( [ self::KEY => true ], get_option( Wormiss_Blog_Import::DONE_OPTION ) );
-		$this->assertIsArray( get_option( Wormiss_Blog_Import::LIST_OPTION ) );
-		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
-		$this->assertFalse( get_option( Wormiss_Blog_Import::WORKING_OPTION ), 'Finished posts are not left as being worked on.' );
-
+		// BATCH older posts, so the first batch makes BATCH posts and leaves the oldest.
+		$older = [];
+		for ( $i = 1; $i <= Wormiss_Blog_Import::BATCH; $i++ ) {
+			$older[] = [
+				'ID'          => '13397',
+				'BlogKey'     => sprintf( '0b6a1d2e-1f3c-4a5b-8c9d-%012d', $i ),
+				'Title'       => 'Older case ' . $i,
+				'Status'      => 'Published',
+				'PublishedOn' => sprintf( '2025-%02d-01T09:00:00', 13 - $i ),
+			];
+		}
 		$data = [
 			'content' => [
 				[
@@ -587,28 +582,37 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 				],
 			],
 		];
-		$this->imis->token()->reply(
-			'/api/Smart_Blogs_Blog_Post?BlogKey',
-			200,
-			Wormiss_Fake_Imis::page(
-				[
-					array_merge(
-						$older,
-						[
-							'BlogPostData' => [
-								'$type'  => 'System.Byte[], mscorlib',
-								// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
-								'$value' => base64_encode( (string) wp_json_encode( $data ) ),
-							],
-						]
-					),
-				]
-			)
-		)->reply( '/api/Smart_Blogs_Comment', 200, Wormiss_Fake_Imis::page( [] ) );
+		$full = static fn( array $row ): array => array_merge(
+			$row,
+			[
+				'BlogPostData' => [
+					'$type'  => 'System.Byte[], mscorlib',
+					// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+					'$value' => base64_encode( (string) wp_json_encode( $data ) ),
+				],
+			]
+		);
+		$this->queue( $this->modern(), 'Management', 'Diagnosis', $older );
+		for ( $i = 0; $i < Wormiss_Blog_Import::BATCH - 1; $i++ ) {
+			$this->imis->reply( '/api/Smart_Blogs_Blog_Post?BlogKey', 200, Wormiss_Fake_Imis::page( [ $full( $older[ $i ] ) ] ) )
+				->reply( '/api/Smart_Blogs_Comment', 200, Wormiss_Fake_Imis::page( [] ) );
+		}
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( Wormiss_Blog_Import::BATCH, $report['created'], implode( ' ', $report['notes'] ) );
+		$this->assertSame( 1, $report['remaining'] );
+		$this->assertCount( Wormiss_Blog_Import::BATCH, get_option( Wormiss_Blog_Import::DONE_OPTION ) );
+		$this->assertIsArray( get_option( Wormiss_Blog_Import::LIST_OPTION ) );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
+		$this->assertFalse( get_option( Wormiss_Blog_Import::WORKING_OPTION ), 'Finished posts are not left as being worked on.' );
+
+		$last = end( $older );
+		$this->imis->token()
+			->reply( '/api/Smart_Blogs_Blog_Post?BlogKey', 200, Wormiss_Fake_Imis::page( [ $full( $last ) ] ) )
+			->reply( '/api/Smart_Blogs_Comment', 200, Wormiss_Fake_Imis::page( [] ) );
 		$report = Wormiss_Blog_Import::run_more();
 		$this->assertSame( 1, $report['created'], implode( ' ', $report['notes'] ) );
 		$this->assertSame( 0, $report['remaining'] );
-		$this->assertNotSame( 0, Wormiss_Blog_Import::post_for( self::OLDER ) );
+		$this->assertNotSame( 0, Wormiss_Blog_Import::post_for( $last['BlogKey'] ) );
 		$this->assertFalse( get_option( Wormiss_Blog_Import::DONE_OPTION ) );
 		$this->assertFalse( get_option( Wormiss_Blog_Import::LIST_OPTION ) );
 		$this->assertFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
