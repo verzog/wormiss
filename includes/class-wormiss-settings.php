@@ -132,6 +132,8 @@ class Wormiss_Settings {
 			'blog_reader_roles'          => [],
 			'blog_import_enabled'        => false,
 			'blog_import_dry_run'        => true,
+			'blog_batch_posts'           => 10,
+			'blog_batch_minutes'         => 1,
 		];
 	}
 
@@ -527,6 +529,12 @@ class Wormiss_Settings {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $roles ), $known ) );
 		} elseif ( isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ) {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $input['blog_reader_roles'] ), array_keys( wp_roles()->get_names() ) ) );
+		}
+		if ( isset( $input['blog_batch_posts'] ) ) {
+			$clean['blog_batch_posts'] = min( Wormiss_Blog_Import::BATCH_MAX, max( 1, absint( $input['blog_batch_posts'] ) ) );
+		}
+		if ( isset( $input['blog_batch_minutes'] ) ) {
+			$clean['blog_batch_minutes'] = min( Wormiss_Blog_Import::GAP_MAX, max( 1, absint( $input['blog_batch_minutes'] ) ) );
 		}
 		foreach ( [ 'blog_import_enabled', 'blog_import_dry_run' ] as $box ) {
 			if ( isset( $input['blog_section'] ) ) {

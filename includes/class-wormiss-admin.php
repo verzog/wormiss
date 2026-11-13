@@ -325,6 +325,8 @@ class Wormiss_Admin {
 		self::field( 'blog_reader_roles', __( 'Who can read the members\' blog', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_enabled', __( 'Import the iMIS blog daily', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_batch_posts', __( 'Blog posts per batch', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_batch_minutes', __( 'Minutes between blog batches', 'wormiss' ), 'wormiss_blog' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -893,6 +895,22 @@ class Wormiss_Admin {
 						. esc_html__( 'For troubleshooting only: bodies can hold members\' personal details.', 'wormiss' )
 						. ' ' . esc_html__( 'Passwords and tokens are always removed.', 'wormiss' ) . '</span>';
 				}
+				return;
+			case 'blog_batch_posts':
+			case 'blog_batch_minutes':
+				$posts = 'blog_batch_posts' === $key;
+				printf(
+					'<input type="number" class="small-text" id="%1$s" name="%2$s" value="%3$d" min="1" max="%4$d" /> <span class="description">%5$s</span>',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					(int) $value,
+					$posts ? (int) Wormiss_Blog_Import::BATCH_MAX : (int) Wormiss_Blog_Import::GAP_MAX,
+					esc_html(
+						$posts
+							? __( 'Up to 20. Each batch also stops after about 20 seconds, so a busy or slow site does less.', 'wormiss' )
+							: __( '1 to 10. Lower is faster; raise it if the site slows down while importing.', 'wormiss' )
+					)
+				);
 				return;
 			default:
 				printf(

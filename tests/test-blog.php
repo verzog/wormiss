@@ -685,6 +685,31 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Posts per batch and minutes between batches come from the settings, kept within limits.
+	 *
+	 * @return void
+	 */
+	public function test_batch_settings(): void {
+		$this->assertSame( Wormiss_Blog_Import::BATCH, Wormiss_Blog_Import::batch() );
+		$this->assertSame( MINUTE_IN_SECONDS, Wormiss_Blog_Import::gap() );
+		$clean = Wormiss_Settings::sanitize(
+			[
+				'blog_batch_posts'   => '500',
+				'blog_batch_minutes' => '0',
+			]
+		);
+		$this->assertSame( Wormiss_Blog_Import::BATCH_MAX, $clean['blog_batch_posts'] );
+		$this->assertSame( 1, $clean['blog_batch_minutes'] );
+		$saved = [
+			'blog_batch_posts'   => 4,
+			'blog_batch_minutes' => 3,
+		];
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), $saved ) );
+		$this->assertSame( 4, Wormiss_Blog_Import::batch() );
+		$this->assertSame( 3 * MINUTE_IN_SECONDS, Wormiss_Blog_Import::gap() );
+	}
+
+	/**
 	 * The batch helper counts unfinished tries per item and keeps within PHP's time limit.
 	 *
 	 * @return void
