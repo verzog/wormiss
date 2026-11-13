@@ -86,6 +86,8 @@ jobs:
           - {wp: 'latest', php: '8.2'}
           - {wp: 'latest', php: '8.3'}
           - {wp: 'latest', php: '8.4'}
+          # The live site runs PHP 8.5.
+          - {wp: 'latest', php: '8.5'}
 
     services:
       mysql:
