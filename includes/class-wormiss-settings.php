@@ -126,6 +126,8 @@ class Wormiss_Settings {
 			'news_import_query'          => '',
 			// The category imported posts go in (made if missing).
 			'news_import_category'       => 'News',
+			// Who imported posts are by (user ID; 0 for the first administrator).
+			'news_import_author'         => 0,
 		];
 	}
 
@@ -506,6 +508,14 @@ class Wormiss_Settings {
 		if ( isset( $input['news_import_category'] ) ) {
 			$category                      = sanitize_text_field( (string) $input['news_import_category'] );
 			$clean['news_import_category'] = '' !== $category ? $category : 'News';
+		}
+		if ( isset( $input['news_import_author'] ) ) {
+			$author = absint( $input['news_import_author'] );
+			if ( 0 === $author || user_can( $author, 'edit_posts' ) ) {
+				$clean['news_import_author'] = $author;
+			} else {
+				add_settings_error( self::OPTION, 'news_import_author', __( 'The news author must be able to write posts.', 'wormiss' ) );
+			}
 		}
 		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish' ] as $box ) {
 			if ( isset( $input['news_import_section'] ) ) {

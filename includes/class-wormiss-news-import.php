@@ -466,9 +466,14 @@ class Wormiss_News_Import {
 		}
 		if ( $post_id ) {
 			$fields['ID'] = $post_id;
-			$saved        = wp_update_post( wp_slash( $fields ), true );
+			// A post made in the background before authors were set gets one now.
+			if ( 0 === (int) get_post_field( 'post_author', $post_id ) ) {
+				$fields['post_author'] = self::author();
+			}
+			$saved = wp_update_post( wp_slash( $fields ), true );
 		} else {
 			$fields['post_status'] = Wormiss_Settings::get( 'news_import_publish' ) ? 'publish' : 'draft';
+			$fields['post_author'] = self::author();
 			$fields['meta_input']  = [ self::META_KEY => $article['key'] ];
 			$saved                 = wp_insert_post( wp_slash( $fields ), true );
 		}
@@ -491,6 +496,29 @@ class Wormiss_News_Import {
 			delete_post_meta( $saved, self::META_SOURCE );
 		}
 		return $post_id ? 'updated' : 'created';
+	}
+
+	/**
+	 * Who imported posts are by: the chosen author if they can still write posts, else the first
+	 * administrator. Background batches run with no one signed in, so this is always set.
+	 *
+	 * @return int User ID (0 only if the site has no administrator).
+	 */
+	public static function author(): int {
+		$chosen = (int) Wormiss_Settings::get( 'news_import_author' );
+		if ( $chosen > 0 && user_can( $chosen, 'edit_posts' ) ) {
+			return $chosen;
+		}
+		$admins = get_users(
+			[
+				'role'    => 'administrator',
+				'number'  => 1,
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+				'fields'  => 'ID',
+			]
+		);
+		return $admins ? (int) $admins[0] : 0;
 	}
 
 	/**

@@ -343,6 +343,41 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Posts made with no one signed in (background batches) get the chosen author, else the
+	 * first administrator; a post left without one gets it on its next update.
+	 *
+	 * @return void
+	 */
+	public function test_author(): void {
+		wp_set_current_user( 0 );
+		self::factory()->user->create( [ 'role' => 'administrator' ] );
+		$this->assertGreaterThan( 0, Wormiss_News_Import::author() );
+		$this->assertTrue( user_can( Wormiss_News_Import::author(), 'edit_posts' ) );
+
+		$editor = self::factory()->user->create( [ 'role' => 'editor' ] );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'news_import_author' => $editor ] ) );
+		$this->queue( $this->page() );
+		Wormiss_News_Import::run();
+		$post_id = Wormiss_News_Import::post_for( self::KEY );
+		$this->assertSame( $editor, (int) get_post_field( 'post_author', $post_id ) );
+
+		$subscriber = self::factory()->user->create( [ 'role' => 'subscriber' ] );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'news_import_author' => $subscriber ] ) );
+		$this->assertNotSame( $subscriber, Wormiss_News_Import::author(), 'Someone who cannot write posts is never the author.' );
+
+		wp_update_post(
+			[
+				'ID'          => $post_id,
+				'post_author' => 0,
+			]
+		);
+		delete_post_meta( $post_id, Wormiss_News_Import::META_SOURCE );
+		$this->queue( $this->page() );
+		Wormiss_News_Import::run();
+		$this->assertGreaterThan( 0, (int) get_post_field( 'post_author', $post_id ) );
+	}
+
+	/**
 	 * Off, or with no query, nothing is read.
 	 *
 	 * @return void
