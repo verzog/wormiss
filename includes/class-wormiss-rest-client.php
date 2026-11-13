@@ -1097,6 +1097,9 @@ class Wormiss_Rest_Client {
 					break;
 				}
 			}
+			if ( '' === $text ) {
+				$text = self::validation_messages( $decoded );
+			}
 		}
 		if ( '' === $text && null === $decoded ) {
 			// An HTML error page: drop scripts and styles, whose text would crowd out the reason.
@@ -1104,6 +1107,26 @@ class Wormiss_Rest_Client {
 		}
 		$text = trim( (string) preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $text ) ) );
 		return mb_strlen( $text ) > 300 ? mb_substr( $text, 0, 297 ) . '...' : $text;
+	}
+
+	/**
+	 * The error messages of an iMIS validation result: {"Errors":{"$values":[{"Message":…}]}},
+	 * on its own or as a reply's ValidationResults, joined by spaces ('' if none).
+	 *
+	 * @param object $decoded Decoded reply.
+	 * @return string
+	 */
+	private static function validation_messages( object $decoded ): string {
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
+		$results  = isset( $decoded->ValidationResults ) && is_object( $decoded->ValidationResults ) ? $decoded->ValidationResults : $decoded;
+		$messages = [];
+		foreach ( self::values( $results->Errors ?? null ) as $error ) {
+			if ( is_object( $error ) && isset( $error->Message ) && is_scalar( $error->Message ) && '' !== trim( (string) $error->Message ) ) {
+				$messages[] = trim( (string) $error->Message );
+			}
+		}
+		// phpcs:enable
+		return implode( ' ', $messages );
 	}
 
 	/**
