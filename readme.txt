@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.31.0
+Stable tag: 0.31.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.31.1 =
+* Audit log: "Download as text" saves the newest 20, 50, 200 or 1000 entries as a plain text file (time, call, result, error, user, iMIS ID and, if ticked, what was sent and what iMIS replied, laid out for reading), for keeping or sending to support. Administrators only; passwords and tokens are never in it.
 
 = 0.31.0 =
 * Check a blog post (Settings, administrators only): enter a members' blog post's blog key to see what iMIS (Smart Blogs) keeps for it, to plan moving the blog into WordPress: the post with its text and preview decoded, its first comments, the fields of blog posts, comments and the CPD logbook, the blog CPD rates, categories and Smart Blogs settings. Read only: nothing is changed in iMIS, and only a plain blog key is accepted.

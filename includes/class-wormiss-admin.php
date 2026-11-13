@@ -54,6 +54,7 @@ class Wormiss_Admin {
 		add_filter( 'parent_file', [ __CLASS__, 'parent_file' ] );
 		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
 		add_action( 'admin_post_wormiss_test_connection', [ __CLASS__, 'test_connection' ] );
+		add_action( 'admin_post_wormiss_log_export', [ __CLASS__, 'export_log' ] );
 		Wormiss_Content_Check::init();
 		Wormiss_Blog_Check::init();
 		add_filter( 'plugin_action_links_' . plugin_basename( WORMISS_FILE ), [ __CLASS__, 'action_links' ] );
@@ -1151,6 +1152,117 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * How many of the newest entries the text download can hold.
+	 */
+	const LOG_EXPORT_SIZES = [ 20, 50, 200, 1000 ];
+
+	/**
+	 * The Download as text form above the audit log.
+	 *
+	 * @return void
+	 */
+	private static function log_export_form(): void {
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post" style="margin:1em 0">';
+		echo '<input type="hidden" name="action" value="wormiss_log_export" />';
+		wp_nonce_field( 'wormiss_log_export' );
+		echo '<label for="wormiss-log-count">' . esc_html__( 'Newest entries', 'wormiss' ) . '</label> ';
+		echo '<select id="wormiss-log-count" name="wormiss_log_count">';
+		foreach ( self::LOG_EXPORT_SIZES as $size ) {
+			printf( '<option value="%1$d" %2$s>%1$d</option>', (int) $size, selected( 50, $size, false ) );
+		}
+		echo '</select> ';
+		echo '<label><input type="checkbox" name="wormiss_log_bodies" value="1" checked /> '
+			. esc_html__( 'Include what was sent and what iMIS replied', 'wormiss' ) . '</label> ';
+		submit_button( __( 'Download as text', 'wormiss' ), 'secondary', 'submit', false );
+		echo '<p class="description">'
+			. esc_html__( 'A plain text file of the newest entries, newest first. Passwords and tokens are never in it,', 'wormiss' )
+			. ' ' . esc_html__( 'but replies can hold members\' details: keep the file safe and delete it when done.', 'wormiss' )
+			. '</p></form>';
+	}
+
+	/**
+	 * The Download as text button: administrators only.
+	 *
+	 * @return void
+	 */
+	public static function export_log(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Sorry, you are not allowed to do that.', 'wormiss' ), 403 );
+		}
+		check_admin_referer( 'wormiss_log_export' );
+		$count = isset( $_POST['wormiss_log_count'] ) ? absint( $_POST['wormiss_log_count'] ) : 50;
+		$count = in_array( $count, self::LOG_EXPORT_SIZES, true ) ? $count : 50;
+		$text  = self::log_text( Wormiss_Logger::recent( $count ), ! empty( $_POST['wormiss_log_bodies'] ) );
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="wormiss-audit-log-' . wp_date( 'Ymd-Hi' ) . '.txt"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		echo $text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- A plain text download, not HTML.
+		exit;
+	}
+
+	/**
+	 * Log rows as plain text: each entry's time (site time), call, result, error, user and iMIS
+	 * ID, and if asked what was sent and what iMIS replied (JSON laid out for reading).
+	 *
+	 * @param array[] $rows   Log rows, as Wormiss_Logger::recent() gives them.
+	 * @param bool    $bodies Include what was sent and replied.
+	 * @return string
+	 */
+	public static function log_text( array $rows, bool $bodies ): string {
+		$format = get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+		$lines  = [
+			sprintf(
+				/* translators: 1: site name, 2: date and time, 3: number of entries. */
+				__( 'Wormiss audit log for %1$s, downloaded %2$s: %3$d entries, newest first.', 'wormiss' ),
+				get_bloginfo( 'name' ),
+				wp_date( $format ),
+				count( $rows )
+			),
+		];
+		foreach ( $rows as $row ) {
+			$user    = (int) ( $row['user_id'] ?? 0 ) ? get_userdata( (int) $row['user_id'] ) : false;
+			$lines[] = '';
+			$lines[] = str_repeat( '=', 72 );
+			$lines[] = __( 'Time:', 'wormiss' ) . ' ' . get_date_from_gmt( (string) ( $row['created'] ?? '' ), $format );
+			$lines[] = __( 'Call:', 'wormiss' ) . ' ' . (string) ( $row['endpoint'] ?? '' );
+			$lines[] = __( 'Result:', 'wormiss' ) . ' ' . (string) ( $row['status'] ?? '' );
+			foreach (
+				[
+					__( 'Error:', 'wormiss' )   => (string) ( $row['error'] ?? '' ),
+					__( 'User:', 'wormiss' )    => $user ? $user->user_login : '',
+					__( 'iMIS ID:', 'wormiss' ) => (string) ( $row['imis_id'] ?? '' ),
+				] as $label => $value
+			) {
+				if ( '' !== $value ) {
+					$lines[] = $label . ' ' . $value;
+				}
+			}
+			if ( ! $bodies ) {
+				continue;
+			}
+			foreach (
+				[
+					'request'  => __( 'Sent to iMIS:', 'wormiss' ),
+					'response' => __( 'iMIS replied:', 'wormiss' ),
+				] as $key => $label
+			) {
+				$body = (string) ( $row[ $key ] ?? '' );
+				if ( '' === $body ) {
+					continue;
+				}
+				$json = json_decode( $body );
+				if ( null !== $json ) {
+					$body = (string) wp_json_encode( $json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+				}
+				$lines[] = $label;
+				$lines[] = $body;
+			}
+		}
+		return implode( "\n", $lines ) . "\n";
+	}
+
+	/**
 	 * The audit log page (newest first, 50 per page).
 	 *
 	 * @return void
@@ -1170,6 +1282,7 @@ class Wormiss_Admin {
 			echo '<div class="notice notice-warning"><p>'
 				. esc_html__( 'Logging is switched off in Wormiss > Settings.', 'wormiss' ) . '</p></div>';
 		}
+		self::log_export_form();
 		echo '<table class="widefat striped"><thead><tr>';
 		$headings = [
 			__( 'Time', 'wormiss' ),
