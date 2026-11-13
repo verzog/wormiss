@@ -69,7 +69,11 @@ class Wormiss_Blog_Filters {
 	public static function chosen(): array {
 		$date = static function ( string $value ): string {
 			$value = trim( $value );
-			return 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ? $value : '';
+			if ( 1 !== preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $value, $part ) ) {
+				return '';
+			}
+			// A real calendar date only (not 2026-99-99).
+			return checkdate( (int) $part[2], (int) $part[3], (int) $part[1] ) ? $value : '';
 		};
 		return [
 			'category' => sanitize_title( (string) get_query_var( 'blog_category' ) ),
@@ -152,15 +156,21 @@ class Wormiss_Blog_Filters {
 		if ( ! $chosen instanceof WP_Term ) {
 			return [ 0 ];
 		}
-		$ids = get_terms(
+		$terms = get_terms(
 			[
 				'taxonomy'   => Wormiss_Blog::TAX_CATEGORY,
 				'hide_empty' => false,
 				'name'       => $chosen->name,
-				'fields'     => 'ids',
 			]
 		);
-		return is_array( $ids ) && $ids ? array_map( 'intval', $ids ) : [ (int) $chosen->term_id ];
+		$ids   = [];
+		foreach ( is_array( $terms ) ? $terms : [] as $term ) {
+			// Subcategories only: a top-level category of the same name is not that level.
+			if ( $term instanceof WP_Term && 0 !== (int) $term->parent ) {
+				$ids[] = (int) $term->term_id;
+			}
+		}
+		return $ids ? $ids : [ 0 ];
 	}
 
 	/**
@@ -285,6 +295,7 @@ class Wormiss_Blog_Filters {
 		$date = static fn( string $name, string $value ): string => '<input type="date" id="wormiss-' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '" />';
 
 		$html  = '<form class="wormiss-blog-filters" method="get" action="' . esc_url( $action ) . '" role="search" aria-label="' . esc_attr__( 'Filter blog posts', 'wormiss' ) . '">';
+		$html .= self::keep_query( $action );
 		$html .= self::select( 'blog_category', __( 'Category', 'wormiss' ), __( 'Any category', 'wormiss' ), $categories, $chosen['category'] );
 		$html .= self::select( 'blog_level', __( 'Level', 'wormiss' ), __( 'Any level', 'wormiss' ), array_values( $levels ), $chosen['level'] );
 		$html .= self::select( 'blog_topic', __( 'Topic', 'wormiss' ), __( 'Any topic', 'wormiss' ), $topics, $chosen['topic'] );
@@ -295,5 +306,27 @@ class Wormiss_Blog_Filters {
 		$html .= '<p class="wormiss-blog-filters__actions"><button type="submit" class="wp-element-button">' . esc_html__( 'Filter', 'wormiss' ) . '</button> '
 			. '<a class="wormiss-blog-filters__reset" href="' . esc_url( $action ) . '">' . esc_html__( 'Reset', 'wormiss' ) . '</a></p>';
 		return $html . '</form>';
+	}
+
+	/**
+	 * Hidden fields for the query string in the form's address: a GET form replaces it, so with
+	 * plain permalinks (?post_type=wormiss_blog) it would otherwise be lost.
+	 *
+	 * @param string $action The form's address.
+	 * @return string
+	 */
+	private static function keep_query( string $action ): string {
+		$query = (string) wp_parse_url( $action, PHP_URL_QUERY );
+		if ( '' === $query ) {
+			return '';
+		}
+		wp_parse_str( $query, $args );
+		$html = '';
+		foreach ( $args as $name => $value ) {
+			if ( is_string( $value ) && ! in_array( $name, self::FIELDS, true ) ) {
+				$html .= '<input type="hidden" name="' . esc_attr( (string) $name ) . '" value="' . esc_attr( $value ) . '" />';
+			}
+		}
+		return $html;
 	}
 }

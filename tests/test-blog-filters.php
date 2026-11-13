@@ -101,12 +101,19 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 				'name'     => 'Management',
 			]
 		);
-		$ann       = self::factory()->user->create( [ 'display_name' => 'Dr Ann' ] );
-		$bob       = self::factory()->user->create( [ 'display_name' => 'Dr Bob' ] );
-		$pink      = $this->post( 'Going Pink', 'a lentigo maligna', '2026-11-01 09:00:00', $ann );
-		$neck      = $this->post( 'R Neck Surgical Case', 'two lesions', '2026-06-17 09:00:00', $bob );
+		// A top-level category with a level's name is not that level.
+		$top  = self::factory()->term->create(
+			[
+				'taxonomy' => $tax,
+				'name'     => 'All Levels',
+			]
+		);
+		$ann  = self::factory()->user->create( [ 'display_name' => 'Dr Ann' ] );
+		$bob  = self::factory()->user->create( [ 'display_name' => 'Dr Bob' ] );
+		$pink = $this->post( 'Going Pink', 'a lentigo maligna', '2026-11-01 09:00:00', $ann );
+		$neck = $this->post( 'R Neck Surgical Case', 'two lesions', '2026-06-17 09:00:00', $bob );
 		wp_set_object_terms( $pink, [ $all ], $tax );
-		wp_set_object_terms( $neck, [ $surgery ], $tax );
+		wp_set_object_terms( $neck, [ $surgery, $top ], $tax );
 		wp_set_object_terms( $pink, [ 'Pigmented' ], Wormiss_Blog::TAX_TOPIC );
 
 		$this->assertSame( [ 'Going Pink' ], $this->titles( [ 'blog_category' => 'diagnosis' ] ), 'A category includes its levels.' );
@@ -123,6 +130,7 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 			)
 		);
 		$this->assertCount( 2, $this->titles( [ 'blog_from' => 'not-a-date' ] ), 'Bad dates are ignored.' );
+		$this->assertCount( 2, $this->titles( [ 'blog_from' => '2026-99-99' ] ), 'Impossible dates are ignored.' );
 
 		wp_set_current_user( 0 );
 		$this->assertSame( [], $this->titles( [ 'blog_q' => 'lentigo' ] ), 'Members-only text is not searched for visitors.' );
@@ -172,5 +180,8 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 		$this->assertStringContainsString( '>Dr Ann</option>', $html );
 		$this->assertStringContainsString( 'value="pink"', $html, 'Kept, as plain text.' );
 		$this->assertStringNotContainsString( '<b>', $html );
+		if ( str_contains( (string) get_post_type_archive_link( Wormiss_Blog::POST_TYPE ), 'post_type=' ) ) {
+			$this->assertStringContainsString( '<input type="hidden" name="post_type" value="wormiss_blog" />', $html, 'Plain permalinks keep the post type.' );
+		}
 	}
 }
