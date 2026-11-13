@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.35.1
+Stable tag: 0.36.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.36.0 =
+* Members' blog listing pages (/blogs/, its categories and topics) show 12 posts a page, as on the iMIS blog.
+* A blog post's categories in a Post Terms block are marked by level (wormiss-term--category for the category, wormiss-term--subcategory for the level beneath it), so a theme can show them as differently coloured badges on blog cards. The SCCA theme shows the category in purple and the level in orange.
 
 = 0.35.1 =
 * Blog import speed is now in Settings > Members' blog: "Blog posts per batch" (1 to 20, default 10, was 3) and "Minutes between blog batches" (1 to 10, default 1, was 2). Each batch copies up to 3 pictures per post and still stops after about 20 seconds, carrying on in the next batch, so a busy or slow site simply does less.

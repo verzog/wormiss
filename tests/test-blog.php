@@ -749,6 +749,52 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Post Terms blocks mark a post's category and subcategory by level, and the blog's
+	 * listing pages show twelve posts.
+	 *
+	 * @return void
+	 */
+	public function test_cards(): void {
+		$tax     = Wormiss_Blog::TAX_CATEGORY;
+		$parent  = self::factory()->term->create(
+			[
+				'taxonomy' => $tax,
+				'name'     => 'Diagnosis',
+			]
+		);
+		$child   = self::factory()->term->create(
+			[
+				'taxonomy' => $tax,
+				'name'     => 'All Levels',
+				'parent'   => $parent,
+			]
+		);
+		$post_id = self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Blog::POST_TYPE,
+				'post_status' => 'publish',
+			]
+		);
+		wp_set_object_terms( $post_id, [ $parent, $child ], $tax );
+		$GLOBALS['post'] = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test set-up.
+		$html            = render_block(
+			[
+				'blockName'    => 'core/post-terms',
+				'attrs'        => [ 'term' => $tax ],
+				'innerBlocks'  => [],
+				'innerHTML'    => '',
+				'innerContent' => [],
+			]
+		);
+		$this->assertMatchesRegularExpression( '#<a [^>]*class="wormiss-term--category"[^>]*>Diagnosis</a>#', $html );
+		$this->assertMatchesRegularExpression( '#<a [^>]*class="wormiss-term--subcategory"[^>]*>All Levels</a>#', $html );
+		unset( $GLOBALS['post'] );
+
+		$this->go_to( add_query_arg( 'post_type', Wormiss_Blog::POST_TYPE, home_url( '/' ) ) );
+		$this->assertSame( Wormiss_Blog::PER_PAGE, (int) get_query_var( 'posts_per_page' ) );
+	}
+
+	/**
 	 * Readers (a chosen role, or staff) see the text and, once due, the solution; others the
 	 * intro and a sign-in message; comments and the REST API follow suit.
 	 *

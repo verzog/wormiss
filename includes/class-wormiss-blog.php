@@ -74,6 +74,8 @@ class Wormiss_Blog {
 		add_action( 'init', [ __CLASS__, 'register' ], 9 );
 		add_filter( 'the_content', [ __CLASS__, 'filter_content' ], 8 );
 		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'styles' ] );
+		add_action( 'pre_get_posts', [ __CLASS__, 'per_page' ] );
+		add_filter( 'render_block_core/post-terms', [ __CLASS__, 'term_classes' ], 10, 3 );
 		add_filter( 'comments_open', [ __CLASS__, 'comments_open' ], 20, 2 );
 		add_filter( 'comments_array', [ __CLASS__, 'comments_array' ], 20, 2 );
 		add_filter( 'comment_text', [ __CLASS__, 'comment_text' ], 20, 2 );
@@ -199,6 +201,63 @@ class Wormiss_Blog {
 		}
 		// In an excerpt just the text; on the page, in a wrapper the blog styles hang off.
 		return doing_filter( 'get_the_excerpt' ) ? $html : '<div class="wormiss-blog-post">' . $html . '</div>';
+	}
+
+	/**
+	 * Posts per page on the blog's listing pages (/blogs/, its categories and topics).
+	 */
+	const PER_PAGE = 12;
+
+	/**
+	 * Twelve posts a page on the blog's listing pages, as on the iMIS blog.
+	 *
+	 * @param WP_Query $query Query.
+	 * @return void
+	 */
+	public static function per_page( $query ): void {
+		if ( is_admin() || ! $query instanceof WP_Query || ! $query->is_main_query() ) {
+			return;
+		}
+		if ( $query->is_post_type_archive( self::POST_TYPE ) || $query->is_tax( [ self::TAX_CATEGORY, self::TAX_TOPIC ] ) ) {
+			$query->set( 'posts_per_page', self::PER_PAGE );
+		}
+	}
+
+	/**
+	 * A post's blog categories marked by level (Post Terms block), so a theme can show the
+	 * category and the subcategory (level) differently: wormiss-term--category on a top-level
+	 * category, wormiss-term--subcategory on one beneath it.
+	 *
+	 * @param string   $html     Block HTML.
+	 * @param array    $block    Block.
+	 * @param WP_Block $instance Block instance.
+	 * @return string
+	 */
+	public static function term_classes( $html, $block, $instance ): string {
+		$html = (string) $html;
+		if ( self::TAX_CATEGORY !== ( $block['attrs']['term'] ?? '' ) || '' === $html ) {
+			return $html;
+		}
+		$post_id = (int) ( $instance->context['postId'] ?? get_the_ID() );
+		$terms   = $post_id ? get_the_terms( $post_id, self::TAX_CATEGORY ) : false;
+		if ( ! is_array( $terms ) ) {
+			return $html;
+		}
+		$levels = [];
+		foreach ( $terms as $term ) {
+			$link = get_term_link( $term );
+			if ( is_string( $link ) ) {
+				$levels[ $link ] = $term->parent ? 'wormiss-term--subcategory' : 'wormiss-term--category';
+			}
+		}
+		$tags = new WP_HTML_Tag_Processor( $html );
+		while ( $tags->next_tag( 'a' ) ) {
+			$href = (string) $tags->get_attribute( 'href' );
+			if ( isset( $levels[ $href ] ) ) {
+				$tags->add_class( $levels[ $href ] );
+			}
+		}
+		return $tags->get_updated_html();
 	}
 
 	/**
