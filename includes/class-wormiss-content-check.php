@@ -40,7 +40,8 @@ class Wormiss_Content_Check {
 	/**
 	 * The lookups made by the article's key ({key}). iMIS's Document service finds a document by
 	 * its version ID with the FindByVersionId operation (a POST to _Execute that only reads), or
-	 * reads it by its document ID; the version ID is the news view's Document Version Key.
+	 * reads it by its document ID; the version ID is the news view's Document Version Key. The
+	 * services' own descriptions (metadata) show their fields and operations.
 	 */
 	public const LOOKUPS = [
 		[
@@ -53,6 +54,16 @@ class Wormiss_Content_Check {
 			'label'  => 'Documents with this version ID',
 			'method' => 'GET',
 			'path'   => '/api/Document?DocumentVersionId={key}',
+		],
+		[
+			'label'  => 'Document service description (fields and operations)',
+			'method' => 'GET',
+			'path'   => '/api/Document/_metadata',
+		],
+		[
+			'label'  => 'DocumentSummary service description (fields and operations)',
+			'method' => 'GET',
+			'path'   => '/api/DocumentSummary/_metadata',
 		],
 	];
 
@@ -68,7 +79,7 @@ class Wormiss_Content_Check {
 	/**
 	 * Longest reply or decoded text kept for showing, in characters.
 	 */
-	public const MAX_SHOWN = 20000;
+	public const MAX_SHOWN = 50000;
 
 	/**
 	 * Hook the button.

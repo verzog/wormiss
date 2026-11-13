@@ -70,18 +70,21 @@ class Test_Wormiss_Content_Check extends Wormiss_Test_Case {
 		$this->imis->token()
 			->reply( '/api/Document/_Execute', 200, [ 'Result' => $document( base64_encode( $xml ) ) ] )
 			->reply( '/api/Document?DocumentVersionId=' . $key, 400, [ 'Message' => 'Not a known property name.' ] )
+			->reply( '/api/Document/_metadata', 200, [ 'EntityTypeName' => 'Document' ] )
+			->reply( '/api/DocumentSummary/_metadata', 200, [ 'EntityTypeName' => 'DocumentSummary' ] )
 			->reply( '/api/Document/' . $doc, 200, $document( base64_encode( gzencode( $xml ) ) ) );
 		// phpcs:enable
 		$results = Wormiss_Content_Check::run( strtoupper( $key ) );
-		$this->assertCount( 3, $results );
+		$this->assertCount( 5, $results );
 		$this->assertTrue( $results[0]['ok'] );
 		$this->assertSame( 'POST', $results[0]['method'] );
 		$this->assertSame( $doc, $results[0]['document_key'] );
 		$this->assertSame( [ $xml ], $results[0]['decoded'] );
 		$this->assertStringContainsString( 'decoded below', $results[0]['body'] );
 		$this->assertStringContainsString( '400', $results[1]['status'] );
-		$this->assertSame( '/api/Document/' . $doc, $results[2]['path'] );
-		$this->assertSame( [ $xml ], $results[2]['decoded'], 'Compressed content is unzipped.' );
+		$this->assertStringContainsString( 'DocumentSummary', $results[3]['body'] );
+		$this->assertSame( '/api/Document/' . $doc, $results[4]['path'] );
+		$this->assertSame( [ $xml ], $results[4]['decoded'], 'Compressed content is unzipped.' );
 
 		$execute = null;
 		foreach ( $this->imis->requests as $request ) {
@@ -107,8 +110,10 @@ class Test_Wormiss_Content_Check extends Wormiss_Test_Case {
 		$key = '6fdbde19-109c-43f8-b008-8b95e69f1704';
 		$this->imis->token()
 			->reply( '/api/Document/_Execute', 200, [ 'Result' => [ 'DocumentVersionId' => $key ] ] )
-			->reply( '/api/Document?', 404, '' );
-		$this->assertCount( 2, Wormiss_Content_Check::run( $key ) );
+			->reply( '/api/Document?', 404, '' )
+			->reply( '/api/Document/_metadata', 404, '' )
+			->reply( '/api/DocumentSummary/_metadata', 404, '' );
+		$this->assertCount( 4, Wormiss_Content_Check::run( $key ) );
 	}
 
 	/**
