@@ -42,6 +42,7 @@ class Wormiss_Blog_Lock {
 		add_action( 'template_redirect', [ __CLASS__, 'guard' ], 0 );
 		add_action( 'pre_get_posts', [ __CLASS__, 'hide_posts' ], 5 );
 		add_filter( 'rest_request_before_callbacks', [ __CLASS__, 'rest_guard' ], 10, 3 );
+		add_filter( 'rest_term_search_query', [ __CLASS__, 'term_search' ] );
 		add_filter( 'oembed_request_post_id', [ __CLASS__, 'oembed_post' ] );
 		add_filter( 'wp_sitemaps_post_types', [ __CLASS__, 'sitemap_types' ] );
 		add_filter( 'wp_sitemaps_taxonomies', [ __CLASS__, 'sitemap_taxonomies' ] );
@@ -116,7 +117,11 @@ class Wormiss_Blog_Lock {
 	 */
 	private static function here(): string {
 		$path = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
-		return home_url( $path );
+		// The request path already holds any folder the site is in, so only the site's scheme
+		// and host are added (home_url() would add the folder twice).
+		$home   = (array) wp_parse_url( home_url() );
+		$origin = ( $home['scheme'] ?? 'https' ) . '://' . ( $home['host'] ?? '' ) . ( isset( $home['port'] ) ? ':' . $home['port'] : '' );
+		return $origin . '/' . ltrim( $path, '/' );
 	}
 
 	/**
@@ -228,6 +233,28 @@ class Wormiss_Blog_Lock {
 			}
 		}
 		return $response;
+	}
+
+	/**
+	 * The REST API's term search (/wp/v2/search?type=term) leaves out blog categories and
+	 * topics for people who cannot read the blog.
+	 *
+	 * @param array $args get_terms() arguments.
+	 * @return array
+	 */
+	public static function term_search( $args ): array {
+		$args = (array) $args;
+		if ( Wormiss_Blog::can_read() ) {
+			return $args;
+		}
+		$taxonomies = array_values( array_diff( (array) ( $args['taxonomy'] ?? [] ), [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] ) );
+		if ( ! $taxonomies ) {
+			// Only blog taxonomies were asked for: nothing to find.
+			$taxonomies      = [ 'category' ];
+			$args['include'] = [ 0 ];
+		}
+		$args['taxonomy'] = $taxonomies;
+		return $args;
 	}
 
 	/**

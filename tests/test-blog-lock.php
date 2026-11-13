@@ -151,6 +151,16 @@ class Test_Wormiss_Blog_Lock extends Wormiss_Test_Case {
 		$this->assertSame( 401, $status( '/wp/v2/' . Wormiss_Blog::TAX_CATEGORY ) );
 		$this->assertSame( 200, $status( '/wp/v2/posts' ), 'Other routes are not touched.' );
 
+		$request = new WP_REST_Request( 'GET', '/wp/v2/search' );
+		$request->set_query_params(
+			[
+				'type'    => 'term',
+				'subtype' => Wormiss_Blog::TAX_TOPIC,
+			]
+		);
+		$found = rest_get_server()->dispatch( $request );
+		$this->assertSame( [], 200 === $found->get_status() ? $found->get_data() : [], 'No blog topics in a term search.' );
+
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'contributor' ] ) );
 		$this->assertSame( 403, $status( '/wp/v2/' . Wormiss_Blog::TAX_TOPIC ) );
 
