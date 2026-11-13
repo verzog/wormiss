@@ -458,7 +458,9 @@ class Wormiss_Blog_Import {
 			return 'skipped';
 		}
 		$feature = '' !== $parts['header'] ? $parts['header'] : $post['thumbnail'];
-		$hash    = md5( (string) wp_json_encode( [ $post, $parts, $feature, self::comments_hash( $comments ) ] ) );
+		// The category and subcategory names are part of it, so a rename in iMIS reaches the post.
+		$names = [ $listing['categories'][ $post['category'] ] ?? null, $listing['subcategories'][ $post['subcategory'] ] ?? null ];
+		$hash  = md5( (string) wp_json_encode( [ $post, $parts, $feature, $names, self::comments_hash( $comments ) ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash ) {
 			return 'skipped';
 		}
@@ -509,8 +511,13 @@ class Wormiss_Blog_Import {
 		update_post_meta( $saved, Wormiss_Blog::META_REVEAL, $parts['reveal'] );
 		update_post_meta( $saved, self::META_AUTHOR_ID, $post['author'] );
 		self::terms( $saved, $post, $listing );
-		$report['comments'] += self::comments( $client, $saved, $comments );
-		$complete            = self::images( $saved, $feature, $post['title'], $report );
+		[ $changed, $comments_done ] = self::comments( $client, $saved, $comments );
+		$report['comments']         += $changed;
+		$complete                    = self::images( $saved, $feature, $post['title'], $report ) && $comments_done;
+		if ( ! $comments_done ) {
+			/* translators: %s: blog title. */
+			self::note( $report, sprintf( __( '%s: some comments could not be saved; tried again next import.', 'wormiss' ), $post['title'] ) );
+		}
 		if ( $complete ) {
 			update_post_meta( $saved, self::META_SOURCE, $hash );
 		} else {
@@ -523,7 +530,7 @@ class Wormiss_Blog_Import {
 	 * A Smart Blogs post's blocks as HTML: the text (every block but page furniture and the
 	 * header picture), the intro (the blocks iMIS shows to non-members), the solution (the
 	 * Conclusion block) and its reveal time, and the header picture (an image before the first
-	 * dividing line). Old posts, which mark no intro, get their first paragraph as the intro.
+	 * dividing line). Old (LegacyHtml) posts, which mark no intro, get their first paragraph.
 	 *
 	 * @param array $data The decoded BlogPostData.
 	 * @return array body, intro, solution, reveal (Unix time), header (image address), unknown (block types).
@@ -538,12 +545,14 @@ class Wormiss_Blog_Import {
 			'unknown'  => [],
 		];
 		$divided = false;
+		$legacy  = false;
 		foreach ( (array) ( $data['content'] ?? [] ) as $block ) {
 			if ( ! is_array( $block ) ) {
 				continue;
 			}
-			$type  = (string) ( $block['type'] ?? '' );
-			$props = is_array( $block['props'] ?? null ) ? $block['props'] : [];
+			$type   = (string) ( $block['type'] ?? '' );
+			$props  = is_array( $block['props'] ?? null ) ? $block['props'] : [];
+			$legacy = $legacy || 'LegacyHtml' === $type;
 			if ( 'Conclusion' === $type ) {
 				foreach ( (array) ( $props['items'] ?? [] ) as $item ) {
 					$html = is_array( $item ) ? self::block_html( $item, $out['unknown'] ) : '';
@@ -580,8 +589,9 @@ class Wormiss_Blog_Import {
 			}
 			$out[ $part ] = implode( "\n\n", $out[ $part ] );
 		}
-		// Old posts mark no intro: their first paragraph with words in it (pictures left out).
-		if ( '' === $out['intro'] && preg_match_all( '#<p\b[^>]*>.*?</p>#s', $out['body'], $found ) ) {
+		// Old posts (LegacyHtml) mark no intro: their first paragraph with words in it (pictures left
+		// out). A new-style post with no visible blocks has no intro: nothing of it is public.
+		if ( $legacy && '' === $out['intro'] && preg_match_all( '#<p\b[^>]*>.*?</p>#s', $out['body'], $found ) ) {
 			foreach ( $found[0] as $paragraph ) {
 				$paragraph = (string) preg_replace( '#<a\b[^>]*>\s*<img\b[^>]*>\s*</a>|<img\b[^>]*>#i', '', $paragraph );
 				if ( '' !== trim( html_entity_decode( wp_strip_all_tags( $paragraph ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ), " \t\n\r\0\x0B\xc2\xa0" ) ) {
@@ -775,12 +785,13 @@ class Wormiss_Blog_Import {
 	 * @param Wormiss_Rest_Client $client   Client.
 	 * @param int                 $post_id  Post ID.
 	 * @param array[]             $comments Comment rows.
-	 * @return int Comments made or changed.
+	 * @return array [ comments made or changed, whether every comment was saved ].
 	 */
-	private static function comments( Wormiss_Rest_Client $client, int $post_id, array $comments ): int {
+	private static function comments( Wormiss_Rest_Client $client, int $post_id, array $comments ): array {
 		usort( $comments, static fn( array $a, array $b ): int => strcmp( (string) ( $a['CreatedOn'] ?? '' ), (string) ( $b['CreatedOn'] ?? '' ) ) );
 		$by_key  = self::existing_comments( $post_id );
 		$changed = 0;
+		$done    = true;
 		$pending = [];
 		foreach ( $comments as $row ) {
 			$key = strtolower( (string) ( $row['CommentKey'] ?? '' ) );
@@ -812,11 +823,16 @@ class Wormiss_Blog_Import {
 					continue;
 				}
 				$fields['comment_ID'] = $by_key[ $key ];
-				wp_update_comment( wp_slash( $fields ) );
+				$updated              = wp_update_comment( wp_slash( $fields ), true );
+				if ( false === $updated || is_wp_error( $updated ) ) {
+					$done = false; // Fingerprint kept as it was: tried again next import.
+					continue;
+				}
 				$comment_id = $by_key[ $key ];
 			} else {
 				$comment_id = (int) wp_insert_comment( wp_slash( $fields ) );
 				if ( ! $comment_id ) {
+					$done = false;
 					continue;
 				}
 				$by_key[ $key ] = $comment_id;
@@ -830,16 +846,22 @@ class Wormiss_Blog_Import {
 			++$changed;
 		}
 		foreach ( $pending as $comment_id => $parent ) {
-			if ( isset( $by_key[ $parent ] ) ) {
-				wp_update_comment(
-					[
-						'comment_ID'     => $comment_id,
-						'comment_parent' => $by_key[ $parent ],
-					]
-				);
+			if ( ! isset( $by_key[ $parent ] ) ) {
+				continue;
+			}
+			$linked = wp_update_comment(
+				[
+					'comment_ID'     => $comment_id,
+					'comment_parent' => $by_key[ $parent ],
+				],
+				true
+			);
+			if ( false === $linked || is_wp_error( $linked ) ) {
+				$done = false;
+				delete_comment_meta( $comment_id, self::COMMENT_SOURCE );
 			}
 		}
-		return $changed;
+		return [ $changed, $done ];
 	}
 
 	/**
@@ -943,9 +965,7 @@ class Wormiss_Blog_Import {
 		];
 		$urls  = [];
 		foreach ( $texts as $text ) {
-			if ( preg_match_all( '#\b(?:src|href)="(' . preg_quote( $base, '#' ) . '/[^"]+\.(?:jpe?g|png|gif|webp))"#i', $text, $found ) ) {
-				$urls = array_merge( $urls, $found[1] );
-			}
+			$urls = array_merge( $urls, self::image_urls( $text, $base ) );
 		}
 		$map = [];
 		foreach ( array_unique( $urls ) as $attr ) {
@@ -976,6 +996,19 @@ class Wormiss_Blog_Import {
 			}
 		}
 		return $complete;
+	}
+
+	/**
+	 * The picture addresses on the iMIS site in some HTML (in src or href, as written there),
+	 * including ones with a query string (e.g. case.jpg?v=2).
+	 *
+	 * @param string $html HTML.
+	 * @param string $base The iMIS site address.
+	 * @return string[]
+	 */
+	public static function image_urls( string $html, string $base ): array {
+		$pattern = '#\b(?:src|href)="(' . preg_quote( $base, '#' ) . '/[^"?\#]+\.(?:jpe?g|png|gif|webp)(?:\?[^"\#]*)?)"#i';
+		return preg_match_all( $pattern, $html, $found ) ? array_values( array_unique( $found[1] ) ) : [];
 	}
 
 	/**

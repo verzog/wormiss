@@ -209,6 +209,52 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A new-style post with no visible blocks has no intro: nothing of it is made public.
+	 *
+	 * @return void
+	 */
+	public function test_no_intro_for_new_posts(): void {
+		$parts = Wormiss_Blog_Import::convert(
+			[
+				'content' => [
+					[
+						'type'  => 'Text',
+						'props' => [ 'text' => 'Members only.' ],
+					],
+				],
+			]
+		);
+		$this->assertSame( '', $parts['intro'] );
+		$this->assertSame( '<p>Members only.</p>', $parts['body'] );
+	}
+
+	/**
+	 * Pictures on the iMIS site are found with or without a query string; others are not.
+	 *
+	 * @return void
+	 */
+	public function test_image_urls(): void {
+		$html = '<img src="https://imis.example.org/a/case.jpg?v=2"><a href="https://imis.example.org/b.PNG">'
+			. '<img src="https://cdn.example.com/c.jpg"><a href="https://imis.example.org/page.aspx">';
+		$this->assertSame(
+			[ 'https://imis.example.org/a/case.jpg?v=2', 'https://imis.example.org/b.PNG' ],
+			Wormiss_Blog_Import::image_urls( $html, 'https://imis.example.org' )
+		);
+	}
+
+	/**
+	 * Comment feeds leave out blog comments for people who cannot read.
+	 *
+	 * @return void
+	 */
+	public function test_comment_feed(): void {
+		wp_set_current_user( 0 );
+		$this->assertStringContainsString( "post_type = 'wormiss_blog'", Wormiss_Blog::comment_feed_where( 'WHERE 1=1' ) );
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
+		$this->assertSame( 'WHERE 1=1', Wormiss_Blog::comment_feed_where( 'WHERE 1=1' ) );
+	}
+
+	/**
 	 * Comment text: decoded from base 64, plain text kept as it is.
 	 *
 	 * @return void

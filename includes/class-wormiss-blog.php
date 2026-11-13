@@ -76,6 +76,8 @@ class Wormiss_Blog {
 		add_filter( 'comments_open', [ __CLASS__, 'comments_open' ], 20, 2 );
 		add_filter( 'comments_array', [ __CLASS__, 'comments_array' ], 20, 2 );
 		add_filter( 'comment_text', [ __CLASS__, 'comment_text' ], 20, 2 );
+		add_filter( 'comment_text_rss', [ __CLASS__, 'comment_text_rss' ], 20 );
+		add_filter( 'comment_feed_where', [ __CLASS__, 'comment_feed_where' ], 20 );
 		add_filter( 'rest_prepare_' . self::POST_TYPE, [ __CLASS__, 'rest_post' ], 20, 2 );
 		add_filter( 'rest_prepare_comment', [ __CLASS__, 'rest_comment' ], 20, 2 );
 	}
@@ -187,6 +189,8 @@ class Wormiss_Blog {
 		if ( ! $post_id || ! self::is_blog( $post_id ) ) {
 			return $content;
 		}
+		// What shows depends on who is looking: never page-cached.
+		Wormiss_Members_Only::no_page_cache();
 		if ( ! self::can_read() ) {
 			return self::link_old_addresses( (string) get_post_meta( $post_id, self::META_INTRO, true ) ) . self::locked_notice();
 		}
@@ -288,6 +292,35 @@ class Wormiss_Blog {
 	 * @return string
 	 */
 	public static function comment_text( $text, $comment = null ) {
+		return $comment instanceof WP_Comment && self::is_blog( (int) $comment->comment_post_ID ) && ! self::can_read() ? '' : $text;
+	}
+
+	/**
+	 * Comment feeds leave out blog comments for people who cannot read.
+	 *
+	 * @param string $where SQL WHERE clause of the comment feed.
+	 * @return string
+	 */
+	public static function comment_feed_where( $where ) {
+		if ( self::can_read() ) {
+			return $where;
+		}
+		global $wpdb;
+		return $where . $wpdb->prepare(
+			" AND {$wpdb->comments}.comment_post_ID NOT IN ( SELECT ID FROM {$wpdb->posts} WHERE post_type = %s )",
+			self::POST_TYPE
+		);
+	}
+
+	/**
+	 * Feed comment text: none for a blog comment when the reader cannot read (the feed query
+	 * already leaves those out; this covers anything that slips through).
+	 *
+	 * @param string $text Comment text for a feed.
+	 * @return string
+	 */
+	public static function comment_text_rss( $text ) {
+		$comment = get_comment();
 		return $comment instanceof WP_Comment && self::is_blog( (int) $comment->comment_post_ID ) && ! self::can_read() ? '' : $text;
 	}
 
