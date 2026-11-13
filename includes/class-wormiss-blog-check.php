@@ -81,6 +81,16 @@ class Wormiss_Blog_Check {
 			'method' => 'GET',
 			'path'   => '/api/Smart_Blogs_Configuration',
 		],
+		[
+			'label'  => 'Blog templates (layouts decoded)',
+			'method' => 'GET',
+			'path'   => '/api/Smart_Blogs_Template',
+		],
+		[
+			'label'  => 'Blog template fields',
+			'method' => 'GET',
+			'path'   => '/api/metadata/Smart_Blogs_Template',
+		],
 	];
 
 	/**
@@ -166,7 +176,8 @@ class Wormiss_Blog_Check {
 		echo '<p class="description">'
 			. esc_html__( 'Shows what iMIS (Smart Blogs) keeps for one members\' blog post, to plan moving the blog here:', 'wormiss' )
 			. ' ' . esc_html__( 'the post (text and preview decoded), its first comments, the fields of posts, comments and the', 'wormiss' )
-			. ' ' . esc_html__( 'CPD logbook, the blog CPD rates, categories and settings. Nothing is changed in iMIS. Comments', 'wormiss' )
+			. ' ' . esc_html__( 'CPD logbook, the blog CPD rates, categories and settings, and the blog templates with their', 'wormiss' )
+			. ' ' . esc_html__( 'layouts (to match posts to the template they were made from). Nothing is changed in iMIS. Comments', 'wormiss' )
 			. ' ' . esc_html__( 'include members\' iMIS IDs: the replies are also kept in the audit log.', 'wormiss' ) . '</p>';
 
 		$result = get_transient( self::transient() );
