@@ -94,6 +94,18 @@ class Test_Wormiss_Blog_Lock extends Wormiss_Test_Case {
 		}
 
 		wp_set_current_user( 0 );
+		$this->go_to(
+			add_query_arg(
+				[
+					'post_type' => Wormiss_Blog::POST_TYPE,
+					's'         => 'Pink',
+				],
+				home_url( '/' )
+			)
+		);
+		$this->assertSame( '', Wormiss_Blog_Lock::decision(), 'A search is narrowed, not sent to sign in.' );
+		$this->assertSame( [], $GLOBALS['wp_query']->posts, 'Nothing of the blog in a search.' );
+
 		$this->go_to( get_permalink( $this->news ) );
 		$this->assertSame( '', Wormiss_Blog_Lock::decision(), 'Other pages are not touched.' );
 

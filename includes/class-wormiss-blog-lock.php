@@ -54,8 +54,13 @@ class Wormiss_Blog_Lock {
 	 * @return bool
 	 */
 	public static function is_blog_page(): bool {
-		return is_singular( Wormiss_Blog::POST_TYPE ) || is_post_type_archive( Wormiss_Blog::POST_TYPE )
-			|| is_tax( [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] );
+		global $wp_query;
+		if ( is_singular( Wormiss_Blog::POST_TYPE ) || is_post_type_archive( Wormiss_Blog::POST_TYPE )
+			|| is_tax( [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] ) ) {
+			return true;
+		}
+		// Any other page of blog posts (a dated listing, say); a search is narrowed instead.
+		return $wp_query instanceof WP_Query && ! $wp_query->is_search() && self::asks_for_blog( $wp_query );
 	}
 
 	/**
@@ -138,9 +143,12 @@ class Wormiss_Blog_Lock {
 		if ( ! $query instanceof WP_Query || ! self::narrowing() ) {
 			return;
 		}
+		// Wormiss's own lookups (get_posts, which suppresses filters) are not listings.
+		if ( $query->get( 'suppress_filters' ) ) {
+			return;
+		}
 		// A blog page itself is left to guard(): sign in, or "not found".
-		if ( $query->is_main_query() && ( $query->is_singular( Wormiss_Blog::POST_TYPE ) || $query->is_post_type_archive( Wormiss_Blog::POST_TYPE )
-			|| $query->is_tax( [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] ) ) ) {
+		if ( $query->is_main_query() && ! $query->is_search() && self::asks_for_blog( $query ) ) {
 			return;
 		}
 		$type = $query->get( 'post_type' );
@@ -163,6 +171,17 @@ class Wormiss_Blog_Lock {
 			return;
 		}
 		$query->set( 'post__in', [ 0 ] );
+	}
+
+	/**
+	 * Whether a query asks for blog posts (by type, category or topic).
+	 *
+	 * @param WP_Query $query Query.
+	 * @return bool
+	 */
+	private static function asks_for_blog( WP_Query $query ): bool {
+		return in_array( Wormiss_Blog::POST_TYPE, array_map( 'strval', (array) $query->get( 'post_type' ) ), true )
+			|| self::blog_tax_query( $query );
 	}
 
 	/**
