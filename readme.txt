@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.35.0
+Stable tag: 0.35.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.35.1 =
+* Blog import speed is now in Settings > Members' blog: "Blog posts per batch" (1 to 20, default 10, was 3) and "Minutes between blog batches" (1 to 10, default 1, was 2). Each batch copies up to 3 pictures per post and still stops after about 20 seconds, carrying on in the next batch, so a busy or slow site simply does less.
 
 = 0.35.0 =
 * Members' blog: the solution is closed until the reader chooses to see it, as on the iMIS blog: a box with an eye icon, "Solution", a short prompt to think it through first and a "Show the solution" button (then "Hide the solution"). It works without scripts and from the keyboard. Before its reveal time readers still see when it will be published (now with the eye icon); staff can open it early, marked as staff only. Non-readers never receive the solution.

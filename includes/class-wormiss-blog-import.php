@@ -126,24 +126,24 @@ class Wormiss_Blog_Import {
 	const TERM_KEY = '_wormiss_blog_category_key';
 
 	/**
-	 * Posts changed per batch.
+	 * Posts changed per batch, by default (Settings > Members' blog).
 	 */
-	const BATCH = 3;
+	const BATCH = 10;
 
 	/**
-	 * Posts checked per batch.
+	 * Most posts changed per batch that the setting allows.
 	 */
-	const MAX_CHECKS = 15;
+	const BATCH_MAX = 20;
 
 	/**
-	 * Images copied per batch.
+	 * Minutes between batches, by default (Settings > Members' blog).
 	 */
-	const MAX_IMAGES = 8;
+	const GAP_MINUTES = 1;
 
 	/**
-	 * Seconds between batches.
+	 * Most minutes between batches that the setting allows.
 	 */
-	const BATCH_GAP = 2 * MINUTE_IN_SECONDS;
+	const GAP_MAX = 10;
 
 	/**
 	 * How long the post list is used by later batches.
@@ -240,6 +240,25 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
+	 * Posts changed per batch (Settings > Members' blog); each batch also stops after about 20
+	 * seconds, so a large setting only helps while the site keeps up. Up to 3 pictures each.
+	 *
+	 * @return int
+	 */
+	public static function batch(): int {
+		return min( self::BATCH_MAX, max( 1, (int) Wormiss_Settings::get( 'blog_batch_posts' ) ) );
+	}
+
+	/**
+	 * Seconds between batches (Settings > Members' blog).
+	 *
+	 * @return int
+	 */
+	public static function gap(): int {
+		return min( self::GAP_MAX, max( 1, (int) Wormiss_Settings::get( 'blog_batch_minutes' ) ) ) * MINUTE_IN_SECONDS;
+	}
+
+	/**
 	 * Import one batch of blog posts.
 	 *
 	 * @param bool $carry_on Carry on from the last batch.
@@ -272,7 +291,7 @@ class Wormiss_Blog_Import {
 			$report['status'] = 'busy';
 			if ( true === $carry_on && ! wp_next_scheduled( self::MORE_HOOK ) ) {
 				// Another batch has it (or one the host stopped holds it until the lock runs out).
-				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+				wp_schedule_single_event( time() + self::gap(), self::MORE_HOOK );
 			}
 			return $report;
 		}
@@ -333,7 +352,7 @@ class Wormiss_Blog_Import {
 				// A long list is read over several batches, a page at a time.
 				update_option( self::LIST_OPTION, $listing, false );
 				if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
-					wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+					wp_schedule_single_event( time() + self::gap(), self::MORE_HOOK );
 				}
 				$report['read'] = count( $listing['posts'] );
 				/* translators: %d: blog posts found so far. */
@@ -475,13 +494,13 @@ class Wormiss_Blog_Import {
 		// Kept from the start, so a batch the host stops part way is carried on, not lost.
 		update_option( self::LIST_OPTION, array_merge( $listing, [ 'time' => $read ] ), false );
 		if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
-			wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+			wp_schedule_single_event( time() + self::gap(), self::MORE_HOOK );
 		}
 		foreach ( $listing['posts'] as $key => $post ) {
 			if ( isset( $done[ $key ] ) ) {
 				continue;
 			}
-			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || Wormiss_Batch::stopped() ) {
+			if ( $writes >= self::batch() || $checked >= 3 * self::batch() + 5 || Wormiss_Batch::stopped() ) {
 				++$todo;
 				continue;
 			}
@@ -1308,7 +1327,7 @@ class Wormiss_Blog_Import {
 		if ( $found ) {
 			return (int) $found[0];
 		}
-		if ( self::$images >= self::MAX_IMAGES || Wormiss_Batch::out_of_time() ) {
+		if ( self::$images >= 3 * self::batch() || Wormiss_Batch::out_of_time() ) {
 			Wormiss_Batch::stop();
 			$complete = false;
 			return 0;
