@@ -175,8 +175,8 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * A Flex row of two or more blocks becomes a Bootstrap-style row of columns; a Flex column,
-	 * or a row with one block left, stays stacked.
+	 * A Flex row of two or more blocks becomes a Bootstrap-style row of columns; a Flex column
+	 * (dividing lines kept), or a row with one block left, stays stacked.
 	 *
 	 * @return void
 	 */
@@ -196,7 +196,17 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 			[
 				'content' => [
 					$flex( 'row', [ $text( 'Left.' ), $text( 'Right.' ) ] ),
-					$flex( 'column', [ $text( 'Top.' ), $text( 'Bottom.' ) ] ),
+					$flex(
+						'column',
+						[
+							$text( 'Top.' ),
+							[
+								'type'  => 'Separator',
+								'props' => [ 'orientation' => 'horizontal' ],
+							],
+							$text( 'Bottom.' ),
+						]
+					),
 					$flex(
 						'row',
 						[
@@ -215,7 +225,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 			$body
 		);
 		$this->assertSame( 1, substr_count( $body, 'wormiss-blog-row' ) );
-		$this->assertStringContainsString( "<p>Top.</p>\n\n<p>Bottom.</p>", $body );
+		$this->assertStringContainsString( "<p>Top.</p>\n\n<hr />\n\n<p>Bottom.</p>", $body, 'Stacked: the dividing line kept.' );
 		$this->assertStringContainsString( '<p>Alone.</p>', $body );
 	}
 

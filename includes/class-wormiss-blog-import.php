@@ -732,13 +732,18 @@ class Wormiss_Blog_Import {
 			$parts = [];
 			foreach ( $props['items'] as $item ) {
 				$html = is_array( $item ) ? self::block_html( $item, $unknown ) : '';
-				if ( '' !== $html && '<hr />' !== $html ) {
+				if ( '' !== $html ) {
 					$parts[] = $html;
 				}
 			}
-			if ( count( $parts ) > 1 && 'column' !== ( $props['direction'] ?? '' ) ) {
+			// Dividing lines are not columns; stacked, they stay between the blocks they divide.
+			$content = array_values( array_filter( $parts, static fn( string $part ): bool => '<hr />' !== $part ) );
+			if ( ! $content ) {
+				return '';
+			}
+			if ( count( $content ) > 1 && 'column' !== ( $props['direction'] ?? '' ) ) {
 				return '<div class="row wormiss-blog-row">' . "\n"
-					. implode( "\n", array_map( static fn( string $part ): string => '<div class="col-md">' . "\n" . $part . "\n</div>", $parts ) )
+					. implode( "\n", array_map( static fn( string $part ): string => '<div class="col-md">' . "\n" . $part . "\n</div>", $content ) )
 					. "\n</div>";
 			}
 			return implode( "\n\n", $parts );
