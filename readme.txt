@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.30.2
+Stable tag: 0.30.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.30.3 =
+* When iMIS refuses a request with its validation errors (for example an IQA that cannot run), the settings page and notes now show iMIS's own message, not only "HTTP 400". This applies to every Wormiss feature that talks to iMIS.
 
 = 0.30.2 =
 * Imported news keeps its pictures where iMIS shows them: the first picture sits beside the text before it (as on the iMIS page; stacked on phones), and other single pictures stay in their place. The first is still the featured image for news cards, but is not shown twice on the article itself.

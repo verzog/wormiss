@@ -196,6 +196,31 @@ class Test_Wormiss_Rest_Client extends Wormiss_Test_Case {
 		$this->assertSame( 'Plain', Wormiss_Rest_Client::error_reason( '"Plain"' ) );
 		$this->assertSame( 'Oops it broke', Wormiss_Rest_Client::error_reason( "<p>Oops\n <b>it</b> broke</p><style>p{}</style>" ) );
 		$this->assertSame( 300, mb_strlen( Wormiss_Rest_Client::error_reason( str_repeat( 'x', 400 ) ) ) );
+		// iMIS validation results, on their own or inside a reply.
+		$validation = [
+			'$type'  => 'Asi.Soa.Core.DataContracts.ValidationResultsData, Asi.Contracts',
+			'Errors' => [
+				'$values' => [
+					[ 'Message' => "The text data type cannot be selected as DISTINCT.\r\nIt is not comparable." ],
+					[ 'Message' => 'Second.' ],
+				],
+			],
+		];
+		$this->assertSame(
+			'The text data type cannot be selected as DISTINCT. It is not comparable. Second.',
+			Wormiss_Rest_Client::error_reason( (string) wp_json_encode( $validation ) )
+		);
+		$this->assertSame(
+			'Second.',
+			Wormiss_Rest_Client::error_reason(
+				(string) wp_json_encode(
+					[
+						'Message'           => null,
+						'ValidationResults' => [ 'Errors' => [ '$values' => [ [ 'Message' => 'Second.' ] ] ] ],
+					]
+				)
+			)
+		);
 	}
 
 	/**

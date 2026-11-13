@@ -407,6 +407,22 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * When iMIS refuses the query, its reason shows on the settings page, and nothing changes.
+	 *
+	 * @return void
+	 */
+	public function test_query_refused_shows_reason(): void {
+		$this->imis->token()->reply(
+			'/api/iqa',
+			400,
+			[ 'Errors' => [ '$values' => [ [ 'Message' => 'The text data type cannot be selected as DISTINCT.' ] ] ] ]
+		);
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( 'error', $report['status'] );
+		$this->assertStringContainsString( 'cannot be selected as DISTINCT', Wormiss_News_Import::summary() );
+	}
+
+	/**
 	 * Off, or with no query, nothing is read.
 	 *
 	 * @return void
