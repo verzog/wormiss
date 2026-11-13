@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.29.2
+Stable tag: 0.30.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -163,6 +163,10 @@ Yes. Add an Event (Wormiss > Add New Event), give it a title and any text you li
 
 Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page with its iMIS description, image and event type, saved as a draft (or published straight away with "Publish imported pages"). Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again. For historical records, set "Also import past events since" to a date to bring in finished events from then on as well.
 
+= Can I bring our iMIS news articles into WordPress? =
+
+Yes. In iMIS, save an IQA that lists your news articles, one row per article and tag, with the Document Version Key column (and ideally Alternate Name, Document Description, Publication Date, Tag Name and Thumbnail Image), with no prompts. Under Wormiss > Settings > Import iMIS news, enter it as the News query, tick "Import iMIS news daily", and press "Import iMIS news now" with the dry run on to see what would be made. Then untick the dry run. Each article becomes a post in the News category with its tags, date, summary, full text and images. To keep your own changes to a post, tick "Stop updating from iMIS" in its iMIS news box. To check one article first, use "Check a news article" on the same page.
+
 = Can members join a waitlist on the website? =
 
 Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
@@ -201,6 +205,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.30.0 =
+* Import iMIS news (Wormiss > Settings > Import iMIS news): once a day, or on "Import iMIS news now", each article your news IQA lists (one row per article and tag, with its Document Version Key) becomes a post in the News category (or the one you choose), with all its iMIS tags, its publication date, summary and full text. The text comes from the article's iMIS content page, in page order: the title heading is left out, the image-only block becomes the featured image, and old fonts, inline styles and stray line breaks are tidied away so posts take on the theme's look. Images on the iMIS site, featured and in the text, are copied into the Media Library (each once). Members-only iMIS articles are members-only here too.
+* iMIS stays the source: a changed article updates its post on the next import, unless an editor ticks "Stop updating from iMIS" in the post's iMIS news box. Only published iMIS articles are imported; a post you trash is not made again; nothing is changed in iMIS.
+* Off, and a dry run (reports what it would make or update), until turned on. Works in batches of 5 posts and 6 images every 2 minutes, so the site is not slowed.
 
 = 0.29.2 =
 * Check a news article uses iMIS's Document service as iMIS documents it: the document is found by its version ID (the news view's Document Version Key) with the FindByVersionId operation, which only reads, then read by its document ID. Its content, sent as binary, is decoded and shown as text. It also shows the Document and DocumentSummary services' own descriptions of their fields and operations. Replies are shown up to 50,000 characters. The business-object style lookups, which the Document service does not accept, are gone.

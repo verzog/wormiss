@@ -117,6 +117,15 @@ class Wormiss_Settings {
 			'event_import_publish'       => false,
 			// Also import finished events that started on or after this date (YYYY-MM-DD; '' for none).
 			'event_import_since'         => '',
+			// Importing iMIS news articles as posts: off, and a dry run, until turned on.
+			'news_import_enabled'        => false,
+			'news_import_dry_run'        => true,
+			// Publish imported posts (else drafts for an editor to publish).
+			'news_import_publish'        => false,
+			// The IQA that lists the articles (one row per article and tag).
+			'news_import_query'          => '',
+			// The category imported posts go in (made if missing).
+			'news_import_category'       => 'News',
 		];
 	}
 
@@ -489,6 +498,21 @@ class Wormiss_Settings {
 		if ( isset( $input['event_places_query'] ) ) {
 			$query                       = self::parse_queries( (string) $input['event_places_query'] );
 			$clean['event_places_query'] = $query ? $query[0] : '';
+		}
+		if ( isset( $input['news_import_query'] ) ) {
+			$query                      = self::parse_queries( (string) $input['news_import_query'] );
+			$clean['news_import_query'] = $query ? $query[0] : '';
+		}
+		if ( isset( $input['news_import_category'] ) ) {
+			$category                      = sanitize_text_field( (string) $input['news_import_category'] );
+			$clean['news_import_category'] = '' !== $category ? $category : 'News';
+		}
+		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish' ] as $box ) {
+			if ( isset( $input['news_import_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
 		}
 		if ( isset( $input['user_sync_query'] ) ) {
 			$query                    = self::parse_queries( (string) $input['user_sync_query'] );
