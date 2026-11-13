@@ -128,6 +128,10 @@ class Wormiss_Settings {
 			'news_import_category'       => 'News',
 			// Who imported posts are by (user ID; 0 for the first administrator).
 			'news_import_author'         => 0,
+			// The members' blog: roles that may read full posts (staff always can), and the import.
+			'blog_reader_roles'          => [],
+			'blog_import_enabled'        => false,
+			'blog_import_dry_run'        => true,
 		];
 	}
 
@@ -515,6 +519,20 @@ class Wormiss_Settings {
 				$clean['news_import_author'] = $author;
 			} else {
 				add_settings_error( self::OPTION, 'news_import_author', __( 'The news author must be able to write posts.', 'wormiss' ) );
+			}
+		}
+		if ( isset( $input['blog_section'] ) ) {
+			$roles                      = isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ? $input['blog_reader_roles'] : [];
+			$known                      = array_keys( wp_roles()->get_names() );
+			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $roles ), $known ) );
+		} elseif ( isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ) {
+			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $input['blog_reader_roles'] ), array_keys( wp_roles()->get_names() ) ) );
+		}
+		foreach ( [ 'blog_import_enabled', 'blog_import_dry_run' ] as $box ) {
+			if ( isset( $input['blog_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
 			}
 		}
 		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish' ] as $box ) {

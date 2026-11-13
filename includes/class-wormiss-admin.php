@@ -224,6 +224,7 @@ class Wormiss_Admin {
 			__( 'iMIS event import', 'wormiss' )        => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 			__( 'CPD hours on event pages', 'wormiss' ) => $on( 'event_cpd' ) ? __( 'On (read from iMIS)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 			__( 'iMIS news import', 'wormiss' )         => $state( $on( 'news_import_enabled' ), $on( 'news_import_dry_run' ) ),
+			__( 'iMIS blog import', 'wormiss' )         => $state( $on( 'blog_import_enabled' ), $on( 'blog_import_dry_run' ) ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Connects this site to iMIS. Everything Wormiss adds is under this menu.', 'wormiss' ) . '</p>';
@@ -318,6 +319,12 @@ class Wormiss_Admin {
 		self::field( 'news_import_query', __( 'News query', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_category', __( 'Category for imported news', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_author', __( 'Author for imported news', 'wormiss' ), 'wormiss_news_import' );
+
+		$title = __( 'Members\' blog', 'wormiss' );
+		add_settings_section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ], self::PAGE );
+		self::field( 'blog_reader_roles', __( 'Who can read the members\' blog', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_import_enabled', __( 'Import the iMIS blog daily', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -496,6 +503,22 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * Intro text for the members' blog section (and the marker that its fields were shown).
+	 *
+	 * @return void
+	 */
+	public static function blog_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[blog_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'The members\' blog (Members\' blog menu, at /blogs/). Readers see full posts, comments and, from', 'wormiss' )
+			. ' ' . esc_html__( 'its reveal time, the solution; everyone else sees the intro and a sign-in message. Staff (editors', 'wormiss' )
+			. ' ' . esc_html__( 'and administrators) can always read. The import copies every published iMIS (Smart Blogs) post', 'wormiss' )
+			. ' ' . esc_html__( 'with its comments and pictures, in small batches; no CPD is recorded for imported activity and', 'wormiss' )
+			. ' ' . esc_html__( 'nothing is changed in iMIS.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
 	 * Intro text for the member sync section (and the marker that its checkboxes were shown).
 	 *
 	 * @return void
@@ -668,6 +691,21 @@ class Wormiss_Admin {
 					. ' ' . esc_html__( 'in small batches (5 pages, 2 images) every 2 minutes in the background. Blank imports upcoming events only.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'blog_reader_roles':
+				$chosen = array_map( 'strval', (array) $value );
+				foreach ( wp_roles()->get_names() as $role => $label ) {
+					printf(
+						'<label style="display:block"><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label>',
+						esc_attr( $name ),
+						esc_attr( (string) $role ),
+						checked( in_array( (string) $role, $chosen, true ), true, false ),
+						esc_html( translate_user_role( $label ) )
+					);
+				}
+				echo '<p class="description">'
+					. esc_html__( 'Tick the roles (e.g. a paid membership role) that may read full blog posts and comment.', 'wormiss' )
+					. ' ' . esc_html__( 'None ticked: only staff can read; everyone else sees intros.', 'wormiss' ) . '</p>';
+				return;
 			case 'news_import_author':
 				wp_dropdown_users(
 					[
@@ -782,6 +820,8 @@ class Wormiss_Admin {
 			case 'news_import_enabled':
 			case 'news_import_dry_run':
 			case 'news_import_publish':
+			case 'blog_import_enabled':
+			case 'blog_import_dry_run':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
 			case 'member_push_enabled':
@@ -952,6 +992,23 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="action" value="wormiss_news_import_now" />';
 		wp_nonce_field( 'wormiss_news_import_now' );
 		submit_button( __( 'Import iMIS news now', 'wormiss' ), 'secondary', 'submit', false );
+		echo '</form>';
+
+		echo '<h2 id="wormiss-blog-import">' . esc_html__( 'Import the iMIS blog now', 'wormiss' ) . '</h2>';
+		$summary = Wormiss_Blog_Import::summary();
+		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The blog import has not run yet.', 'wormiss' ) ) . '</p>';
+		$notes = Wormiss_Blog_Import::notes();
+		if ( $notes ) {
+			echo '<ul class="ul-disc">';
+			foreach ( $notes as $note ) {
+				echo '<li>' . esc_html( $note ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		echo '<input type="hidden" name="action" value="wormiss_blog_import_now" />';
+		wp_nonce_field( 'wormiss_blog_import_now' );
+		submit_button( __( 'Import the iMIS blog now', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
 
 		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';
