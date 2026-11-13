@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.38.0
+Stable tag: 0.38.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.38.1 =
+* Blog import, faster pictures: imported blog pictures get only the sizes the blog shows (thumbnail, medium and large) instead of every size the site has, so each picture is copied several times faster. Other uploads are unchanged; the sizes can be changed with the wormiss_blog_image_sizes filter.
+* Blog import: posts whose iMIS content is only in their preview data (BlogPostData left empty, as when a post is edited after it was published) are now imported from it instead of being skipped as unreadable.
 
 = 0.38.0 =
 * Members' blog filters: a "Blog filters" block for the blog home, category and topic pages, with Category, Level, Topic, Author, Published from/to and a keyword search. Choosing a level (for example All Levels) finds it under every category. For visitors who cannot read the blog, the keyword search looks at titles and summaries only, so members-only text cannot be found by searching.

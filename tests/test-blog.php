@@ -311,6 +311,68 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Imported pictures get only the sizes the blog shows.
+	 */
+	public function test_blog_sizes(): void {
+		$size  = [
+			'width'  => 100,
+			'height' => 100,
+			'crop'   => false,
+		];
+		$sizes = array_fill_keys( [ 'thumbnail', 'medium', 'medium_large', 'large', '1536x1536', '2048x2048' ], $size );
+		$this->assertSame( [ 'thumbnail', 'medium', 'large' ], array_keys( Wormiss_Blog_Import::blog_sizes( $sizes ) ) );
+
+		$more = static function (): array {
+			return [ 'medium', '1536x1536' ];
+		};
+		add_filter( 'wormiss_blog_image_sizes', $more );
+		$this->assertSame( [ 'medium', '1536x1536' ], array_keys( Wormiss_Blog_Import::blog_sizes( $sizes ) ) );
+		remove_filter( 'wormiss_blog_image_sizes', $more );
+	}
+
+	/**
+	 * A post whose blocks are only in its preview data (BlogPostData left empty) is read from there.
+	 */
+	public function test_post_data_preview(): void {
+		$blob    = static function ( array $data ): string {
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+			return base64_encode( (string) wp_json_encode( $data ) );
+		};
+		$empty   = [
+			'content' => [],
+			'root'    => [ 'props' => [ 'title' => '' ] ],
+			'zones'   => (object) [],
+		];
+		$preview = [
+			'root'    => [ 'props' => [ 'title' => 'BCC or Melanoma or Both' ] ],
+			'content' => [
+				[
+					'type'  => 'Text',
+					'props' => [ 'text' => '<p>A torso lesion.</p>' ],
+				],
+			],
+		];
+		$data    = Wormiss_Blog_Import::post_data(
+			[
+				'BlogPostData'        => $blob( $empty ),
+				'BlogPostPreviewData' => $blob( $preview ),
+			]
+		);
+		$this->assertSame( 'BCC or Melanoma or Both', $data['root']['props']['title'] );
+		$this->assertCount( 1, $data['content'] );
+
+		// BlogPostData is used when it has blocks.
+		$main = Wormiss_Blog_Import::post_data(
+			[
+				'BlogPostData'        => $blob( $preview ),
+				'BlogPostPreviewData' => $blob( $empty ),
+			]
+		);
+		$this->assertCount( 1, $main['content'] );
+		$this->assertSame( [], Wormiss_Blog_Import::post_data( [] ) );
+	}
+
+	/**
 	 * A post is matched to the template whose own blocks it shares most; blocks every template
 	 * copied are no help; old HTML posts are "Legacy", others "Other".
 	 *

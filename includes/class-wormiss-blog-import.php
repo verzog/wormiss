@@ -600,9 +600,7 @@ class Wormiss_Blog_Import {
 			self::note( $report, sprintf( __( '%1$s: not read from iMIS (%2$s).', 'wormiss' ), $post['title'], $e->getMessage() ) );
 			return 'skipped';
 		}
-		$data  = $rows ? ( $rows[0]['BlogPostData'] ?? '' ) : '';
-		$json  = json_decode( Wormiss_Content_Check::decode_blob( is_string( $data ) ? $data : '', false ), true );
-		$parts = self::convert( is_array( $json ) ? $json : [] );
+		$parts = self::convert( self::post_data( $rows ? (array) $rows[0] : [] ) );
 		if ( '' === $parts['body'] && '' === $parts['intro'] ) {
 			/* translators: %s: blog title. */
 			self::note( $report, sprintf( __( '%s: its iMIS content could not be read, so not imported.', 'wormiss' ), $post['title'] ) );
@@ -677,6 +675,30 @@ class Wormiss_Blog_Import {
 			delete_post_meta( $saved, self::META_SOURCE );
 		}
 		return $post_id ? 'updated' : 'created';
+	}
+
+	/**
+	 * A post's blocks. Some posts keep them only in BlogPostPreviewData (BlogPostData is left
+	 * empty when a post is edited after it was published), so that is read when BlogPostData
+	 * has no blocks.
+	 *
+	 * @param array $row The Smart_Blogs_Blog_Post row.
+	 * @return array The decoded post data (empty when neither field can be read).
+	 */
+	public static function post_data( array $row ): array {
+		$found = [];
+		foreach ( [ 'BlogPostData', 'BlogPostPreviewData' ] as $field ) {
+			$blob = $row[ $field ] ?? '';
+			$json = json_decode( Wormiss_Content_Check::decode_blob( is_string( $blob ) ? $blob : '', false ), true );
+			if ( ! is_array( $json ) ) {
+				continue;
+			}
+			if ( ! empty( $json['content'] ) ) {
+				return $json;
+			}
+			$found = $found ? $found : $json;
+		}
+		return $found;
 	}
 
 	/**
@@ -1584,7 +1606,9 @@ class Wormiss_Blog_Import {
 			self::note( $report, sprintf( __( '%1$s: a picture could not be copied (%2$s).', 'wormiss' ), $title, $tmp->get_error_message() ) );
 			return 0;
 		}
-		$name       = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		$name = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		// Only the sizes the blog shows: each size is another resize, the slow part of a copy.
+		add_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
 		$attachment = media_handle_sideload(
 			[
 				'name'     => '' !== $name ? $name : 'blog-image.jpg',
@@ -1593,6 +1617,7 @@ class Wormiss_Blog_Import {
 			$post_id,
 			$title
 		);
+		remove_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
 		if ( is_wp_error( $attachment ) ) {
 			$complete = false;
 			wp_delete_file( $tmp );
@@ -1603,6 +1628,23 @@ class Wormiss_Blog_Import {
 		update_post_meta( (int) $attachment, self::META_FROM, $url );
 		Wormiss_Batch::progress();
 		return (int) $attachment;
+	}
+
+	/**
+	 * The resized copies made of an imported blog picture: the ones the blog shows (thumbnail,
+	 * medium and large) rather than every size the site has.
+	 *
+	 * @param array $sizes Sizes WordPress would make (name => size).
+	 * @return array
+	 */
+	public static function blog_sizes( array $sizes ): array {
+		/**
+		 * The image sizes made for pictures the blog import copies.
+		 *
+		 * @param string[] $keep Size names (default thumbnail, medium and large).
+		 */
+		$keep = (array) apply_filters( 'wormiss_blog_image_sizes', [ 'thumbnail', 'medium', 'large' ] );
+		return array_intersect_key( $sizes, array_flip( array_map( 'strval', $keep ) ) );
 	}
 
 	/**
