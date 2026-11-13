@@ -96,6 +96,21 @@ class Wormiss_Blog_Import {
 	const META_AUTHOR_ID = '_wormiss_blog_author_imis';
 
 	/**
+	 * Post meta: the name of the iMIS (Smart Blogs) template the post was made from, as matched.
+	 */
+	const META_TEMPLATE = '_wormiss_blog_template';
+
+	/**
+	 * Template text an author never changed, left out: the whole text.
+	 */
+	const PLACEHOLDER = 'Text';
+
+	/**
+	 * Template text an author never changed, left out: the start of the text.
+	 */
+	const PLACEHOLDER_START = 'Lorem ipsum dolor';
+
+	/**
 	 * The iMIS address of the featured image.
 	 */
 	const META_FEATURE = '_wormiss_blog_feature';
@@ -330,6 +345,7 @@ class Wormiss_Blog_Import {
 					'offset'        => 0,
 					'categories'    => self::names( $client, 'Smart_Blogs_Category', 'CategoryKey' ),
 					'subcategories' => self::names( $client, 'Smart_Blogs_Subcategory', 'SubcategoryKey', 'ParentCategoryKey' ),
+					'templates'     => self::templates( $client ),
 					'time'          => time(),
 				];
 			} catch ( Wormiss_Exception $e ) {
@@ -570,8 +586,9 @@ class Wormiss_Blog_Import {
 		}
 		$feature = '' !== $parts['header'] ? $parts['header'] : $post['thumbnail'];
 		// The category and subcategory names are part of it, so a rename in iMIS reaches the post.
-		$names = [ $listing['categories'][ $post['category'] ] ?? null, $listing['subcategories'][ $post['subcategory'] ] ?? null ];
-		$hash  = md5( (string) wp_json_encode( [ $post, $parts, $feature, $names, self::comments_hash( $comments ) ] ) );
+		$names    = [ $listing['categories'][ $post['category'] ] ?? null, $listing['subcategories'][ $post['subcategory'] ] ?? null ];
+		$template = self::template_for( $parts['ids'], $parts['legacy'], (array) ( $listing['templates'] ?? [] ) );
+		$hash     = md5( (string) wp_json_encode( [ $post, $parts, $feature, $names, $template, self::comments_hash( $comments ) ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash ) {
 			return 'skipped';
 		}
@@ -621,6 +638,7 @@ class Wormiss_Blog_Import {
 		update_post_meta( $saved, Wormiss_Blog::META_SOLUTION, wp_slash( $parts['solution'] ) );
 		update_post_meta( $saved, Wormiss_Blog::META_REVEAL, $parts['reveal'] );
 		update_post_meta( $saved, self::META_AUTHOR_ID, $post['author'] );
+		update_post_meta( $saved, self::META_TEMPLATE, $template );
 		self::terms( $saved, $post, $listing );
 		[ $changed, $comments_done ] = self::comments( $client, $saved, $comments );
 		$report['comments']         += $changed;
@@ -644,7 +662,8 @@ class Wormiss_Blog_Import {
 	 * dividing line). Old (LegacyHtml) posts, which mark no intro, get their first paragraph.
 	 *
 	 * @param array $data The decoded BlogPostData.
-	 * @return array body, intro, solution, reveal (Unix time), header (image address), unknown (block types).
+	 * @return array body, intro, solution, reveal (Unix time), header (image address), unknown (block types),
+	 *               ids (every block's id), legacy (an old HTML post).
 	 */
 	public static function convert( array $data ): array {
 		$out     = [
@@ -654,6 +673,8 @@ class Wormiss_Blog_Import {
 			'reveal'   => 0,
 			'header'   => '',
 			'unknown'  => [],
+			'ids'      => self::block_ids( (array) ( $data['content'] ?? [] ) ),
+			'legacy'   => false,
 		];
 		$divided = false;
 		$legacy  = false;
@@ -712,6 +733,7 @@ class Wormiss_Blog_Import {
 			}
 		}
 		$out['unknown'] = array_values( array_unique( $out['unknown'] ) );
+		$out['legacy']  = $legacy;
 		return $out;
 	}
 
@@ -734,7 +756,13 @@ class Wormiss_Blog_Import {
 				$html = (string) preg_replace( '#</?(?:html|head|body)\b[^>]*>#i', '', $html );
 				return self::bootstrap( Wormiss_News_Import::clean( self::site_paths( $html ) ) );
 			case 'Text':
-				return self::text_html( (string) ( $props['text'] ?? '' ), (string) ( $props['align'] ?? '' ), ! empty( $props['bold'] ) );
+				return self::text_html( self::unplaceholder( (string) ( $props['text'] ?? '' ) ), (string) ( $props['align'] ?? '' ), ! empty( $props['bold'] ) );
+			case 'Poll':
+				return self::poll_html( $props );
+			case 'Grid':
+				return self::grid_html( (array) ( $props['items'] ?? [] ), (int) ( $props['numColumns'] ?? 2 ), $unknown );
+			case 'ImageShowcase':
+				return self::showcase_html( (array) ( $props['images'] ?? [] ), (int) ( $props['columns'] ?? 3 ) );
 			case 'Image':
 				$src = self::address( (string) ( $props['imageSrc'] ?? ( $props['src'] ?? '' ) ) );
 				if ( '' === $src ) {
@@ -777,6 +805,195 @@ class Wormiss_Blog_Import {
 			$unknown[] = $type;
 		}
 		return '';
+	}
+
+	/**
+	 * Text with template placeholders taken out ('' when it was only a placeholder).
+	 *
+	 * @param string $text Text.
+	 * @return string
+	 */
+	public static function unplaceholder( string $text ): string {
+		$trimmed = trim( $text );
+		if ( self::PLACEHOLDER === $trimmed || 0 === strpos( $trimmed, self::PLACEHOLDER_START ) ) {
+			return '';
+		}
+		return $text;
+	}
+
+	/**
+	 * A poll as its question and choices (votes are not in iMIS's blog data). The template's
+	 * "Your question" and "Option 1" wording is taken out; an untouched poll shows nothing.
+	 *
+	 * @param array $props Poll properties.
+	 * @return string
+	 */
+	private static function poll_html( array $props ): string {
+		$question = trim( (string) preg_replace( '/^\s*Your question\s*/i', '', (string) ( $props['question'] ?? '' ) ) );
+		$choices  = [];
+		foreach ( (array) ( $props['options'] ?? [] ) as $option ) {
+			$text = is_array( $option ) ? trim( (string) preg_replace( '/^\s*Option\s*\d+\s*/i', '', (string) ( $option['text'] ?? '' ) ) ) : '';
+			if ( '' !== $text ) {
+				$choices[] = '<li>' . esc_html( (string) preg_replace( '/\s+/', ' ', $text ) ) . '</li>';
+			}
+		}
+		if ( '' === $question && ! $choices ) {
+			return '';
+		}
+		return '<div class="card wormiss-blog-poll"><div class="card-header"><h2 class="h5 mb-0">' . esc_html__( 'Poll', 'wormiss' ) . '</h2></div>'
+			. '<div class="card-body">' . ( '' !== $question ? '<p class="wormiss-blog-poll__question">' . esc_html( (string) preg_replace( '/\s+/', ' ', $question ) ) . '</p>' : '' )
+			. ( $choices ? '<ul class="wormiss-blog-poll__choices">' . implode( '', $choices ) . '</ul>' : '' )
+			. '<p class="small text-muted">' . esc_html__( 'Give your answer and reasons in the discussion below.', 'wormiss' ) . '</p></div></div>';
+	}
+
+	/**
+	 * A grid of blocks in its number of columns (one column on phones); dividing lines and
+	 * empty blocks are not cells.
+	 *
+	 * @param array    $items   Items.
+	 * @param int      $columns Columns.
+	 * @param string[] $unknown Block types not understood, added to.
+	 * @return string
+	 */
+	private static function grid_html( array $items, int $columns, array &$unknown ): string {
+		$cells = [];
+		foreach ( $items as $item ) {
+			$html = is_array( $item ) ? self::block_html( $item, $unknown ) : '';
+			if ( '' !== $html && '<hr />' !== $html ) {
+				$cells[] = '<div class="wormiss-blog-grid__item">' . "\n" . $html . "\n</div>";
+			}
+		}
+		if ( ! $cells ) {
+			return '';
+		}
+		if ( 1 === count( $cells ) ) {
+			return (string) preg_replace( '#^<div class="wormiss-blog-grid__item">\n|\n</div>$#', '', $cells[0] );
+		}
+		$columns = min( 4, max( 1, $columns ) );
+		return '<div class="wormiss-blog-grid wormiss-blog-grid--cols-' . $columns . '">' . "\n" . implode( "\n", $cells ) . "\n</div>";
+	}
+
+	/**
+	 * An image showcase (gallery) as a grid of pictures with their captions.
+	 *
+	 * @param array $images  Images.
+	 * @param int   $columns Columns.
+	 * @return string
+	 */
+	private static function showcase_html( array $images, int $columns ): string {
+		$cells = [];
+		foreach ( $images as $image ) {
+			if ( is_string( $image ) ) {
+				$image = [ 'src' => $image ];
+			}
+			if ( ! is_array( $image ) ) {
+				continue;
+			}
+			$src = self::address( (string) ( $image['imageSrc'] ?? $image['src'] ?? $image['url'] ?? '' ) );
+			if ( '' === $src ) {
+				continue;
+			}
+			$caption = trim( (string) ( $image['caption'] ?? $image['title'] ?? '' ) );
+			$cells[] = '<figure class="figure wormiss-blog-image"><img class="img-fluid" src="' . esc_url( $src ) . '" alt="'
+				. esc_attr( (string) ( $image['alt'] ?? $caption ) ) . '" />'
+				. ( '' !== $caption ? '<figcaption class="figure-caption">' . esc_html( $caption ) . '</figcaption>' : '' ) . '</figure>';
+		}
+		if ( ! $cells ) {
+			return '';
+		}
+		$columns = min( 4, max( 1, $columns ) );
+		return '<div class="wormiss-blog-grid wormiss-blog-grid--cols-' . $columns . ' wormiss-blog-showcase">' . "\n"
+			. implode( "\n", array_map( static fn( string $cell ): string => '<div class="wormiss-blog-grid__item">' . $cell . '</div>', $cells ) )
+			. "\n</div>";
+	}
+
+	/**
+	 * Every block id in some blocks, items within containers included.
+	 *
+	 * @param array $blocks Blocks.
+	 * @return string[]
+	 */
+	public static function block_ids( array $blocks ): array {
+		$ids = [];
+		foreach ( $blocks as $block ) {
+			if ( ! is_array( $block ) ) {
+				continue;
+			}
+			$props = is_array( $block['props'] ?? null ) ? $block['props'] : [];
+			if ( isset( $props['id'] ) && is_string( $props['id'] ) && '' !== $props['id'] ) {
+				$ids[] = $props['id'];
+			}
+			if ( is_array( $props['items'] ?? null ) ) {
+				$ids = array_merge( $ids, self::block_ids( $props['items'] ) );
+			}
+		}
+		return array_values( array_unique( $ids ) );
+	}
+
+	/**
+	 * The Smart Blogs templates: name => the block ids only that template has (the ones every
+	 * template copied from another are no help in telling them apart). Not read: none.
+	 *
+	 * @param Wormiss_Rest_Client $client Client.
+	 * @return array[]
+	 */
+	private static function templates( Wormiss_Rest_Client $client ): array {
+		try {
+			$rows = self::read_all( $client, '/api/Smart_Blogs_Template', 200 );
+		} catch ( Wormiss_Exception $e ) {
+			unset( $e ); // Templates only label posts: an import goes on without them.
+			return [];
+		}
+		$all = [];
+		foreach ( $rows as $row ) {
+			$name = sanitize_text_field( (string) ( $row['Name'] ?? '' ) );
+			$data = $row['TemplateData'] ?? '';
+			$json = json_decode( Wormiss_Content_Check::decode_blob( is_string( $data ) ? $data : '', false ), true );
+			if ( '' !== $name && is_array( $json ) ) {
+				$all[ $name ] = self::block_ids( (array) ( $json['content'] ?? [] ) );
+			}
+		}
+		return self::unique_ids( $all );
+	}
+
+	/**
+	 * Each template's block ids that no other template has.
+	 *
+	 * @param array[] $all Template name => block ids.
+	 * @return array[]
+	 */
+	public static function unique_ids( array $all ): array {
+		$counts = $all ? array_count_values( array_merge( ...array_values( $all ) ) ) : [];
+		$unique = [];
+		foreach ( $all as $name => $ids ) {
+			$unique[ $name ] = array_values( array_filter( $ids, static fn( string $id ): bool => 1 === $counts[ $id ] ) );
+		}
+		return $unique;
+	}
+
+	/**
+	 * The template a post was made from: the one whose own blocks it shares most; "Legacy" for
+	 * an old HTML post; "Other" when none matches.
+	 *
+	 * @param string[] $ids       The post's block ids.
+	 * @param bool     $legacy    An old HTML post.
+	 * @param array[]  $templates Template name => its own block ids.
+	 * @return string
+	 */
+	public static function template_for( array $ids, bool $legacy, array $templates ): string {
+		$best  = '';
+		$score = 0;
+		foreach ( $templates as $name => $own ) {
+			$shared = count( array_intersect( (array) $own, $ids ) );
+			if ( $shared > $score ) {
+				$best  = (string) $name;
+				$score = $shared;
+			}
+		}
+		if ( '' !== $best ) {
+			return $best;
+		}
+		return $legacy ? 'Legacy' : 'Other';
 	}
 
 	/**
@@ -1408,6 +1625,11 @@ class Wormiss_Blog_Import {
 	public static function render_box( $post ): void {
 		wp_nonce_field( 'wormiss_blog_box', 'wormiss_blog_box_nonce' );
 		echo '<p>' . esc_html__( 'Imported from iMIS (Smart Blogs). Each import brings this post and its comments up to date.', 'wormiss' ) . '</p>';
+		$template = (string) get_post_meta( $post->ID, self::META_TEMPLATE, true );
+		if ( '' !== $template ) {
+			/* translators: %s: template name. */
+			echo '<p>' . esc_html( sprintf( __( 'iMIS template: %s', 'wormiss' ), $template ) ) . '</p>';
+		}
 		printf(
 			'<p><label><input type="checkbox" name="wormiss_blog_detached" value="1" %1$s /> %2$s</label></p>',
 			checked( (bool) get_post_meta( $post->ID, self::META_DETACHED, true ), true, false ),

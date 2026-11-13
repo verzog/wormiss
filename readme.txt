@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.36.0
+Stable tag: 0.37.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.37.0 =
+* Blog import, closer to the iMIS posts: grids keep their columns (for example two pictures side by side, wrapping onto more rows; one column on phones); image showcases (galleries) come across as a grid of pictures with captions; polls show their question and choices in a "Poll" box (votes are not in iMIS's blog data, so readers answer in the discussion); template text the author never changed ("Text", "Lorem ipsum…", "Your question", "Option 1") is left out.
+* Blog import: each post is matched to the iMIS template it was made from (by the blocks only that template has), shown in the post's "iMIS blog" box and as a class on the post (wormiss-blog-post--template-3 and so on) so each template can be styled; old HTML posts are "Legacy", others "Other". The templates are read from iMIS with the post list, so new templates are picked up by themselves. Posts already imported change on the next import.
 
 = 0.36.0 =
 * Members' blog listing pages (/blogs/, its categories and topics) show 12 posts a page, as on the iMIS blog.
