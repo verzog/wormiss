@@ -179,6 +179,10 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( 'style', $built['html'] );
 		$this->assertStringContainsString( 'Intro.', $built['html'] );
 		$this->assertStringContainsString( '<p>Full article text.</p>', $built['html'] );
+		// The image stays beside the intro before it, as on the iMIS page; intro stays italic.
+		$this->assertStringContainsString( '<div class="wormiss-news-lead"><div class="wormiss-news-lead__text">', $built['html'] );
+		$this->assertStringContainsString( 'src="https://imis.example.org/images/Vale%20Professor.png"', $built['html'] );
+		$this->assertStringContainsString( '<i>More intro.</i>', $built['html'] );
 		$this->assertStringNotContainsString( '&nbsp;', $built['html'] );
 		$this->assertTrue( Wormiss_News_Import::parse( $this->page( '<p>x</p>', true ) )['members'] );
 		$this->assertNull( Wormiss_News_Import::parse( 'not xml' ) );
@@ -375,6 +379,23 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 		$report = Wormiss_News_Import::run();
 		$this->assertSame( 1, $report['skipped'], 'Unchanged, so not updated.' );
 		$this->assertGreaterThan( 0, (int) get_post_field( 'post_author', $post_id ), 'But given an author.' );
+	}
+
+	/**
+	 * On the article's own page the featured image is left out when the article shows it; a
+	 * card for another post keeps its image.
+	 *
+	 * @return void
+	 */
+	public function test_featured_image_not_twice(): void {
+		$this->queue( $this->page() );
+		Wormiss_News_Import::run();
+		$post_id = Wormiss_News_Import::post_for( self::KEY );
+		$other   = self::factory()->post->create();
+		$this->go_to( get_permalink( $post_id ) );
+		$block = static fn( int $id ): WP_Block => new WP_Block( [ 'blockName' => 'core/post-featured-image' ], [ 'postId' => $id ] );
+		$this->assertSame( '', Wormiss_News_Import::hide_featured( '<img>', [], $block( $post_id ) ) );
+		$this->assertSame( '<img>', Wormiss_News_Import::hide_featured( '<img>', [], $block( $other ) ) );
 	}
 
 	/**

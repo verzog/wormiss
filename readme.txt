@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.30.1
+Stable tag: 0.30.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.30.2 =
+* Imported news keeps its pictures where iMIS shows them: the first picture sits beside the text before it (as on the iMIS page; stacked on phones), and other single pictures stay in their place. The first is still the featured image for news cards, but is not shown twice on the article itself.
+* Italic or bold text that runs over several paragraphs in iMIS stays italic or bold in every paragraph.
 
 = 0.30.1 =
 * Imported news always has an author: "Author for imported news" (Wormiss > Settings > Import iMIS news), or the first administrator if none is chosen. Posts made by the background batches (when no one is signed in) used to have none; those get the author on the next import, changed or not.

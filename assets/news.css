@@ -1,0 +1,34 @@
+/*
+ * Imported iMIS news (Wormiss): the article's first image beside the text before it, as the
+ * iMIS page shows it; stacked, image last, on phones.
+ */
+.wormiss-news-lead {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	align-items: start;
+	margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+	.wormiss-news-lead {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.wormiss-news-lead__text > :first-child {
+	margin-top: 0;
+}
+
+.wormiss-news-lead__image,
+.wormiss-news-image {
+	margin: 0 0 2rem;
+}
+
+.wormiss-news-lead__image img,
+.wormiss-news-image img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
