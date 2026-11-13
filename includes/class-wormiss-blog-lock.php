@@ -56,6 +56,11 @@ class Wormiss_Blog_Lock {
 	 */
 	public static function is_blog_page(): bool {
 		global $wp_query;
+		// A search (even one limited to blog posts, which WordPress also counts as the blog's
+		// archive) is narrowed by hide_posts() instead.
+		if ( is_search() ) {
+			return false;
+		}
 		if ( is_singular( Wormiss_Blog::POST_TYPE ) || is_post_type_archive( Wormiss_Blog::POST_TYPE )
 			|| is_tax( [ Wormiss_Blog::TAX_CATEGORY, Wormiss_Blog::TAX_TOPIC ] ) ) {
 			return true;
