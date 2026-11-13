@@ -679,7 +679,7 @@ class Wormiss_News_Import {
 				continue;
 			}
 			if ( preg_match( '#^<h2>(.*)</h2>$#s', $html, $match )
-				&& 0 === strcasecmp( trim( wp_strip_all_tags( $match[1] ) ), trim( $title ) ) ) {
+				&& 0 === strcasecmp( self::plain( $match[1] ), self::plain( $title ) ) ) {
 				continue;
 			}
 			$parts[]   = $html;
@@ -715,6 +715,8 @@ class Wormiss_News_Import {
 		$html = force_balance_tags( $html );
 		// Twice: removing an empty tag can empty the one around it.
 		$html = (string) preg_replace( '#<(\w+)>(?:\s|&nbsp;|&\#160;|\xc2\xa0)*</\1>#u', '', $html );
+		// iMIS writes links to its own pages as [@]path or [~]path (the site root).
+		$html = (string) preg_replace( '#\b(href|src)="\[[@~]\]/?#i', '$1="/', $html );
 		$html = (string) preg_replace_callback(
 			'#\b(href|src)="(/[^/"][^"]*|~/[^"]*)"#i',
 			static function ( array $found ): string {
@@ -724,6 +726,17 @@ class Wormiss_News_Import {
 			$html
 		);
 		return trim( $html );
+	}
+
+	/**
+	 * Text for comparing: tags and entities gone, spaces collapsed.
+	 *
+	 * @param string $text Text or HTML.
+	 * @return string
+	 */
+	private static function plain( string $text ): string {
+		$text = html_entity_decode( wp_strip_all_tags( $text ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		return trim( (string) preg_replace( '/[\s\x{00a0}]+/u', ' ', $text ) );
 	}
 
 	/**
