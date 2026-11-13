@@ -270,9 +270,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 *
 	 * @param array  $data       The post's blocks.
 	 * @param string $management The first category's name in iMIS.
+	 * @param string $diagnosis  The second category's name in iMIS.
 	 * @return void
 	 */
-	private function queue( array $data, string $management = 'Management' ): void {
+	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis' ): void {
 		$post    = [
 			'ID'             => '13397',
 			'BlogKey'        => self::KEY,
@@ -320,7 +321,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 						],
 						[
 							'CategoryKey' => 'cat-2',
-							'Name'        => 'Diagnosis',
+							'Name'        => $diagnosis,
 						],
 					]
 				)
@@ -450,6 +451,15 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
 		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
 		$this->assertContains( 'Practice management', wp_list_pluck( wp_get_object_terms( $post_id, $tax ), 'name' ) );
+
+		// The first takes the second's old name, which iMIS gave up in the same change: each
+		// keeps its own category here rather than taking over the other's.
+		$this->queue( $this->modern(), 'Diagnosis', 'Clinical' );
+		Wormiss_Blog_Import::run();
+		$this->assertSame( 'Diagnosis', get_term( $old['term_id'], $tax )->name );
+		$this->assertSame( 'Clinical', get_term( $diagnosis->term_id, $tax )->name );
+		$this->assertSame( $diagnosis->term_id, get_term_by( 'name', 'Dermoscopy', $tax )->parent );
+		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
 	}
 
 	/**

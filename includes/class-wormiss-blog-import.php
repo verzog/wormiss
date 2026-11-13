@@ -742,6 +742,15 @@ class Wormiss_Blog_Import {
 		$dry  = ! empty( $report['dry_run'] );
 		$made = 0;
 		$ids  = [];
+		// Renames and moves first, so a name freed up in iMIS is free here before it is reused.
+		if ( ! $dry ) {
+			foreach ( $listing['categories'] as $key => $category ) {
+				self::follow( self::by_key( (string) $key ), $category['name'], 0 );
+			}
+			foreach ( $listing['subcategories'] as $key => $sub ) {
+				self::follow( self::by_key( (string) $key ), $sub['name'], self::by_key( $sub['parent'] ) );
+			}
+		}
 		foreach ( $listing['categories'] as $key => $category ) {
 			$ids[ $key ] = self::term( (string) $key, $category['name'], 0, $dry, $made );
 		}
@@ -786,8 +795,8 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
-	 * A blog category's term ID, found by its iMIS key (or, the first time, its name) and
-	 * made if missing; its name and parent follow iMIS.
+	 * A blog category's term ID, found by its iMIS key (or, the first time, the name of one
+	 * made before keys were kept) and made if missing; its name and parent follow iMIS.
 	 *
 	 * @param string $key       iMIS category or subcategory key.
 	 * @param string $name      Name.
@@ -800,38 +809,17 @@ class Wormiss_Blog_Import {
 		if ( '' === $key || '' === $name ) {
 			return 0;
 		}
-		$found = get_terms(
-			[
-				'taxonomy'   => Wormiss_Blog::TAX_CATEGORY,
-				'hide_empty' => false,
-				'fields'     => 'ids',
-				'number'     => 1,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- A handful of categories.
-				'meta_query' => [
-					[
-						'key'   => self::TERM_KEY,
-						'value' => $key,
-					],
-				],
-			]
-		);
-		if ( is_array( $found ) && $found ) {
-			$id   = (int) $found[0];
-			$term = get_term( $id, Wormiss_Blog::TAX_CATEGORY );
-			if ( ! $dry && $term instanceof WP_Term && ( html_entity_decode( $term->name, ENT_QUOTES ) !== $name || (int) $term->parent !== $parent_id ) ) {
-				wp_update_term(
-					$id,
-					Wormiss_Blog::TAX_CATEGORY,
-					[
-						'name'   => wp_slash( $name ),
-						'parent' => $parent_id,
-					]
-				);
+		$id = self::by_key( $key );
+		if ( $id ) {
+			if ( ! $dry ) {
+				self::follow( $id, $name, $parent_id );
 			}
 			return $id;
 		}
+		// Only a category without a key is taken over by name: one with another key is
+		// another iMIS category.
 		$exists = term_exists( wp_slash( $name ), Wormiss_Blog::TAX_CATEGORY, $parent_id );
-		if ( is_array( $exists ) ) {
+		if ( is_array( $exists ) && '' === (string) get_term_meta( (int) $exists['term_id'], self::TERM_KEY, true ) ) {
 			$id = (int) $exists['term_id'];
 			if ( ! $dry ) {
 				update_term_meta( $id, self::TERM_KEY, $key );
@@ -849,6 +837,56 @@ class Wormiss_Blog_Import {
 		}
 		update_term_meta( (int) $new['term_id'], self::TERM_KEY, $key );
 		return (int) $new['term_id'];
+	}
+
+	/**
+	 * The blog category with this iMIS key.
+	 *
+	 * @param string $key iMIS category or subcategory key.
+	 * @return int Term ID, or 0.
+	 */
+	private static function by_key( string $key ): int {
+		if ( '' === $key ) {
+			return 0;
+		}
+		$found = get_terms(
+			[
+				'taxonomy'   => Wormiss_Blog::TAX_CATEGORY,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+				'number'     => 1,
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- A handful of categories.
+				'meta_query' => [
+					[
+						'key'   => self::TERM_KEY,
+						'value' => $key,
+					],
+				],
+			]
+		);
+		return is_array( $found ) && $found ? (int) $found[0] : 0;
+	}
+
+	/**
+	 * Give a blog category the name and parent it has in iMIS.
+	 *
+	 * @param int    $id        Term ID (0 for none).
+	 * @param string $name      Name.
+	 * @param int    $parent_id Parent term ID.
+	 * @return void
+	 */
+	private static function follow( int $id, string $name, int $parent_id ): void {
+		$term = $id && '' !== $name ? get_term( $id, Wormiss_Blog::TAX_CATEGORY ) : null;
+		if ( $term instanceof WP_Term && ( html_entity_decode( $term->name, ENT_QUOTES ) !== $name || (int) $term->parent !== $parent_id ) ) {
+			wp_update_term(
+				$id,
+				Wormiss_Blog::TAX_CATEGORY,
+				[
+					'name'   => wp_slash( $name ),
+					'parent' => $parent_id,
+				]
+			);
+		}
 	}
 
 	/**
