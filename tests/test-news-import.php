@@ -189,6 +189,29 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A title heading with an ampersand (escaped in iMIS) is still recognised as the title.
+	 *
+	 * @return void
+	 */
+	public function test_title_heading_with_ampersand(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'PageHeading',
+					'html' => '<h1>Skin Cancer Blog &amp; SkinTalk are Back Online!</h1>',
+				],
+				[
+					'name' => 'Body',
+					'html' => '<p>Text.</p>',
+				],
+			],
+			'image' => '',
+		];
+		$built   = Wormiss_News_Import::build( 'Skin Cancer Blog & SkinTalk are Back Online!', $content );
+		$this->assertSame( '<p>Text.</p>', $built['html'] );
+	}
+
+	/**
 	 * Tidying: fonts, styles and scripts gone, h1 to h2, line-break runs to paragraphs, iMIS
 	 * links made full addresses (other sites' left alone).
 	 *
@@ -204,7 +227,13 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( 'script', $html );
 		$this->assertStringNotContainsString( 'style', $html );
 		$this->assertStringContainsString( 'href="https://imis.example.org/web/About"', $html );
-		$this->assertStringContainsString( 'href="https://abc.net.au/x"', $html );
+		$this->assertStringContainsString( 'href="https://abc.net.au/x" target="_blank" rel="noopener noreferrer"', $html );
+		$this->assertSame( 2, substr_count( $html, 'target="_blank"' ), 'Every link opens in a new tab, once.' );
+		// iMIS's own-site link token.
+		$this->assertStringContainsString(
+			'href="https://imis.example.org/web/membership/join-now.aspx"',
+			Wormiss_News_Import::clean( '<p><a href="[@]web/membership/join-now.aspx">join</a></p>' )
+		);
 	}
 
 	/**
@@ -324,7 +353,7 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 			'html' => '<p><a href="https://example.org/register"><img src="https://cdn.example.org/c.png" alt="Register"></a></p>',
 		];
 		$built              = Wormiss_News_Import::build( 'Title', $content );
-		$this->assertMatchesRegularExpression( '#<figure class="wormiss-news-image wormiss-news-feature"><a href="https://example.org/register"><img[^>]*c\.png#', $built['html'] );
+		$this->assertMatchesRegularExpression( '#<figure class="wormiss-news-image wormiss-news-feature"><a href="https://example.org/register"[^>]*><img[^>]*c\.png#', $built['html'] );
 
 		$long = str_repeat( 'x', Wormiss_Content_Check::MAX_SHOWN + 100 );
 		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.30.3
+Stable tag: 0.30.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.30.4 =
+* Imported news: links iMIS writes to its own pages as [@]path (e.g. "become a member") now go to the iMIS site instead of a page that does not exist here.
+* Imported news: every link in an article opens in a new tab.
+* Imported news: a heading that repeats the title is left out even when the title has an ampersand or similar character (it showed twice).
 
 = 0.30.3 =
 * When iMIS refuses a request with its validation errors (for example an IQA that cannot run), the settings page and notes now show iMIS's own message, not only "HTTP 400". This applies to every Wormiss feature that talks to iMIS.
