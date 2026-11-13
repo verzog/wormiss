@@ -166,12 +166,96 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertSame( "<p>Hi everyone,<br>\nwelcome.</p>", $parts['intro'] );
 		$this->assertStringContainsString( 'Members only part.', $parts['body'] );
 		$this->assertStringContainsString( 'Second &lt;paragraph&gt;.', $parts['body'] );
-		$this->assertStringContainsString( '<img src="https://imis.example.org/images/Causeis/smart-blogs/13397/k/case.jpg" alt="Case" />', $parts['body'] );
+		$this->assertStringContainsString( '<img class="img-fluid" src="https://imis.example.org/images/Causeis/smart-blogs/13397/k/case.jpg" alt="Case" />', $parts['body'] );
 		$this->assertStringNotContainsString( 'header.jpg', $parts['body'] );
 		$this->assertStringNotContainsString( 'Access Restricted', $parts['body'] );
 		$this->assertSame( '<p>It was a BCC.</p>', $parts['solution'] );
 		$this->assertSame( strtotime( '2026-06-19T11:00:00Z' ), $parts['reveal'] );
 		$this->assertSame( [], $parts['unknown'] );
+	}
+
+	/**
+	 * A Flex row of two or more blocks becomes a Bootstrap-style row of columns; a Flex column
+	 * (dividing lines kept), or a row with one block left, stays stacked.
+	 *
+	 * @return void
+	 */
+	public function test_convert_rows(): void {
+		$text = static fn( string $words ): array => [
+			'type'  => 'Text',
+			'props' => [ 'text' => $words ],
+		];
+		$flex = static fn( string $direction, array $items ): array => [
+			'type'  => 'Flex',
+			'props' => [
+				'direction' => $direction,
+				'items'     => $items,
+			],
+		];
+		$body = Wormiss_Blog_Import::convert(
+			[
+				'content' => [
+					$flex( 'row', [ $text( 'Left.' ), $text( 'Right.' ) ] ),
+					$flex(
+						'column',
+						[
+							$text( 'Top.' ),
+							[
+								'type'  => 'Separator',
+								'props' => [ 'orientation' => 'horizontal' ],
+							],
+							$text( 'Bottom.' ),
+						]
+					),
+					$flex(
+						'row',
+						[
+							[
+								'type'  => 'AuthorName',
+								'props' => [],
+							],
+							$text( 'Alone.' ),
+						]
+					),
+				],
+			]
+		)['body'];
+		$this->assertStringContainsString(
+			"<div class=\"row wormiss-blog-row\">\n<div class=\"col-md\">\n<p>Left.</p>\n</div>\n<div class=\"col-md\">\n<p>Right.</p>\n</div>\n</div>",
+			$body
+		);
+		$this->assertSame( 1, substr_count( $body, 'wormiss-blog-row' ) );
+		$this->assertStringContainsString( "<p>Top.</p>\n\n<hr />\n\n<p>Bottom.</p>", $body, 'Stacked: the dividing line kept.' );
+		$this->assertStringContainsString( '<p>Alone.</p>', $body );
+	}
+
+	/**
+	 * Old posts' tidied HTML gets Bootstrap-style classes, and spacing done with empty
+	 * paragraphs or runs of line breaks is taken out.
+	 *
+	 * @return void
+	 */
+	public function test_bootstrap(): void {
+		$html = '<p>&nbsp;</p><p><br>Line one<br><br><br><br>line two<br></p><p> </p>'
+			. '<p><img src="a.jpg" alt=""></p><table><tr><td>1</td></tr></table><blockquote>Quote</blockquote>';
+		$this->assertSame(
+			'<p>Line one<br /><br />line two</p><p><img class="img-fluid" src="a.jpg" alt=""></p>'
+			. '<div class="table-responsive"><table class="table table-sm"><tr><td>1</td></tr></table></div>'
+			. '<blockquote class="blockquote">Quote</blockquote>',
+			Wormiss_Blog_Import::bootstrap( $html )
+		);
+	}
+
+	/**
+	 * Uploads are scaled down to 1600 pixels on their longest side; 0 keeps WordPress's limit.
+	 *
+	 * @return void
+	 */
+	public function test_upload_size(): void {
+		$this->assertSame( 1600, apply_filters( 'big_image_size_threshold', 2560, [ 4000, 3000 ], '/tmp/a.jpg', 0 ) );
+		add_filter( 'wormiss_image_max_size', '__return_zero' );
+		$this->assertSame( 2560, apply_filters( 'big_image_size_threshold', 2560, [ 4000, 3000 ], '/tmp/a.jpg', 0 ) );
+		remove_filter( 'wormiss_image_max_size', '__return_zero' );
 	}
 
 	/**
@@ -675,7 +759,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertTrue( Wormiss_Blog::comments_open( true, $post_id ) );
 
 		update_post_meta( $post_id, Wormiss_Blog::META_REVEAL, time() - 60 );
-		$this->assertStringContainsString( 'The answer.', Wormiss_Blog::filter_content( '<p>Full text.</p>' ) );
+		$html = Wormiss_Blog::filter_content( '<p>Full text.</p>' );
+		$this->assertStringContainsString( 'The answer.', $html );
+		$this->assertStringStartsWith( '<div class="wormiss-blog-post">', $html );
+		$this->assertStringContainsString( '<section class="card wormiss-blog-solution">', $html );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
 		$this->assertTrue( Wormiss_Blog::can_read(), 'Staff can always read.' );

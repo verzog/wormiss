@@ -1,0 +1,119 @@
+/*
+ * Members' blog posts (Wormiss): a small Bootstrap-style layout, kept inside the post so
+ * it never reaches the rest of the site. The theme sets colours and fonts.
+ */
+.wormiss-blog-post .row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.5rem;
+	margin: 0 0 1.5rem;
+}
+
+.wormiss-blog-post .col-md {
+	flex: 1 1 100%;
+	min-width: 0;
+}
+
+@media (min-width: 768px) {
+	.wormiss-blog-post .col-md {
+		flex: 1 1 0;
+	}
+}
+
+.wormiss-blog-post .col-md > :first-child {
+	margin-top: 0;
+}
+
+.wormiss-blog-post .img-fluid {
+	max-width: 100%;
+	height: auto;
+}
+
+.wormiss-blog-post .figure {
+	margin: 0 0 1.5rem;
+}
+
+.wormiss-blog-post .figure .img-fluid {
+	display: block;
+	margin: 0 auto;
+	border-radius: 8px;
+}
+
+.wormiss-blog-post .text-center {
+	text-align: center;
+}
+
+.wormiss-blog-post .text-end {
+	text-align: right;
+}
+
+.wormiss-blog-post .table-responsive {
+	overflow-x: auto;
+	margin: 0 0 1.5rem;
+}
+
+.wormiss-blog-post .table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.wormiss-blog-post .table th,
+.wormiss-blog-post .table td {
+	padding: 0.4rem 0.6rem;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	vertical-align: top;
+	text-align: left;
+}
+
+.wormiss-blog-post .blockquote {
+	margin: 0 0 1.5rem;
+	padding-left: 1rem;
+	border-left: 4px solid currentcolor;
+	font-size: 1.1em;
+}
+
+.wormiss-blog-post .card {
+	margin: 2rem 0;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.wormiss-blog-post .card-header {
+	padding: 0.75rem 1.25rem;
+	background: rgba(0, 0, 0, 0.04);
+	border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.wormiss-blog-post .card-header .h5 {
+	margin: 0;
+	font-size: 1.25rem;
+}
+
+.wormiss-blog-post .card-body {
+	padding: 1.25rem;
+}
+
+.wormiss-blog-post .card-body > :last-child {
+	margin-bottom: 0;
+}
+
+.wormiss-blog-post .alert {
+	margin: 2rem 0;
+	padding: 1rem 1.25rem;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: 8px;
+	background: rgba(0, 0, 0, 0.04);
+}
+
+.wormiss-blog-post .alert > :last-child {
+	margin-bottom: 0;
+}
+
+.wormiss-blog-post .small {
+	font-size: 0.875em;
+}
+
+.wormiss-blog-post .text-muted {
+	opacity: 0.75;
+}

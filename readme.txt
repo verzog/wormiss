@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.33.1
+Stable tag: 0.34.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.34.0 =
+* Uploads: every picture uploaded to the site (imported news and blog pictures, and anything staff upload) is scaled down to 1600 pixels on its longest side, and that copy is used everywhere, for smaller files and faster pages. Pictures already in the Media Library are not changed. The size can be changed with the wormiss_image_max_size filter (0 for WordPress's own 2560).
+* Members' blog posts in a simple Bootstrap-style layout: iMIS rows of blocks become rows of columns (stacked on phones), pictures fit their column, old posts' tables scroll on phones and quotes look like quotes, and empty paragraphs and runs of line breaks used as spacing are taken out. The solution shows in a card, and the "will be published on" and members-only messages in alert boxes. A small stylesheet loads on blog pages only; the theme sets colours and fonts. Posts already imported change on the next blog import.
 
 = 0.33.1 =
 * Blog import no longer stops the site: the list of blog posts is read from iMIS a page at a time (over several batches for a long blog), keeping only each post's details, instead of every post's full text at once.
