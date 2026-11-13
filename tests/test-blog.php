@@ -35,6 +35,11 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	const KEY = 'd61ef139-372b-4e44-a52e-5ef022610b20';
 
 	/**
+	 * An older blog post's key.
+	 */
+	const OLDER = '0b6a1d2e-1f3c-4a5b-8c9d-0e1f2a3b4c5d';
+
+	/**
 	 * Register the blog; turn the import on (not a dry run); keep pictures in iMIS.
 	 *
 	 * @return void
@@ -65,6 +70,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		remove_filter( 'wormiss_blog_import_images', '__return_false' );
 		delete_option( Wormiss_Blog_Import::LOCK_OPTION );
 		delete_option( Wormiss_Blog_Import::PEOPLE_OPTION );
+		delete_option( Wormiss_Blog_Import::WORKING_OPTION );
+		delete_option( Wormiss_Blog_Import::LIST_OPTION );
+		delete_option( Wormiss_Blog_Import::DONE_OPTION );
+		wp_clear_scheduled_hook( Wormiss_Blog_Import::MORE_HOOK );
 		parent::tear_down();
 	}
 
@@ -271,9 +280,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 * @param array  $data       The post's blocks.
 	 * @param string $management The first category's name in iMIS.
 	 * @param string $diagnosis  The second category's name in iMIS.
+	 * @param array  $older      More (older) posts in the list.
 	 * @return void
 	 */
-	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis' ): void {
+	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis', array $older = [] ): void {
 		$post    = [
 			'ID'             => '13397',
 			'BlogKey'        => self::KEY,
@@ -309,7 +319,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 			];
 		};
 		$this->imis->token()
-			->reply( '/api/Smart_Blogs_Blog_Post?Limit', 200, Wormiss_Fake_Imis::page( [ $post ] ) )
+			->reply( '/api/Smart_Blogs_Blog_Post?Limit', 200, Wormiss_Fake_Imis::page( array_merge( [ $post ], $older ) ) )
 			->reply(
 				'/api/Smart_Blogs_Category',
 				200,
@@ -460,6 +470,151 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertSame( 'Clinical', get_term( $diagnosis->term_id, $tax )->name );
 		$this->assertSame( $diagnosis->term_id, get_term_by( 'name', 'Dermoscopy', $tax )->parent );
 		$this->assertSame( 4, count( get_terms( 'taxonomy=' . $tax . '&hide_empty=0&fields=ids' ) ) );
+	}
+
+	/**
+	 * One post per batch: progress is kept after each post and the next batch is booked at the
+	 * start (so a batch the host stops is carried on), and the last batch tidies up.
+	 *
+	 * @return void
+	 */
+	public function test_batches(): void {
+		$older = [
+			'ID'          => '13397',
+			'BlogKey'     => self::OLDER,
+			'Title'       => 'An older case',
+			'Status'      => 'Published',
+			'PublishedOn' => '2025-02-01T09:00:00',
+		];
+		$this->queue( $this->modern(), 'Management', 'Diagnosis', [ $older ] );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['created'] );
+		$this->assertSame( 1, $report['remaining'] );
+		$this->assertSame( [ self::KEY => true ], get_option( Wormiss_Blog_Import::DONE_OPTION ) );
+		$this->assertIsArray( get_option( Wormiss_Blog_Import::LIST_OPTION ) );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
+		$this->assertFalse( get_option( Wormiss_Blog_Import::WORKING_OPTION ), 'Finished posts are not left as being worked on.' );
+
+		$data = [
+			'content' => [
+				[
+					'type'  => 'LegacyHtml',
+					'props' => [ 'html' => '<p>An older case, in full.</p>' ],
+				],
+			],
+		];
+		$this->imis->reply(
+			'/api/Smart_Blogs_Blog_Post?BlogKey',
+			200,
+			Wormiss_Fake_Imis::page(
+				[
+					array_merge(
+						$older,
+						[
+							'BlogPostData' => [
+								'$type'  => 'System.Byte[], mscorlib',
+								// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+								'$value' => base64_encode( (string) wp_json_encode( $data ) ),
+							],
+						]
+					),
+				]
+			)
+		)->reply( '/api/Smart_Blogs_Comment', 200, Wormiss_Fake_Imis::page( [] ) );
+		$report = Wormiss_Blog_Import::run_more();
+		$this->assertSame( 1, $report['created'], implode( ' ', $report['notes'] ) );
+		$this->assertSame( 0, $report['remaining'] );
+		$this->assertNotSame( 0, Wormiss_Blog_Import::post_for( self::OLDER ) );
+		$this->assertFalse( get_option( Wormiss_Blog_Import::DONE_OPTION ) );
+		$this->assertFalse( get_option( Wormiss_Blog_Import::LIST_OPTION ) );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
+
+		// Nothing left to carry on with: a late batch does nothing.
+		$this->assertSame( 'done', Wormiss_Blog_Import::run_more()['status'] );
+	}
+
+	/**
+	 * A long post list is read a page at a time over several batches, then imported.
+	 *
+	 * @return void
+	 */
+	public function test_list_over_batches(): void {
+		// The first page has a draft and says there is more; the usual list is the second page.
+		$draft = [
+			'BlogKey' => self::OLDER,
+			'Title'   => 'Not yet',
+			'Status'  => 'Draft',
+		];
+		$this->imis->reply( '/api/Smart_Blogs_Blog_Post?Limit=100&Offset=0', 200, Wormiss_Fake_Imis::page( [ $draft ], true, 1 ) );
+		$this->queue( $this->modern() );
+		add_filter( 'wormiss_batch_seconds', '__return_zero' );
+		$report = Wormiss_Blog_Import::run();
+		remove_filter( 'wormiss_batch_seconds', '__return_zero' );
+		$this->assertSame( 0, $report['created'] );
+		$this->assertStringContainsString( 'Still reading the list', implode( ' ', $report['notes'] ) );
+		$this->assertSame( 1, get_option( Wormiss_Blog_Import::LIST_OPTION )['offset'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
+
+		$report = Wormiss_Blog_Import::run_more();
+		$this->assertSame( 1, $report['read'], implode( ' ', $report['notes'] ) );
+		$this->assertSame( 1, $report['created'] );
+		$this->assertNotSame( 0, Wormiss_Blog_Import::post_for( self::KEY ) );
+	}
+
+	/**
+	 * A post two batches started and never finished (the host stopped them) is skipped with a
+	 * note; a batch that finds another one running books itself again.
+	 *
+	 * @return void
+	 */
+	public function test_stuck_post_skipped(): void {
+		update_option(
+			Wormiss_Blog_Import::WORKING_OPTION,
+			[
+				'key'   => self::KEY,
+				'tries' => Wormiss_Batch::MAX_TRIES,
+			]
+		);
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, Wormiss_Blog_Import::post_for( self::KEY ) );
+		$this->assertStringContainsString( 'stopped the import twice', implode( ' ', $report['notes'] ) );
+		$this->assertFalse( get_option( Wormiss_Blog_Import::WORKING_OPTION ) );
+
+		update_option( Wormiss_Blog_Import::LIST_OPTION, [ 'time' => time() ] );
+		update_option( Wormiss_Blog_Import::LOCK_OPTION, (string) time() );
+		wp_clear_scheduled_hook( Wormiss_Blog_Import::MORE_HOOK );
+		$this->assertSame( 'busy', Wormiss_Blog_Import::run_more()['status'] );
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
+	}
+
+	/**
+	 * The batch helper counts unfinished tries per item and keeps within PHP's time limit.
+	 *
+	 * @return void
+	 */
+	public function test_batch_helper(): void {
+		$option = 'wormiss_test_working';
+		$this->assertSame( 0, Wormiss_Batch::begin( $option, 'a' ) );
+		$this->assertSame( 1, Wormiss_Batch::begin( $option, 'a' ) );
+		$this->assertSame( 0, Wormiss_Batch::begin( $option, 'b' ), 'Another item starts again.' );
+		Wormiss_Batch::end( $option );
+		$this->assertSame( 0, Wormiss_Batch::begin( $option, 'b' ), 'Finished: counted afresh.' );
+		Wormiss_Batch::end( $option );
+
+		$limit = ini_get( 'max_execution_time' );
+		set_time_limit( 12 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restored below.
+		$this->assertSame( 6, Wormiss_Batch::seconds() );
+		set_time_limit( (int) $limit ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Restoring.
+
+		Wormiss_Batch::start();
+		$this->assertFalse( Wormiss_Batch::stopped() );
+		Wormiss_Batch::stop();
+		$this->assertTrue( Wormiss_Batch::stopped() );
+		$this->assertTrue( Wormiss_Batch::put_off() );
+		Wormiss_Batch::start();
+		$this->assertFalse( Wormiss_Batch::put_off() );
 	}
 
 	/**
