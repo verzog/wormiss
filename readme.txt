@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.34.2
+Stable tag: 0.35.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.35.0 =
+* Members' blog: the solution is closed until the reader chooses to see it, as on the iMIS blog: a box with an eye icon, "Solution", a short prompt to think it through first and a "Show the solution" button (then "Hide the solution"). It works without scripts and from the keyboard. Before its reveal time readers still see when it will be published (now with the eye icon); staff can open it early, marked as staff only. Non-readers never receive the solution.
 
 = 0.34.2 =
 * Check a blog post now also shows the Smart Blogs blog templates (each one's name and layout, decoded) and their fields, to plan a layout here for each iMIS template. Read only: nothing is changed in iMIS.
