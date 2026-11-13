@@ -64,6 +64,11 @@ class Wormiss_News_Import {
 	const LOCK_OPTION = 'wormiss_news_import_lock';
 
 	/**
+	 * Option: the article being imported, and how many batches have tried it.
+	 */
+	const WORKING_OPTION = 'wormiss_news_import_working';
+
+	/**
 	 * The article's iMIS document version key (the news view's Document Version Key).
 	 */
 	const META_KEY = '_wormiss_news_key';
@@ -121,7 +126,7 @@ class Wormiss_News_Import {
 	/**
 	 * Seconds after which a lock left by a run that died is taken over.
 	 */
-	const LOCK_SECONDS = 600;
+	const LOCK_SECONDS = 300;
 
 	/**
 	 * Most IQA rows read.
@@ -295,10 +300,19 @@ class Wormiss_News_Import {
 			$report['status'] = 'off';
 			return self::save( $report );
 		}
-		if ( ! Wormiss_Event_Import::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS ) ) {
-			$report['status'] = 'busy';
+		if ( true === $carry_on && false === get_option( self::LIST_OPTION ) ) {
+			$report['status'] = 'done'; // Finished already: nothing to carry on with.
 			return $report;
 		}
+		if ( ! Wormiss_Event_Import::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS ) ) {
+			$report['status'] = 'busy';
+			if ( true === $carry_on && ! wp_next_scheduled( self::MORE_HOOK ) ) {
+				// Another batch has it (or one the host stopped holds it until the lock runs out).
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+			}
+			return $report;
+		}
+		Wormiss_Batch::start();
 		try {
 			return self::import( $report, $done, true === $carry_on );
 		} finally {
@@ -389,44 +403,60 @@ class Wormiss_News_Import {
 		$writes         = 0;
 		$checked        = 0;
 		$todo           = 0;
+		// Kept from the start, so a batch the host stops part way is carried on, not lost.
+		update_option(
+			self::LIST_OPTION,
+			[
+				'time'     => $read,
+				'articles' => $articles,
+			],
+			false
+		);
+		if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+			wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+		}
 		foreach ( $articles as $key => $article ) {
 			if ( isset( $done[ $key ] ) ) {
 				continue;
 			}
-			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || self::$images >= self::MAX_IMAGES ) {
+			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || Wormiss_Batch::stopped() ) {
 				++$todo;
 				continue;
 			}
-			++$checked;
 			$done[ $key ] = true;
-			$result       = self::one( $client, $article, $report );
+			if ( Wormiss_Batch::begin( self::WORKING_OPTION, (string) $key ) >= Wormiss_Batch::MAX_TRIES ) {
+				Wormiss_Batch::end( self::WORKING_OPTION );
+				++$report['skipped'];
+				/* translators: %s: title. */
+				self::note( $report, sprintf( __( '%s: skipped, as two batches could not finish it (too big or too slow for one go); tried again next import.', 'wormiss' ), $article['title'] ) );
+				update_option( self::DONE_OPTION, $done, false );
+				continue;
+			}
+			++$checked;
+			$result = self::one( $client, $article, $report );
+			Wormiss_Batch::done( self::WORKING_OPTION );
 			if ( 'created' === $result || 'updated' === $result ) {
 				++$writes;
 				++$report[ $result ];
 			} else {
 				++$report['skipped'];
 			}
+			if ( Wormiss_Batch::put_off() ) {
+				// Put off part way (out of time or pictures): finished in the next batch.
+				unset( $done[ $key ] );
+				++$todo;
+			}
+			update_option( self::DONE_OPTION, $done, false );
 		}
 		$report['remaining'] = $todo;
-		if ( $todo > 0 ) {
-			update_option( self::DONE_OPTION, $done, false );
-			update_option(
-				self::LIST_OPTION,
-				[
-					'time'     => $read,
-					'articles' => $articles,
-				],
-				false
-			);
-			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
-				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
-			}
-		} else {
+		if ( 0 === $todo ) {
 			delete_option( self::DONE_OPTION );
 			delete_option( self::LIST_OPTION );
+			wp_clear_scheduled_hook( self::MORE_HOOK );
 		}
 		return self::save( $report );
 	}
+
 
 	/**
 	 * Make or update the post for one article.
@@ -878,7 +908,8 @@ class Wormiss_News_Import {
 		if ( $found ) {
 			return (int) $found[0];
 		}
-		if ( self::$images >= self::MAX_IMAGES ) {
+		if ( self::$images >= self::MAX_IMAGES || Wormiss_Batch::out_of_time() ) {
+			Wormiss_Batch::stop();
 			$complete = false;
 			return 0;
 		}
@@ -910,6 +941,7 @@ class Wormiss_News_Import {
 			return 0;
 		}
 		update_post_meta( (int) $attachment, self::META_FROM, $url );
+		Wormiss_Batch::progress();
 		return (int) $attachment;
 	}
 

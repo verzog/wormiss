@@ -66,6 +66,11 @@ class Wormiss_Blog_Import {
 	const LOCK_OPTION = 'wormiss_blog_import_lock';
 
 	/**
+	 * Option: the blog post being imported, and how many batches have tried it.
+	 */
+	const WORKING_OPTION = 'wormiss_blog_import_working';
+
+	/**
 	 * Names looked up in iMIS (iMIS ID => name) for commenters without an account here.
 	 */
 	const PEOPLE_OPTION = 'wormiss_blog_people';
@@ -123,7 +128,7 @@ class Wormiss_Blog_Import {
 	/**
 	 * Posts changed per batch.
 	 */
-	const BATCH = 3;
+	const BATCH = 1;
 
 	/**
 	 * Posts checked per batch.
@@ -133,12 +138,12 @@ class Wormiss_Blog_Import {
 	/**
 	 * Images copied per batch.
 	 */
-	const MAX_IMAGES = 30;
+	const MAX_IMAGES = 8;
 
 	/**
 	 * Seconds between batches.
 	 */
-	const BATCH_GAP = MINUTE_IN_SECONDS;
+	const BATCH_GAP = 2 * MINUTE_IN_SECONDS;
 
 	/**
 	 * How long the post list is used by later batches.
@@ -148,7 +153,7 @@ class Wormiss_Blog_Import {
 	/**
 	 * Lock lifetime.
 	 */
-	const LOCK_SECONDS = 600;
+	const LOCK_SECONDS = 300;
 
 	/**
 	 * Rows per page of iMIS lists.
@@ -259,10 +264,19 @@ class Wormiss_Blog_Import {
 			$report['status'] = 'off';
 			return self::save( $report );
 		}
-		if ( ! Wormiss_Event_Import::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS ) ) {
-			$report['status'] = 'busy';
+		if ( true === $carry_on && false === get_option( self::LIST_OPTION ) ) {
+			$report['status'] = 'done'; // Finished already: nothing to carry on with.
 			return $report;
 		}
+		if ( ! Wormiss_Event_Import::take_lock( self::LOCK_OPTION, self::LOCK_SECONDS ) ) {
+			$report['status'] = 'busy';
+			if ( true === $carry_on && ! wp_next_scheduled( self::MORE_HOOK ) ) {
+				// Another batch has it (or one the host stopped holds it until the lock runs out).
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+			}
+			return $report;
+		}
+		Wormiss_Batch::start();
 		try {
 			return self::import( $report, $done, true === $carry_on );
 		} finally {
@@ -282,54 +296,111 @@ class Wormiss_Blog_Import {
 		self::$images = 0;
 		$client       = new Wormiss_Rest_Client();
 		$kept         = $carry_on ? get_option( self::LIST_OPTION ) : false;
-		if ( is_array( $kept ) && (int) ( $kept['time'] ?? 0 ) > time() - self::LIST_MAX_AGE && is_array( $kept['posts'] ?? null ) ) {
-			return self::write( $client, $report, $done, $kept, (int) $kept['time'] );
+		// A list still being read stays in use while each batch adds to it; a finished one ages
+		// from when its last page was read.
+		$since = is_array( $kept ) ? (int) ( $kept['touched'] ?? $kept['time'] ?? 0 ) : 0;
+		if ( is_array( $kept ) && $since > time() - self::LIST_MAX_AGE && is_array( $kept['posts'] ?? null ) ) {
+			$listing = $kept;
+		} else {
+			// A fresh list: what an earlier, unfinished import did no longer counts.
+			delete_option( self::DONE_OPTION );
+			$done = [];
+			try {
+				$listing = [
+					'posts'         => [],
+					'offset'        => 0,
+					'categories'    => self::names( $client, 'Smart_Blogs_Category', 'CategoryKey' ),
+					'subcategories' => self::names( $client, 'Smart_Blogs_Subcategory', 'SubcategoryKey', 'ParentCategoryKey' ),
+					'time'          => time(),
+				];
+			} catch ( Wormiss_Exception $e ) {
+				$report['status']  = 'error';
+				$report['notes'][] = $e->getMessage();
+				return self::save( $report );
+			}
+			self::categories( $listing, $report );
 		}
-		try {
-			$listing = [
-				'posts'         => self::post_list( $client ),
-				'categories'    => self::names( $client, 'Smart_Blogs_Category', 'CategoryKey' ),
-				'subcategories' => self::names( $client, 'Smart_Blogs_Subcategory', 'SubcategoryKey', 'ParentCategoryKey' ),
-				'time'          => time(),
-			];
-		} catch ( Wormiss_Exception $e ) {
-			$report['status']  = 'error';
-			$report['notes'][] = $e->getMessage();
-			return self::save( $report );
+		if ( null !== ( $listing['offset'] ?? null ) ) {
+			try {
+				$listing = self::read_list( $client, $listing );
+			} catch ( Wormiss_Exception $e ) {
+				$report['status']  = 'error';
+				$report['notes'][] = $e->getMessage();
+				return self::save( $report );
+			}
+			$listing['touched'] = time();
+			if ( null !== $listing['offset'] ) {
+				// A long list is read over several batches, a page at a time.
+				update_option( self::LIST_OPTION, $listing, false );
+				if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+					wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+				}
+				$report['read'] = count( $listing['posts'] );
+				/* translators: %d: blog posts found so far. */
+				self::note( $report, sprintf( __( 'Still reading the list of blog posts from iMIS (%d published so far); carries on in the background.', 'wormiss' ), count( $listing['posts'] ) ) );
+				return self::save( $report );
+			}
+			uasort( $listing['posts'], static fn( array $a, array $b ): int => strcmp( $b['published'], $a['published'] ) );
+			$listing['time'] = $listing['touched'];
 		}
-		self::categories( $listing, $report );
-		return self::write( $client, $report, $done, $listing, $listing['time'] );
+		return self::write( $client, $report, $done, $listing, (int) $listing['time'] );
 	}
 
 	/**
-	 * Every published post's details (not its text), newest first: key => details.
+	 * Read more of the blog post list, a page at a time, until it ends or the batch is out of
+	 * time. Each page's text is dropped as soon as the post's details are taken, so a long
+	 * blog never sits in memory.
 	 *
-	 * @param Wormiss_Rest_Client $client Client.
-	 * @return array[]
+	 * @param Wormiss_Rest_Client $client  Client.
+	 * @param array               $listing The list so far; its offset is the next page.
+	 * @return array The list; offset null once every page is read.
 	 * @throws Wormiss_Exception When iMIS cannot be read.
 	 */
-	private static function post_list( Wormiss_Rest_Client $client ): array {
-		$posts = [];
-		foreach ( self::read_all( $client, '/api/Smart_Blogs_Blog_Post', self::MAX_POSTS ) as $row ) {
-			$key = strtolower( (string) ( $row['BlogKey'] ?? '' ) );
-			if ( ! Wormiss_Content_Check::is_key( $key ) || 'Published' !== (string) ( $row['Status'] ?? '' ) ) {
-				continue;
+	private static function read_list( Wormiss_Rest_Client $client, array $listing ): array {
+		$offset = (int) $listing['offset'];
+		do {
+			$result = $client->request( 'GET', '/api/Smart_Blogs_Blog_Post?Limit=' . self::PAGE . '&Offset=' . $offset, null, null, false );
+			if ( ! is_object( $result->body ) ) {
+				throw new Wormiss_Exception( __( 'iMIS sent a response that could not be read.', 'wormiss' ) );
 			}
-			$posts[ $key ] = [
-				'key'         => $key,
-				'author'      => (string) ( $row['ID'] ?? '' ),
-				'title'       => sanitize_text_field( (string) ( $row['Title'] ?? '' ) ),
-				'summary'     => sanitize_textarea_field( (string) ( $row['Summary'] ?? '' ) ),
-				'tags'        => (string) ( $row['Tags'] ?? '' ),
-				'category'    => (string) ( $row['CategoryKey'] ?? '' ),
-				'subcategory' => (string) ( $row['SubcategoryKey'] ?? '' ),
-				'thumbnail'   => (string) ( $row['ThumbnailUrl'] ?? '' ),
-				'published'   => (string) ( $row['PublishedOn'] ?? '' ),
-				'updated'     => (string) ( $row['UpdatedOn'] ?? '' ),
-			];
+			$page = Wormiss_Rest_Client::items( $result->body );
+			foreach ( $page as $item ) {
+				$post = is_object( $item ) ? self::list_entry( Wormiss_Rest_Client::properties( $item ) ) : null;
+				if ( $post ) {
+					$listing['posts'][ $post['key'] ] = $post;
+				}
+			}
+			[ $more, $offset ] = Wormiss_Rest_Client::next_page( $result->body, $offset, count( $page ) );
+			$more              = $more && $page && $offset < self::MAX_POSTS;
+			unset( $result, $page );
+		} while ( $more && ! Wormiss_Batch::out_of_time() );
+		$listing['offset'] = $more ? $offset : null;
+		return $listing;
+	}
+
+	/**
+	 * A published post's details (not its text) from its list row.
+	 *
+	 * @param array $row Row properties.
+	 * @return array|null Null for a draft, or a row without a blog key.
+	 */
+	private static function list_entry( array $row ): ?array {
+		$key = strtolower( (string) ( $row['BlogKey'] ?? '' ) );
+		if ( ! Wormiss_Content_Check::is_key( $key ) || 'Published' !== (string) ( $row['Status'] ?? '' ) ) {
+			return null;
 		}
-		uasort( $posts, static fn( array $a, array $b ): int => strcmp( $b['published'], $a['published'] ) );
-		return $posts;
+		return [
+			'key'         => $key,
+			'author'      => (string) ( $row['ID'] ?? '' ),
+			'title'       => sanitize_text_field( (string) ( $row['Title'] ?? '' ) ),
+			'summary'     => sanitize_textarea_field( (string) ( $row['Summary'] ?? '' ) ),
+			'tags'        => (string) ( $row['Tags'] ?? '' ),
+			'category'    => (string) ( $row['CategoryKey'] ?? '' ),
+			'subcategory' => (string) ( $row['SubcategoryKey'] ?? '' ),
+			'thumbnail'   => (string) ( $row['ThumbnailUrl'] ?? '' ),
+			'published'   => (string) ( $row['PublishedOn'] ?? '' ),
+			'updated'     => (string) ( $row['UpdatedOn'] ?? '' ),
+		];
 	}
 
 	/**
@@ -401,34 +472,49 @@ class Wormiss_Blog_Import {
 		$writes         = 0;
 		$checked        = 0;
 		$todo           = 0;
+		// Kept from the start, so a batch the host stops part way is carried on, not lost.
+		update_option( self::LIST_OPTION, array_merge( $listing, [ 'time' => $read ] ), false );
+		if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
+			wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
+		}
 		foreach ( $listing['posts'] as $key => $post ) {
 			if ( isset( $done[ $key ] ) ) {
 				continue;
 			}
-			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || self::$images >= self::MAX_IMAGES ) {
+			if ( $writes >= self::BATCH || $checked >= self::MAX_CHECKS || Wormiss_Batch::stopped() ) {
 				++$todo;
 				continue;
 			}
-			++$checked;
 			$done[ $key ] = true;
-			$result       = self::one( $client, $post, $listing, $report );
+			if ( Wormiss_Batch::begin( self::WORKING_OPTION, (string) $key ) >= Wormiss_Batch::MAX_TRIES ) {
+				Wormiss_Batch::end( self::WORKING_OPTION );
+				++$report['skipped'];
+				/* translators: %s: title. */
+				self::note( $report, sprintf( __( '%s: skipped, as two batches could not finish it (too big or too slow for one go); tried again next import.', 'wormiss' ), $post['title'] ) );
+				update_option( self::DONE_OPTION, $done, false );
+				continue;
+			}
+			++$checked;
+			$result = self::one( $client, $post, $listing, $report );
+			Wormiss_Batch::done( self::WORKING_OPTION );
 			if ( 'created' === $result || 'updated' === $result ) {
 				++$writes;
 				++$report[ $result ];
 			} else {
 				++$report['skipped'];
 			}
+			if ( Wormiss_Batch::put_off() ) {
+				// Put off part way (out of time or pictures): finished in the next batch.
+				unset( $done[ $key ] );
+				++$todo;
+			}
+			update_option( self::DONE_OPTION, $done, false );
 		}
 		$report['remaining'] = $todo;
-		if ( $todo > 0 ) {
-			update_option( self::DONE_OPTION, $done, false );
-			update_option( self::LIST_OPTION, array_merge( $listing, [ 'time' => $read ] ), false );
-			if ( ! wp_next_scheduled( self::MORE_HOOK ) ) {
-				wp_schedule_single_event( time() + self::BATCH_GAP, self::MORE_HOOK );
-			}
-		} else {
+		if ( 0 === $todo ) {
 			delete_option( self::DONE_OPTION );
 			delete_option( self::LIST_OPTION );
+			wp_clear_scheduled_hook( self::MORE_HOOK );
 		}
 		return self::save( $report );
 	}
@@ -437,7 +523,7 @@ class Wormiss_Blog_Import {
 	 * Make or update one blog post and its comments.
 	 *
 	 * @param Wormiss_Rest_Client $client Client.
-	 * @param array               $post   From post_list().
+	 * @param array               $post   From list_entry().
 	 * @param array               $listing   The list (category names).
 	 * @param array               $report Report.
 	 * @return string created, updated or skipped.
@@ -773,7 +859,7 @@ class Wormiss_Blog_Import {
 	 * A post's category (with its subcategory beneath it) and topics.
 	 *
 	 * @param int   $post_id Post ID.
-	 * @param array $post    From post_list().
+	 * @param array $post    From list_entry().
 	 * @param array $listing The list.
 	 * @return void
 	 */
@@ -928,8 +1014,14 @@ class Wormiss_Blog_Import {
 			$approved = 'Published' === (string) ( $row['Status'] ?? '' ) ? 1 : 0;
 			$hash     = md5( $text . "\0" . $imis . "\0" . $parent . "\0" . $approved );
 			$person   = get_user_by( 'login', $imis );
-			$date     = Wormiss_News_Import::local_date( (string) ( $row['CreatedOn'] ?? '' ) );
-			$fields   = [
+			if ( ! $person instanceof WP_User && ! self::named( $imis ) && Wormiss_Batch::out_of_time() ) {
+				// Out of time to look the commenter up in iMIS: finished in the next batch.
+				Wormiss_Batch::stop();
+				$done = false;
+				continue;
+			}
+			$date   = Wormiss_News_Import::local_date( (string) ( $row['CreatedOn'] ?? '' ) );
+			$fields = [
 				'comment_post_ID'  => $post_id,
 				'comment_content'  => $text,
 				'comment_approved' => $approved,
@@ -971,6 +1063,9 @@ class Wormiss_Blog_Import {
 		}
 		foreach ( $pending as $comment_id => $parent ) {
 			if ( ! isset( $by_key[ $parent ] ) ) {
+				// Parent not saved this time: the reply is saved again next time and linked then.
+				$done = false;
+				delete_comment_meta( $comment_id, self::COMMENT_SOURCE );
 				continue;
 			}
 			$linked = wp_update_comment(
@@ -1028,7 +1123,18 @@ class Wormiss_Blog_Import {
 	}
 
 	/**
-	 * The name to show for a commenter without an account here, looked up in iMIS once.
+	 * Whether a commenter's name was already looked up.
+	 *
+	 * @param string $imis iMIS ID.
+	 * @return bool
+	 */
+	private static function named( string $imis ): bool {
+		$people = get_option( self::PEOPLE_OPTION, [] );
+		return is_array( $people ) && isset( $people[ $imis ] );
+	}
+
+	/**
+	 * A commenter's name from iMIS (looked up once, then kept).
 	 *
 	 * @param Wormiss_Rest_Client $client Client.
 	 * @param string              $imis   iMIS ID.
@@ -1054,6 +1160,7 @@ class Wormiss_Blog_Import {
 		}
 		$name            = '' !== trim( $name ) ? sanitize_text_field( $name ) : __( 'A member', 'wormiss' );
 		$people[ $imis ] = $name;
+		Wormiss_Batch::progress();
 		update_option( self::PEOPLE_OPTION, $people, false );
 		return $name;
 	}
@@ -1163,7 +1270,8 @@ class Wormiss_Blog_Import {
 		if ( $found ) {
 			return (int) $found[0];
 		}
-		if ( self::$images >= self::MAX_IMAGES ) {
+		if ( self::$images >= self::MAX_IMAGES || Wormiss_Batch::out_of_time() ) {
+			Wormiss_Batch::stop();
 			$complete = false;
 			return 0;
 		}
@@ -1195,6 +1303,7 @@ class Wormiss_Blog_Import {
 			return 0;
 		}
 		update_post_meta( (int) $attachment, self::META_FROM, $url );
+		Wormiss_Batch::progress();
 		return (int) $attachment;
 	}
 

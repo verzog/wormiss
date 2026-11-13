@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.33.0
+Stable tag: 0.33.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.33.1 =
+* Blog import no longer stops the site: the list of blog posts is read from iMIS a page at a time (over several batches for a long blog), keeping only each post's details, instead of every post's full text at once.
+* Blog and news imports: each batch stops starting new work after about 20 seconds (less where PHP allows less), and the next batch carries on. Progress is saved after every post, and the next batch is booked when a batch starts, so a batch the host stops part way is carried on rather than repeated. A post that has stopped two batches is skipped with a note and tried again in the next import.
+* Blog import: one post per batch, at most 8 pictures per batch, and 2 minutes between batches. Commenters' names are looked up in iMIS only while the batch has time; the rest are done in the next batch. A reply whose parent comment was not saved is linked on the next try instead of being left at the top level.
 
 = 0.33.0 =
 * Blog import: every iMIS blog category and subcategory is now made in WordPress (Blogs > Categories), with each subcategory under its parent, including ones no post uses yet, so the list matches iMIS. Each category remembers which iMIS category it is, so renaming or moving it in iMIS updates it here on the next import instead of making a new one. Categories made by 0.32.0 are matched by name and kept. A dry run only says how many it would make.
