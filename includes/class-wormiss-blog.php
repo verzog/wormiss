@@ -87,7 +87,7 @@ class Wormiss_Blog {
 	 */
 	public static function register(): void {
 		register_post_type(
-			self::POST_TYPE,
+			'wormiss_blog', // Literal so its validity can be checked; the same as POST_TYPE.
 			[
 				'labels'       => [
 					'name'          => __( 'Members\' blog', 'wormiss' ),
