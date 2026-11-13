@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.28.1
+Stable tag: 0.29.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -201,6 +201,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.29.0 =
+* Check a news article (Settings, administrators only): enter an iMIS news article's Document Version Key to see what iMIS gives out for it (content items, content and document lookups), to plan importing news. Read only: nothing is changed in iMIS, only a key in the expected form is accepted, and the replies are also kept in the audit log.
 
 = 0.28.1 =
 * Events open inside their page template again on current WordPress, which reads the post type's editor default mode (the 0.28.0 setting was only read by WordPress 6.8). Events are always edited in their template, so editors see where each detail goes and how the page will look: the editor switches to it once it has finished loading (switching earlier was undone), and switches back if "Show template" is turned off.
