@@ -503,7 +503,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 				],
 			],
 		];
-		$this->imis->reply(
+		$this->imis->token()->reply(
 			'/api/Smart_Blogs_Blog_Post?BlogKey',
 			200,
 			Wormiss_Fake_Imis::page(
@@ -555,6 +555,7 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertSame( 1, get_option( Wormiss_Blog_Import::LIST_OPTION )['offset'] );
 		$this->assertNotFalse( wp_next_scheduled( Wormiss_Blog_Import::MORE_HOOK ) );
 
+		$this->imis->token(); // Each batch signs in afresh.
 		$report = Wormiss_Blog_Import::run_more();
 		$this->assertSame( 1, $report['read'], implode( ' ', $report['notes'] ) );
 		$this->assertSame( 1, $report['created'] );
