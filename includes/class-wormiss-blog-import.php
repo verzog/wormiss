@@ -128,7 +128,7 @@ class Wormiss_Blog_Import {
 	/**
 	 * Posts changed per batch.
 	 */
-	const BATCH = 1;
+	const BATCH = 3;
 
 	/**
 	 * Posts checked per batch.
