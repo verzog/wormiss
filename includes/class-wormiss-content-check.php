@@ -58,12 +58,12 @@ class Wormiss_Content_Check {
 		[
 			'label'  => 'Document service description (fields and operations)',
 			'method' => 'GET',
-			'path'   => '/api/Document/_metadata',
+			'path'   => '/api/metadata/Document',
 		],
 		[
 			'label'  => 'DocumentSummary service description (fields and operations)',
 			'method' => 'GET',
-			'path'   => '/api/DocumentSummary/_metadata',
+			'path'   => '/api/metadata/DocumentSummary',
 		],
 	];
 
