@@ -209,16 +209,18 @@ class Wormiss_Content_Check {
 		if ( str_starts_with( $bytes, "\x1f\x8b" ) && function_exists( 'gzdecode' ) ) {
 			$unzipped = @gzdecode( $bytes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Not compressed is an answer.
 			$bytes    = false === $unzipped ? $bytes : $unzipped;
-		} elseif ( ! mb_check_encoding( $bytes, 'UTF-8' ) && function_exists( 'gzinflate' ) ) {
+		} elseif ( ! self::is_utf8( $bytes ) && function_exists( 'gzinflate' ) ) {
 			$inflated = @gzinflate( $bytes ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Not compressed is an answer.
 			$bytes    = false === $inflated ? $bytes : $inflated;
 		}
 		if ( str_starts_with( $bytes, "\xff\xfe" ) ) {
-			$bytes = mb_convert_encoding( substr( $bytes, 2 ), 'UTF-8', 'UTF-16LE' );
+			$bytes = self::from_utf16( substr( $bytes, 2 ), 'UTF-16LE' );
+		} elseif ( str_starts_with( $bytes, "\xfe\xff" ) ) {
+			$bytes = self::from_utf16( substr( $bytes, 2 ), 'UTF-16BE' );
 		} elseif ( str_starts_with( $bytes, "\xef\xbb\xbf" ) ) {
 			$bytes = substr( $bytes, 3 );
 		}
-		if ( ! mb_check_encoding( $bytes, 'UTF-8' ) ) {
+		if ( ! self::is_utf8( $bytes ) ) {
 			return sprintf(
 				/* translators: %d: number of bytes. */
 				__( '(%d bytes that are not text; the first ones in hex follow.)', 'wormiss' ),
@@ -226,6 +228,37 @@ class Wormiss_Content_Check {
 			) . "\n" . bin2hex( substr( $bytes, 0, 64 ) );
 		}
 		return self::cut( $bytes );
+	}
+
+	/**
+	 * Whether bytes are valid UTF-8 (without needing the mbstring extension).
+	 *
+	 * @param string $bytes Bytes.
+	 * @return bool
+	 */
+	private static function is_utf8( string $bytes ): bool {
+		if ( function_exists( 'mb_check_encoding' ) ) {
+			return mb_check_encoding( $bytes, 'UTF-8' );
+		}
+		return 1 === preg_match( '//u', $bytes );
+	}
+
+	/**
+	 * UTF-16 text as UTF-8, with mbstring or iconv; unchanged (then shown as not text) without either.
+	 *
+	 * @param string $bytes    UTF-16 bytes, without the byte order mark.
+	 * @param string $encoding UTF-16LE or UTF-16BE.
+	 * @return string
+	 */
+	private static function from_utf16( string $bytes, string $encoding ): string {
+		if ( function_exists( 'mb_convert_encoding' ) ) {
+			return (string) mb_convert_encoding( $bytes, 'UTF-8', $encoding );
+		}
+		if ( function_exists( 'iconv' ) ) {
+			$converted = iconv( $encoding, 'UTF-8//IGNORE', $bytes );
+			return false === $converted ? $bytes : $converted;
+		}
+		return $bytes;
 	}
 
 	/**

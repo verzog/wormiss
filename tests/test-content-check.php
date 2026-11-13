@@ -112,6 +112,21 @@ class Test_Wormiss_Content_Check extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Content in UTF-16 (either byte order) or deflated is decoded; binary is reported.
+	 *
+	 * @return void
+	 */
+	public function test_decode_blob(): void {
+		$xml = '<ContentItem><Html>Article text</Html></ContentItem>';
+		// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Test data as iMIS sends it.
+		$this->assertSame( $xml, Wormiss_Content_Check::decode_blob( base64_encode( "\xff\xfe" . mb_convert_encoding( $xml, 'UTF-16LE', 'UTF-8' ) ) ) );
+		$this->assertSame( $xml, Wormiss_Content_Check::decode_blob( base64_encode( "\xfe\xff" . mb_convert_encoding( $xml, 'UTF-16BE', 'UTF-8' ) ) ) );
+		$this->assertSame( $xml, Wormiss_Content_Check::decode_blob( base64_encode( gzdeflate( $xml ) ) ) );
+		$this->assertStringContainsString( 'not text', Wormiss_Content_Check::decode_blob( base64_encode( "\x00\xff\x80\x81" ) ) );
+		// phpcs:enable
+	}
+
+	/**
 	 * Long replies are cut.
 	 *
 	 * @return void
