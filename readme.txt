@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.38.1
+Stable tag: 0.39.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.39.0 =
+* Members' blog for members only: the blog home, posts, categories and topics (and their feeds) now send visitors to the sign-in page and back, and show signed-in people who are not readers the site's "not found" page; nothing of a post is shown, not even its title or intro. Blog posts are also left out of site searches and other post listings, and the REST API's blog posts, categories and topics answer readers only; no embeds of blog posts and no blog in the XML sitemaps. Blog pages are never page-cached. Readers are as before: staff plus the roles ticked in Settings > Members' blog. Pictures copied into the Media Library can still be opened by anyone with their address.
 
 = 0.38.1 =
 * Blog import, faster pictures: imported blog pictures get only the sizes the blog shows (thumbnail, medium and large) instead of every size the site has, so each picture is copied several times faster. Other uploads are unchanged; the sizes can be changed with the wormiss_blog_image_sizes filter.

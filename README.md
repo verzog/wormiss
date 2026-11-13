@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.38.1)
+## What it does (0.39.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -81,7 +81,9 @@ whose iMIS REST client and audit log it reuses.
 * **Members' blog** (at `/blogs/`): imported from iMIS Smart Blogs with all posts, intros,
   solutions (shown from their reveal time), categories, topics, authors, threaded comments
   and pictures. Readers are the roles chosen in settings (e.g. a paid membership role) plus
-  staff; others see intros only. Links to old iMIS blog addresses go to the posts here.
+  staff. Everyone else is kept out: visitors are sent to sign in, signed-in non-members see
+  "not found", and blog posts, categories and topics are left out of searches, other
+  listings, the REST API, embeds and the XML sitemaps. Links to old iMIS blog addresses go to the posts here.
   Posts use a simple Bootstrap-style layout (rows and columns, cards, responsive
   pictures and tables), styled by a small stylesheet on blog pages only.
 
