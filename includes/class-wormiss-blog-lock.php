@@ -201,8 +201,10 @@ class Wormiss_Blog_Lock {
 		if ( ! in_array( $status, [ 'approve', 1, '1' ], true ) ) {
 			return;
 		}
-		// Marked here (which also keeps its cache apart from readers'); comments_clauses() acts on it.
+		// Marked here; comments_clauses() acts on it. WordPress caches comment queries by their
+		// standard settings only, so a harmless "not post 0" keeps this cache apart from readers'.
 		$query->query_vars['wormiss_no_blog'] = true;
+		$query->query_vars['post__not_in']    = array_values( array_unique( array_merge( array_map( 'intval', (array) ( $query->query_vars['post__not_in'] ?? [] ) ), [ 0 ] ) ) );
 	}
 
 	/**
