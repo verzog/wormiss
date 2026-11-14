@@ -1038,6 +1038,37 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The Blog post details block: comment count, the line under the title, and the column with
+	 * Back to posts, initials, reading time and date.
+	 *
+	 * @return void
+	 */
+	public function test_meta(): void {
+		$author  = self::factory()->user->create( [ 'display_name' => 'Lloyd Peterson' ] );
+		$post_id = self::factory()->post->create(
+			[
+				'post_type'    => Wormiss_Blog::POST_TYPE,
+				'post_status'  => 'publish',
+				'post_author'  => $author,
+				'post_date'    => '2026-11-13 09:00:00',
+				'post_content' => '<p>' . str_repeat( 'word ', 450 ) . '</p>',
+			]
+		);
+		self::factory()->comment->create_post_comments( $post_id, 3 );
+
+		$this->assertStringContainsString( '<span>3</span>', Wormiss_Blog::meta_html( $post_id, 'comments' ) );
+		$line = Wormiss_Blog::meta_html( $post_id, 'line' );
+		$this->assertStringContainsString( 'Lloyd Peterson', $line );
+		$this->assertStringContainsString( '13/11/2026', $line );
+		$side = Wormiss_Blog::meta_html( $post_id, 'sidebar' );
+		$this->assertStringContainsString( 'Back to posts', $side );
+		$this->assertStringContainsString( '>LP<', $side );
+		$this->assertStringContainsString( '3 min read', $side );
+		$this->assertStringContainsString( '13 Nov 2026', $side );
+		$this->assertSame( '', Wormiss_Blog::meta_html( self::factory()->post->create(), 'comments' ), 'Blog posts only.' );
+	}
+
+	/**
 	 * Links to old iMIS blog addresses go to the imported post here.
 	 *
 	 * @return void

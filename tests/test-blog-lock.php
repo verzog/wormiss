@@ -169,6 +169,62 @@ class Test_Wormiss_Blog_Lock extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Comments on blog posts (and their writers' names) are left out of public comment lists
+	 * for people who cannot read the blog; Wormiss's own all-status lookups still find them.
+	 *
+	 * @return void
+	 */
+	public function test_comments(): void {
+		self::factory()->comment->create(
+			[
+				'comment_post_ID' => $this->blog,
+				'comment_author'  => 'Dr Ann',
+			]
+		);
+		self::factory()->comment->create(
+			[
+				'comment_post_ID' => $this->news,
+				'comment_author'  => 'Dr Bob',
+			]
+		);
+		$names = static function ( array $args ): array {
+			return wp_list_pluck( get_comments( $args ), 'comment_author' );
+		};
+		wp_set_current_user( 0 );
+		$this->assertSame( [ 'Dr Bob' ], $names( [ 'status' => 'approve' ] ) );
+		$this->assertSame(
+			[],
+			$names(
+				[
+					'status'  => 'approve',
+					'post_id' => $this->blog,
+				]
+			)
+		);
+		$this->assertSame(
+			[ 'Dr Ann' ],
+			$names(
+				[
+					'status'  => 'all',
+					'post_id' => $this->blog,
+				]
+			),
+			'Own lookups are left alone.'
+		);
+
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
+		$this->assertSame(
+			[ 'Dr Ann' ],
+			$names(
+				[
+					'status'  => 'approve',
+					'post_id' => $this->blog,
+				]
+			)
+		);
+	}
+
+	/**
 	 * No embeds for non-readers, and nothing of the blog in the XML sitemaps.
 	 *
 	 * @return void

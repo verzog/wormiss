@@ -1,0 +1,26 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/blog-meta",
+	"version": "0.40.0",
+	"title": "Blog post details",
+	"category": "theme",
+	"icon": "info-outline",
+	"description": "A members' blog post's details, as on the iMIS blog: its comment count (for cards), its author, date and comment count (under the title), or a column with Back to posts, the author, reading time and date.",
+	"keywords": [ "blog", "comments", "author", "imis" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"show": {
+			"type": "string",
+			"enum": [ "comments", "line", "sidebar" ],
+			"default": "comments"
+		}
+	},
+	"usesContext": [ "postId", "postType" ],
+	"supports": {
+		"html": false,
+		"align": false
+	},
+	"editorScript": "file:./index.js",
+	"render": "file:./render.php"
+}

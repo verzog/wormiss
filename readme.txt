@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.39.0
+Stable tag: 0.40.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,12 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.40.0 =
+* Members' blog: comments on blog posts, with their writers' names, are now left out of every public comment list (a post's discussion, "Latest comments" and the REST API) for people who cannot read the blog.
+* Blog filters laid out as on the iMIS blog: Category, Subcategories, Tags, Authors, Published date (from and to in one field) and Keyword. Each choice applies as soon as it is picked, a "Date published" button turns the order between newest and oldest first, and Reset clears them. Without JavaScript a Filter button does the same.
+* New "Blog post details" block: a post's comment count (for the blog's cards); its author, date and comment count (under the title); or a column with Back to posts, the author's initials and name, reading time and date (beside the post).
+* The "Access restricted" panel (shown after the intro when the blog is not hidden) now matches the iMIS blog: a lock, "Sign in or join to continue reading", and Sign in and (where sign-up is on) Create account buttons.
 
 = 0.39.0 =
 * Members' blog for members only: the blog home, posts, categories and topics (and their feeds) now send visitors to the sign-in page and back, and show signed-in people who are not readers the site's "not found" page; nothing of a post is shown, not even its title or intro. Blog posts are also left out of site searches and other post listings, and the REST API's blog posts, categories and topics answer readers only; no embeds of blog posts and no blog in the XML sitemaps. Blog pages are never page-cached. Readers are as before: staff plus the roles ticked in Settings > Members' blog. Pictures copied into the Media Library can still be opened by anyone with their address.

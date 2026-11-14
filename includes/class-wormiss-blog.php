@@ -274,6 +274,79 @@ class Wormiss_Blog {
 	}
 
 	/**
+	 * A blog post's details for the Blog post details block: its comment count ('comments'),
+	 * author, date and comment count ('line'), or Back to posts, author, reading time and date
+	 * ('sidebar').
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $show    comments, line or sidebar.
+	 * @return string
+	 */
+	public static function meta_html( int $post_id, string $show ): string {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post || self::POST_TYPE !== $post->post_type ) {
+			return '';
+		}
+		$count    = (int) get_comments_number( $post );
+		$comments = '<span class="wormiss-blog-meta__comments" title="' . esc_attr(
+			/* translators: %d: number of comments. */
+			sprintf( _n( '%d comment', '%d comments', $count, 'wormiss' ), $count )
+		) . '">' . self::icon( 'comment' ) . '<span>' . esc_html( number_format_i18n( $count ) ) . '</span></span>';
+		if ( 'comments' === $show ) {
+			return $comments;
+		}
+		$author = get_the_author_meta( 'display_name', (int) $post->post_author );
+		if ( 'line' === $show ) {
+			return '<span class="wormiss-blog-meta__author">' . esc_html( $author ) . '</span>'
+				. '<span class="wormiss-blog-meta__date">' . esc_html( get_the_date( 'd/m/Y', $post ) ) . '</span>' . $comments;
+		}
+		$words   = str_word_count( wp_strip_all_tags( (string) $post->post_content ) );
+		$minutes = max( 1, (int) ceil( $words / 200 ) );
+		$back    = (string) get_post_type_archive_link( self::POST_TYPE );
+		return '<a class="wormiss-blog-meta__back" href="' . esc_url( $back ) . '">' . self::icon( 'back' ) . esc_html__( 'Back to posts', 'wormiss' ) . '</a>'
+			. '<span class="wormiss-blog-meta__item"><span class="wormiss-blog-meta__initials" aria-hidden="true">' . esc_html( self::initials( $author ) ) . '</span>' . esc_html( $author ) . '</span>'
+			. '<span class="wormiss-blog-meta__item">' . self::icon( 'clock' ) . esc_html(
+				/* translators: %d: minutes. */
+				sprintf( _n( '%d min read', '%d min read', $minutes, 'wormiss' ), $minutes )
+			) . '</span>'
+			. '<span class="wormiss-blog-meta__item">' . self::icon( 'calendar' ) . esc_html( get_the_date( 'j M Y', $post ) ) . '</span>';
+	}
+
+	/**
+	 * A name's initials (e.g. LP for Lloyd Peterson).
+	 *
+	 * @param string $name Name.
+	 * @return string
+	 */
+	private static function initials( string $name ): string {
+		$words   = array_filter( explode( ' ', (string) preg_replace( '/\s+/', ' ', trim( $name ) ) ) );
+		$letters = '';
+		foreach ( $words as $word ) {
+			$letters .= mb_strtoupper( mb_substr( $word, 0, 1 ) );
+		}
+		// First and last name's initials.
+		return mb_strlen( $letters ) > 2 ? mb_substr( $letters, 0, 1 ) . mb_substr( $letters, -1 ) : $letters;
+	}
+
+	/**
+	 * A small line icon.
+	 *
+	 * @param string $name comment, back, clock, calendar or lock.
+	 * @return string SVG.
+	 */
+	private static function icon( string $name ): string {
+		$paths = [
+			'comment'  => '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+			'back'     => '<path d="M15 18l-6-6 6-6"/>',
+			'clock'    => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+			'calendar' => '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+			'lock'     => '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+		];
+		return '<svg class="wormiss-blog-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor"'
+			. ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' . ( $paths[ $name ] ?? '' ) . '</svg>';
+	}
+
+	/**
 	 * The solution section for a reader: shown from its reveal time; staff see it earlier,
 	 * marked with when members will.
 	 *
@@ -332,11 +405,18 @@ class Wormiss_Blog {
 	 * @return string
 	 */
 	private static function locked_notice(): string {
-		$text = is_user_logged_in()
-			? __( 'The full blog post and its discussion are for members.', 'wormiss' )
-			: __( 'The full blog post and its discussion are for members. Sign in to read on.', 'wormiss' );
-		$link = is_user_logged_in() ? '' : ' <a href="' . esc_url( wp_login_url( (string) get_permalink() ) ) . '">' . esc_html__( 'Sign in', 'wormiss' ) . '</a>';
-		return '<div class="alert alert-secondary wormiss-blog-locked"><p>' . esc_html( $text ) . $link . '</p></div>';
+		$html = '<div class="wormiss-blog-locked"><span class="wormiss-blog-locked__icon">' . self::icon( 'lock' ) . '</span>'
+			. '<p class="wormiss-blog-locked__title">' . esc_html__( 'Access restricted', 'wormiss' ) . '</p>';
+		if ( is_user_logged_in() ) {
+			return $html . '<p class="wormiss-blog-locked__text">' . esc_html__( 'The full blog post and its discussion are for members.', 'wormiss' ) . '</p></div>';
+		}
+		$html .= '<p class="wormiss-blog-locked__text">' . esc_html__( 'Sign in or join to continue reading', 'wormiss' ) . '</p>'
+			. '<p class="wormiss-blog-locked__actions"><a class="wormiss-blog-locked__sign-in" href="' . esc_url( wp_login_url( (string) get_permalink() ) ) . '">'
+			. esc_html__( 'Sign in', 'wormiss' ) . '</a>';
+		if ( get_option( 'users_can_register' ) ) {
+			$html .= '<a class="wormiss-blog-locked__join" href="' . esc_url( wp_registration_url() ) . '">' . esc_html__( 'Create account', 'wormiss' ) . '</a>';
+		}
+		return $html . '</p></div>';
 	}
 
 	/**
