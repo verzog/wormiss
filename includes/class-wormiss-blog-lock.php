@@ -42,6 +42,7 @@ class Wormiss_Blog_Lock {
 		add_action( 'template_redirect', [ __CLASS__, 'guard' ], 0 );
 		add_action( 'pre_get_posts', [ __CLASS__, 'hide_posts' ], 5 );
 		add_action( 'pre_get_comments', [ __CLASS__, 'hide_comments' ] );
+		add_filter( 'comments_clauses', [ __CLASS__, 'comments_clauses' ], 10, 2 );
 		add_filter( 'rest_request_before_callbacks', [ __CLASS__, 'rest_guard' ], 10, 3 );
 		add_filter( 'rest_term_search_query', [ __CLASS__, 'term_search' ] );
 		add_filter( 'oembed_request_post_id', [ __CLASS__, 'oembed_post' ] );
@@ -200,8 +201,30 @@ class Wormiss_Blog_Lock {
 		if ( ! in_array( $status, [ 'approve', 1, '1' ], true ) ) {
 			return;
 		}
-		$not                                    = (array) ( $query->query_vars['post_type__not_in'] ?? [] );
-		$query->query_vars['post_type__not_in'] = array_values( array_unique( array_merge( $not, [ Wormiss_Blog::POST_TYPE ] ) ) );
+		// Marked here (which also keeps its cache apart from readers'); comments_clauses() acts on it.
+		$query->query_vars['wormiss_no_blog'] = true;
+	}
+
+	/**
+	 * Leave blog posts' comments out of a comment query marked by hide_comments().
+	 *
+	 * @param array            $clauses SQL clauses.
+	 * @param WP_Comment_Query $query   Comment query.
+	 * @return array
+	 */
+	public static function comments_clauses( $clauses, $query ): array {
+		global $wpdb;
+		$clauses = (array) $clauses;
+		if ( ! $query instanceof WP_Comment_Query || empty( $query->query_vars['wormiss_no_blog'] ) ) {
+			return $clauses;
+		}
+		$join = (string) ( $clauses['join'] ?? '' );
+		if ( false === strpos( $join, "JOIN {$wpdb->posts} ON" ) ) {
+			$clauses['join'] = trim( $join . " JOIN {$wpdb->posts} ON {$wpdb->posts}.ID = {$wpdb->comments}.comment_post_ID" );
+		}
+		$where            = (string) ( $clauses['where'] ?? '' );
+		$clauses['where'] = ( '' !== $where ? $where . ' AND ' : '' ) . $wpdb->prepare( "{$wpdb->posts}.post_type <> %s", Wormiss_Blog::POST_TYPE );
+		return $clauses;
 	}
 
 	/**
