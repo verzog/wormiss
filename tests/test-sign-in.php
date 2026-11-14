@@ -97,6 +97,12 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 
 		$this->imis->token();
 		$this->assertWPError( Wormiss_Sign_In::authenticate( '99999', 'imis-pass' ), 'No website account for that iMIS ID yet.' );
+
+		// iMIS IDs with letters are found too.
+		$other = self::factory()->user->create( [ 'user_login' => 'carol' ] );
+		update_user_meta( $other, 'imis_id', 'A123' );
+		$this->imis->token();
+		$this->assertSame( $other, Wormiss_Sign_In::authenticate( 'A123', 'imis-pass' )->ID );
 	}
 
 	/**
@@ -139,6 +145,12 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 		$this->assertContains( get_option( 'default_role' ), $user->roles );
 		$this->assertTrue( wp_check_password( 'long-enough-pass', $user->user_pass, $user->ID ) );
 		$this->assertWPError( Wormiss_Sign_In::create_account( 'Bob Again', 'bob@example.org', 'long-enough-pass' ), 'Email already used.' );
+		$this->assertFalse( Wormiss_Sign_In::is_member_account( $user ), 'A free account is never a member.' );
+
+		// It signs in with its own password, even where usernames are iMIS IDs.
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'member_id_source' => 'login' ] ) );
+		$this->refuse();
+		$this->assertSame( $user->ID, Wormiss_Sign_In::authenticate( 'bob@example.org', 'long-enough-pass' )->ID );
 	}
 
 	/**

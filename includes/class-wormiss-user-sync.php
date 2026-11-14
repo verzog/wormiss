@@ -480,6 +480,10 @@ class Wormiss_User_Sync {
 				$user = false;
 			}
 		}
+		// Never a free website account: anyone could have made it with a member's email.
+		if ( $user && get_user_meta( $user->ID, Wormiss_Sign_In::META_FREE, true ) ) {
+			$user = false;
+		}
 		return $user ? (int) $user->ID : 0;
 	}
 

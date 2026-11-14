@@ -48,6 +48,9 @@ class Wormiss_Sign_In {
 	/** Shortest password for a website account. */
 	const MIN_PASSWORD = 10;
 
+	/** User meta marking a free website account made on the sign-in page (never a member). */
+	const META_FREE = 'wormiss_free_account';
+
 	/**
 	 * Messages for the form on this request: errors, and which form they belong to.
 	 *
@@ -195,15 +198,14 @@ class Wormiss_Sign_In {
 		}
 		$user = self::find( $login );
 		if ( $imis_ok ) {
-			// Only an account linked to iMIS (and, for an ID, to that ID) is signed in by iMIS.
-			$linked = $user ? Wormiss_Member::imis_id( $user->ID ) : '';
-			if ( '' === $linked || ( ctype_digit( $login ) && $linked !== $login ) ) {
+			// Only a member's account (and, for an ID, that ID's) is signed in by iMIS.
+			if ( ! $user || ! self::is_member_account( $user ) || ( ! is_email( $login ) && Wormiss_Member::imis_id( $user->ID ) !== $login ) ) {
 				$user = null;
 			}
 			if ( ! $user ) {
 				return new WP_Error( 'wormiss_sign_in', __( 'Your iMIS sign-in worked, but your website account is not ready yet. It is made from iMIS each night; please try again tomorrow.', 'wormiss' ) );
 			}
-		} elseif ( ! $user || ( '' !== Wormiss_Member::imis_id( $user->ID ) && ! user_can( $user, 'edit_posts' ) )
+		} elseif ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) )
 			|| ! wp_check_password( $password, $user->user_pass, $user->ID ) ) {
 			// Members always use their iMIS password; staff and other accounts their website one.
 			return $wrong;
@@ -215,7 +217,17 @@ class Wormiss_Sign_In {
 	}
 
 	/**
-	 * The website account for an iMIS ID (all digits), an email, or a username.
+	 * Whether a website account is a member's (linked to an iMIS ID), not a free account.
+	 *
+	 * @param WP_User $user Account.
+	 * @return bool
+	 */
+	public static function is_member_account( WP_User $user ): bool {
+		return ! get_user_meta( $user->ID, self::META_FREE, true ) && '' !== Wormiss_Member::imis_id( $user->ID );
+	}
+
+	/**
+	 * The website account for an iMIS ID, an email, or a username.
 	 *
 	 * @param string $login What was typed.
 	 * @return WP_User|null
@@ -225,7 +237,7 @@ class Wormiss_Sign_In {
 			$user = get_user_by( 'email', $login );
 			return $user instanceof WP_User ? $user : null;
 		}
-		if ( ctype_digit( $login ) && 'login' !== Wormiss_Settings::get( 'member_id_source' ) ) {
+		if ( '' !== Wormiss_Member::clean_id( $login ) && 'login' !== Wormiss_Settings::get( 'member_id_source' ) ) {
 			// phpcs:disable WordPress.DB.SlowDBQuery -- One indexed meta lookup.
 			$found = get_users(
 				[
@@ -339,6 +351,8 @@ class Wormiss_Sign_In {
 		if ( is_wp_error( $user_id ) ) {
 			return new WP_Error( 'wormiss_sign_up', __( 'Your account could not be made. Please try again.', 'wormiss' ) );
 		}
+		// Never linked to a member later: its email is not proven, so it must not pick up a member's iMIS ID.
+		update_user_meta( (int) $user_id, self::META_FREE, 1 );
 		set_transient( $key, $count + 1, HOUR_IN_SECONDS );
 		$user = get_userdata( (int) $user_id );
 		return $user instanceof WP_User ? $user : new WP_Error( 'wormiss_sign_up', __( 'Your account could not be made. Please try again.', 'wormiss' ) );
