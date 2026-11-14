@@ -2,17 +2,23 @@
 	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
 	"apiVersion": 3,
 	"name": "wormiss/blog-filters",
-	"version": "0.38.0",
+	"version": "0.40.0",
 	"title": "Blog filters",
 	"category": "widgets",
 	"icon": "filter",
-	"description": "Filters for the members' blog: category, level, topic, author, published dates and keyword. For the blog's listing pages.",
-	"keywords": [ "blog", "filter", "search", "imis" ],
+	"description": "Filters for the members' blog, as on the iMIS blog: category, subcategory, tags, authors, published dates and keyword, applied as they are chosen, with a newest/oldest sort. For the blog's listing pages.",
+	"keywords": [
+		"blog",
+		"filter",
+		"search",
+		"imis"
+	],
 	"textdomain": "wormiss",
 	"supports": {
 		"html": false
 	},
 	"editorScript": "file:./index.js",
 	"style": "wormiss-blog-filters",
-	"render": "file:./render.php"
+	"render": "file:./render.php",
+	"viewScript": "wormiss-blog-filters-view"
 }

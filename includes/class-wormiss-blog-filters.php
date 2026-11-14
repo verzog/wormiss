@@ -33,7 +33,7 @@ class Wormiss_Blog_Filters {
 	/**
 	 * The form's fields (query string names).
 	 */
-	const FIELDS = [ 'blog_category', 'blog_level', 'blog_topic', 'blog_author', 'blog_from', 'blog_to', 'blog_q' ];
+	const FIELDS = [ 'blog_category', 'blog_level', 'blog_topic', 'blog_author', 'blog_from', 'blog_to', 'blog_q', 'blog_order' ];
 
 	/**
 	 * Transient: the blog's authors (user IDs).
@@ -83,6 +83,7 @@ class Wormiss_Blog_Filters {
 			'from'     => $date( (string) get_query_var( 'blog_from' ) ),
 			'to'       => $date( (string) get_query_var( 'blog_to' ) ),
 			'q'        => sanitize_text_field( (string) get_query_var( 'blog_q' ) ),
+			'order'    => 'asc' === strtolower( (string) get_query_var( 'blog_order' ) ) ? 'asc' : 'desc',
 		];
 	}
 
@@ -139,6 +140,9 @@ class Wormiss_Blog_Filters {
 		if ( $dates ) {
 			$query->set( 'date_query', [ array_merge( $dates, [ 'inclusive' => true ] ) ] );
 		}
+		// By date either way (a keyword search would otherwise put relevance first).
+		$query->set( 'orderby', 'date' );
+		$query->set( 'order', 'asc' === $chosen['order'] ? 'ASC' : 'DESC' );
 		if ( '' !== $chosen['q'] ) {
 			$query->set( 's', $chosen['q'] );
 			add_filter( 'posts_search', [ __CLASS__, 'search_where' ], 10, 2 );
@@ -288,22 +292,35 @@ class Wormiss_Blog_Filters {
 		);
 		$topics = is_array( $topics ) ? $topics : [];
 
-		$authors = '<option value="">' . esc_html__( 'Any author', 'wormiss' ) . '</option>';
+		$authors = '<option value="">' . esc_html__( 'Select authors', 'wormiss' ) . '</option>';
 		foreach ( self::authors() as $user ) {
 			$authors .= '<option value="' . esc_attr( (string) $user->ID ) . '"' . selected( $chosen['author'], (int) $user->ID, false ) . '>' . esc_html( $user->display_name ) . '</option>';
 		}
-		$date = static fn( string $name, string $value ): string => '<input type="date" id="wormiss-' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '" />';
+		$date = static fn( string $name, string $value, string $label ): string => '<input type="date" id="wormiss-' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '" aria-label="' . esc_attr( $label ) . '" />';
+		// The sort button turns the order round; its arrow shows the order now.
+		$newest = 'desc' === $chosen['order'];
+		$sort   = '<button type="submit" class="wormiss-blog-filters__sort" name="blog_order" value="' . ( $newest ? 'asc' : 'desc' ) . '" title="'
+			. esc_attr( $newest ? __( 'Newest first: show oldest first', 'wormiss' ) : __( 'Oldest first: show newest first', 'wormiss' ) ) . '">'
+			. esc_html__( 'Date published', 'wormiss' ) . ' <span aria-hidden="true">' . ( $newest ? '&darr;' : '&uarr;' ) . '</span></button>';
 
 		$html  = '<form class="wormiss-blog-filters" method="get" action="' . esc_url( $action ) . '" role="search" aria-label="' . esc_attr__( 'Filter blog posts', 'wormiss' ) . '">';
 		$html .= self::keep_query( $action );
-		$html .= self::select( 'blog_category', __( 'Category', 'wormiss' ), __( 'Any category', 'wormiss' ), $categories, $chosen['category'] );
-		$html .= self::select( 'blog_level', __( 'Level', 'wormiss' ), __( 'Any level', 'wormiss' ), array_values( $levels ), $chosen['level'] );
-		$html .= self::select( 'blog_topic', __( 'Topic', 'wormiss' ), __( 'Any topic', 'wormiss' ), $topics, $chosen['topic'] );
-		$html .= self::field( 'blog_author', __( 'Author', 'wormiss' ), '<select id="wormiss-blog_author" name="blog_author">' . $authors . '</select>' );
-		$html .= self::field( 'blog_from', __( 'Published from', 'wormiss' ), $date( 'blog_from', $chosen['from'] ) );
-		$html .= self::field( 'blog_to', __( 'Published to', 'wormiss' ), $date( 'blog_to', $chosen['to'] ) );
-		$html .= self::field( 'blog_q', __( 'Keyword', 'wormiss' ), '<input type="search" id="wormiss-blog_q" name="blog_q" value="' . esc_attr( $chosen['q'] ) . '" />' );
-		$html .= '<p class="wormiss-blog-filters__actions"><button type="submit" class="wp-element-button">' . esc_html__( 'Filter', 'wormiss' ) . '</button> '
+		$html .= self::select( 'blog_category', __( 'Category', 'wormiss' ), __( 'Select category', 'wormiss' ), $categories, $chosen['category'] );
+		$html .= self::select( 'blog_level', __( 'Subcategories', 'wormiss' ), __( 'Select subcategory', 'wormiss' ), array_values( $levels ), $chosen['level'] );
+		$html .= self::select( 'blog_topic', __( 'Tags', 'wormiss' ), __( 'Select tags', 'wormiss' ), $topics, $chosen['topic'] );
+		$html .= self::field( 'blog_author', __( 'Authors', 'wormiss' ), '<select id="wormiss-blog_author" name="blog_author">' . $authors . '</select>' );
+		$html .= self::field(
+			'blog_from',
+			__( 'Published date', 'wormiss' ),
+			'<span class="wormiss-blog-filters__range">' . $date( 'blog_from', $chosen['from'], __( 'Published from', 'wormiss' ) )
+				. '<span aria-hidden="true">&ndash;</span>' . $date( 'blog_to', $chosen['to'], __( 'Published to', 'wormiss' ) ) . '</span>'
+		);
+		$html .= self::field( 'blog_q', __( 'Keyword', 'wormiss' ), '<input type="search" id="wormiss-blog_q" name="blog_q" value="' . esc_attr( $chosen['q'] ) . '" placeholder="' . esc_attr__( 'Keyword', 'wormiss' ) . '" />' );
+		// Oldest first stays with every change; the sort button's own value comes after it and wins.
+		$html .= $newest ? '' : '<input type="hidden" name="blog_order" value="asc" />';
+		// Filter comes first, so pressing Enter applies the filters rather than turning the order round.
+		$html .= '<p class="wormiss-blog-filters__actions">'
+			. '<button type="submit" class="wormiss-blog-filters__apply">' . esc_html__( 'Filter', 'wormiss' ) . '</button>' . $sort
 			. '<a class="wormiss-blog-filters__reset" href="' . esc_url( $action ) . '">' . esc_html__( 'Reset', 'wormiss' ) . '</a></p>';
 		return $html . '</form>';
 	}

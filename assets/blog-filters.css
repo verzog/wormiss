@@ -1,4 +1,4 @@
-/* Members' blog filters (Wormiss): fields in a grid, stacked on phones. */
+/* Members' blog filters (Wormiss), laid out as on the iMIS blog: three across, stacked on phones. */
 .wormiss-blog-filters {
 	display: grid;
 	grid-template-columns: 1fr;
@@ -6,7 +6,7 @@
 	align-items: end;
 	margin: 0 0 2rem;
 	padding: 1rem 1.25rem;
-	border-radius: 8px;
+	border-radius: 4px;
 	background: rgba(0, 0, 0, 0.04);
 }
 
@@ -25,7 +25,7 @@
 
 .wormiss-blog-filters__field label {
 	font-size: 0.8125rem;
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .wormiss-blog-filters__field select,
@@ -33,20 +33,58 @@
 	width: 100%;
 	min-height: 2.5rem;
 	padding: 0.35rem 0.5rem;
-	border: 1px solid rgba(0, 0, 0, 0.25);
+	border: 1px solid rgba(0, 0, 0, 0.15);
 	border-radius: 4px;
 	background: #fff;
 	font: inherit;
 	font-size: 0.875rem;
 }
 
+/* Published date: from and to side by side in one field. */
+.wormiss-blog-filters__range {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.wormiss-blog-filters__range input {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+/* Sort and Reset on the right of their own row. */
 .wormiss-blog-filters__actions {
 	display: flex;
-	gap: 1rem;
+	grid-column: 1 / -1;
+	gap: 0.5rem;
 	align-items: center;
+	justify-content: flex-end;
 	margin: 0;
 }
 
+.wormiss-blog-filters__actions button,
 .wormiss-blog-filters__reset {
-	font-size: 0.875rem;
+	min-height: 2.25rem;
+	padding: 0.35rem 0.9rem;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: 4px;
+	background: #fff;
+	color: inherit;
+	font: inherit;
+	font-size: 0.8125rem;
+	text-decoration: none;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+}
+
+.wormiss-blog-filters__reset {
+	border-color: var(--wp--preset--color--purple, #44277f);
+	background: var(--wp--preset--color--purple, #44277f);
+	color: #fff;
+}
+
+/* Choices apply as they change (with JavaScript), so the Filter button is not needed. */
+.wormiss-blog-filters--auto .wormiss-blog-filters__apply {
+	display: none;
 }

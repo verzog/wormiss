@@ -84,8 +84,19 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		register_block_type( WORMISS_DIR . '/blocks/complete' );
 		wp_register_style( 'wormiss-blog-filters', plugins_url( 'assets/blog-filters.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		wp_register_script(
+			'wormiss-blog-filters-view',
+			plugins_url( 'assets/blog-filters.js', WORMISS_FILE ),
+			[],
+			WORMISS_VERSION,
+			[
+				'in_footer' => true,
+				'strategy'  => 'defer',
+			]
+		);
 		register_block_type( WORMISS_DIR . '/blocks/events' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-filters' );
+		register_block_type( WORMISS_DIR . '/blocks/blog-meta' );
 		// The event blocks share one editor script and style.
 		wp_register_script(
 			'wormiss-event-blocks',
