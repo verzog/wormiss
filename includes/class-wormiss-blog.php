@@ -322,7 +322,8 @@ class Wormiss_Blog {
 		$words   = array_filter( explode( ' ', (string) preg_replace( '/\s+/', ' ', trim( $name ) ) ) );
 		$letters = '';
 		foreach ( $words as $word ) {
-			$letters .= mb_strtoupper( mb_substr( $word, 0, 1 ) );
+			$first    = mb_substr( $word, 0, 1 );
+			$letters .= function_exists( 'mb_strtoupper' ) ? mb_strtoupper( $first ) : strtoupper( $first );
 		}
 		// First and last name's initials.
 		return mb_strlen( $letters ) > 2 ? mb_substr( $letters, 0, 1 ) . mb_substr( $letters, -1 ) : $letters;

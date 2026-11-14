@@ -184,6 +184,7 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( '<b>', $html );
 		$this->assertStringContainsString( '>Subcategories</label>', $html );
 		$this->assertStringContainsString( 'name="blog_order" value="asc"', $html, 'The sort button turns to oldest first.' );
+		$this->assertLessThan( strpos( $html, 'wormiss-blog-filters__sort' ), strpos( $html, 'wormiss-blog-filters__apply' ), 'Enter applies the filters.' );
 		if ( str_contains( (string) get_post_type_archive_link( Wormiss_Blog::POST_TYPE ), 'post_type=' ) ) {
 			$this->assertStringContainsString( '<input type="hidden" name="post_type" value="wormiss_blog" />', $html, 'Plain permalinks keep the post type.' );
 		}

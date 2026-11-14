@@ -140,10 +140,9 @@ class Wormiss_Blog_Filters {
 		if ( $dates ) {
 			$query->set( 'date_query', [ array_merge( $dates, [ 'inclusive' => true ] ) ] );
 		}
-		if ( 'asc' === $chosen['order'] ) {
-			$query->set( 'orderby', 'date' );
-			$query->set( 'order', 'ASC' );
-		}
+		// By date either way (a keyword search would otherwise put relevance first).
+		$query->set( 'orderby', 'date' );
+		$query->set( 'order', 'asc' === $chosen['order'] ? 'ASC' : 'DESC' );
 		if ( '' !== $chosen['q'] ) {
 			$query->set( 's', $chosen['q'] );
 			add_filter( 'posts_search', [ __CLASS__, 'search_where' ], 10, 2 );
@@ -319,8 +318,9 @@ class Wormiss_Blog_Filters {
 		$html .= self::field( 'blog_q', __( 'Keyword', 'wormiss' ), '<input type="search" id="wormiss-blog_q" name="blog_q" value="' . esc_attr( $chosen['q'] ) . '" placeholder="' . esc_attr__( 'Keyword', 'wormiss' ) . '" />' );
 		// Oldest first stays with every change; the sort button's own value comes after it and wins.
 		$html .= $newest ? '' : '<input type="hidden" name="blog_order" value="asc" />';
-		$html .= '<p class="wormiss-blog-filters__actions">' . $sort
-			. '<button type="submit" class="wormiss-blog-filters__apply">' . esc_html__( 'Filter', 'wormiss' ) . '</button>'
+		// Filter comes first, so pressing Enter applies the filters rather than turning the order round.
+		$html .= '<p class="wormiss-blog-filters__actions">'
+			. '<button type="submit" class="wormiss-blog-filters__apply">' . esc_html__( 'Filter', 'wormiss' ) . '</button>' . $sort
 			. '<a class="wormiss-blog-filters__reset" href="' . esc_url( $action ) . '">' . esc_html__( 'Reset', 'wormiss' ) . '</a></p>';
 		return $html . '</form>';
 	}
