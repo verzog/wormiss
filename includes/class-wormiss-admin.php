@@ -334,6 +334,8 @@ class Wormiss_Admin {
 		self::field( 'signin_page', __( 'Sign-in page', 'wormiss' ), 'wormiss_sign_in' );
 		self::field( 'signin_forgot_url', __( 'iMIS forgot-password page', 'wormiss' ), 'wormiss_sign_in' );
 		self::field( 'signin_join_url', __( 'iMIS join page', 'wormiss' ), 'wormiss_sign_in' );
+		self::field( 'signin_free_accounts', __( 'Free website accounts', 'wormiss' ), 'wormiss_sign_in' );
+		self::field( 'signin_confirm_email', __( 'Confirm free accounts\' email', 'wormiss' ), 'wormiss_sign_in' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
@@ -533,9 +535,10 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function sign_in_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[signin_section]" value="1" />';
 		echo '<p id="wormiss-sign-in">'
-			. esc_html__( 'A sign-in page on this site, so members never see the server\'s own login. Sign-ups for free website', 'wormiss' )
-			. ' ' . esc_html__( 'accounts show there when Settings > General > "Anyone can register" is ticked.', 'wormiss' )
+			. esc_html__( 'A sign-in page on this site, so members never see the server\'s own login. Members sign in with their', 'wormiss' )
+			. ' ' . esc_html__( 'iMIS ID (e.g. 20022) or email and their iMIS password.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -730,6 +733,18 @@ class Wormiss_Admin {
 					$url = wp_nonce_url( admin_url( 'admin-post.php?action=wormiss_create_sign_in_page' ), 'wormiss_create_sign_in_page' );
 					echo '<p><a class="button" href="' . esc_url( $url ) . '">' . esc_html__( 'Create the sign-in page', 'wormiss' ) . '</a></p>';
 				}
+				return;
+			case 'signin_free_accounts':
+			case 'signin_confirm_email':
+				printf(
+					'<label><input type="checkbox" id="%1$s" name="%2$s" value="1" %3$s /> %4$s</label>',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					checked( (bool) $value, true, false ),
+					'signin_free_accounts' === $key
+						? esc_html__( 'Offer a free website account (for events and news, not members\' content) beside the sign-in form', 'wormiss' )
+						: esc_html__( 'Free accounts work only once their owner opens a link emailed to them (recommended)', 'wormiss' )
+				);
 				return;
 			case 'signin_forgot_url':
 			case 'signin_join_url':

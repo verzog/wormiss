@@ -154,6 +154,30 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * With confirmation on, a free account works only once the link emailed to it is opened;
+	 * a wrong or used link does nothing.
+	 *
+	 * @return void
+	 */
+	public function test_email_confirmation(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'signin_confirm_email' => true ] ) );
+		reset_phpmailer_instance();
+		$user = Wormiss_Sign_In::create_account( 'Dee Lane', 'dee@example.org', 'long-enough-pass' );
+		$this->assertInstanceOf( WP_User::class, $user );
+		$mail = tests_retrieve_phpmailer_instance()->get_sent();
+		$this->assertSame( 'dee@example.org', $mail->to[0][0] );
+		$this->assertSame( 1, preg_match( '/wormiss_confirm=([0-9]+\.[A-Za-z0-9]+)/', $mail->body, $found ) );
+
+		$this->refuse();
+		$this->assertWPError( Wormiss_Sign_In::authenticate( 'dee@example.org', 'long-enough-pass' ), 'Not until confirmed.' );
+		$this->assertNull( Wormiss_Sign_In::confirm( $user->ID . '.wrong' ) );
+		$this->assertSame( $user->ID, Wormiss_Sign_In::confirm( $found[1] )->ID );
+		$this->assertNull( Wormiss_Sign_In::confirm( $found[1] ), 'A link works once.' );
+		$this->refuse();
+		$this->assertSame( $user->ID, Wormiss_Sign_In::authenticate( 'dee@example.org', 'long-enough-pass' )->ID );
+	}
+
+	/**
 	 * The page: the sign-in form, the forgot-password link and join button when set, and the
 	 * free-account form only when sign-ups are on; signed in, a Continue and Sign out.
 	 *
@@ -170,19 +194,19 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 				]
 			)
 		);
-		update_option( 'users_can_register', 0 );
 		$html = Wormiss_Sign_In::render();
 		$this->assertStringContainsString( 'iMIS ID or email', $html );
 		$this->assertStringContainsString( 'href="https://imis.example.org/forgot"', $html );
 		$this->assertStringContainsString( 'href="https://imis.example.org/join"', $html );
 		$this->assertStringNotContainsString( 'wormiss_name', $html );
 
-		update_option( 'users_can_register', 1 );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'signin_free_accounts' => true ] ) );
 		$this->assertStringContainsString( 'name="wormiss_name"', Wormiss_Sign_In::render() );
 
 		wp_set_current_user( $this->member() );
 		$html = Wormiss_Sign_In::render();
 		$this->assertStringContainsString( 'Sign out', $html );
+		$this->assertStringContainsString( 'iMIS ID 12345', $html );
 		$this->assertStringNotContainsString( 'name="pwd"', $html );
 	}
 }

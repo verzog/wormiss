@@ -414,8 +414,8 @@ class Wormiss_Blog {
 		$html .= '<p class="wormiss-blog-locked__text">' . esc_html__( 'Sign in or join to continue reading', 'wormiss' ) . '</p>'
 			. '<p class="wormiss-blog-locked__actions"><a class="wormiss-blog-locked__sign-in" href="' . esc_url( wp_login_url( (string) get_permalink() ) ) . '">'
 			. esc_html__( 'Sign in', 'wormiss' ) . '</a>';
-		if ( get_option( 'users_can_register' ) ) {
-			$html .= '<a class="wormiss-blog-locked__join" href="' . esc_url( wp_registration_url() ) . '">' . esc_html__( 'Create account', 'wormiss' ) . '</a>';
+		if ( Wormiss_Sign_In::free_accounts() || '' !== (string) Wormiss_Settings::get( 'signin_join_url' ) ) {
+			$html .= '<a class="wormiss-blog-locked__join" href="' . esc_url( wp_login_url( (string) get_permalink() ) ) . '">' . esc_html__( 'Create account', 'wormiss' ) . '</a>';
 		}
 		return $html . '</p></div>';
 	}

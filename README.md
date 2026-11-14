@@ -80,7 +80,7 @@ whose iMIS REST client and audit log it reuses.
 
 * **Sign-in page**: members sign in with their iMIS ID or email and iMIS password (checked with
   iMIS); staff and other website accounts with their website password. Beside it, Become a member
-  (the iMIS join page) and, when sign-ups are on, a free website account. Every Sign in link goes
+  (the iMIS join page) and, when turned on, a free website account (optionally confirmed by email). Every Sign in link goes
   there, so the server's own login (such as YunoHost's) is never shown.
 * **Members' blog** (at `/blogs/`): imported from iMIS Smart Blogs with all posts, intros,
   solutions (shown from their reveal time), categories, topics, authors, threaded comments

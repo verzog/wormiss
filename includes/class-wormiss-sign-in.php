@@ -51,6 +51,12 @@ class Wormiss_Sign_In {
 	/** User meta marking a free website account made on the sign-in page (never a member). */
 	const META_FREE = 'wormiss_free_account';
 
+	/** User meta holding a free account's email confirmation (hashed key and expiry) until used. */
+	const META_CONFIRM = 'wormiss_email_confirm';
+
+	/** How long an email confirmation link works. */
+	const CONFIRM_SECONDS = 2 * DAY_IN_SECONDS;
+
 	/**
 	 * Messages for the form on this request: errors, and which form they belong to.
 	 *
@@ -128,6 +134,15 @@ class Wormiss_Sign_In {
 				wp_safe_redirect( home_url( '/' ) );
 				exit;
 			}
+		}
+		if ( isset( $_GET['wormiss_confirm'] ) ) {
+			$user = self::confirm( sanitize_text_field( wp_unslash( (string) $_GET['wormiss_confirm'] ) ) );
+			if ( $user ) {
+				self::sign_in( $user, false );
+				wp_safe_redirect( add_query_arg( 'wormiss_confirmed', '1', (string) get_permalink( $page ) ) );
+				exit;
+			}
+			self::$messages['sign_in'] = __( 'That confirmation link has expired or was already used. Please sign in, or create your account again.', 'wormiss' );
 		}
 		$action = isset( $_POST['wormiss_action'] ) ? sanitize_key( wp_unslash( (string) $_POST['wormiss_action'] ) ) : '';
 		// phpcs:enable
@@ -210,6 +225,9 @@ class Wormiss_Sign_In {
 			// Members always use their iMIS password; staff and other accounts their website one.
 			return $wrong;
 		}
+		if ( get_user_meta( $user->ID, self::META_CONFIRM, true ) ) {
+			return new WP_Error( 'wormiss_sign_in', __( 'Please confirm your email first: open the link we emailed you.', 'wormiss' ) );
+		}
 		if ( Wormiss_User_Sync::is_blocked( $user->ID ) ) {
 			return new WP_Error( 'wormiss_sign_in', __( 'Your membership is not current, so you cannot sign in. Please contact the College.', 'wormiss' ) );
 		}
@@ -276,7 +294,7 @@ class Wormiss_Sign_In {
 	 * @return WP_User|null
 	 */
 	private static function sign_up_request(): ?WP_User {
-		if ( ! get_option( 'users_can_register' ) ) {
+		if ( ! self::free_accounts() ) {
 			return null;
 		}
 		if ( ! check_ajax_referer( 'wormiss_sign_up', '_wormiss_nonce', false ) ) {
@@ -296,8 +314,73 @@ class Wormiss_Sign_In {
 			self::$messages['sign_up'] = $result->get_error_message();
 			return null;
 		}
+		if ( get_user_meta( $result->ID, self::META_CONFIRM, true ) ) {
+			self::$messages['sent'] = $email;
+			return null;
+		}
 		self::sign_in( $result, false );
 		return $result;
+	}
+
+	/**
+	 * Whether free website accounts can be made on the sign-in page.
+	 *
+	 * @return bool
+	 */
+	public static function free_accounts(): bool {
+		return (bool) Wormiss_Settings::get( 'signin_free_accounts' );
+	}
+
+	/**
+	 * Send a free account its email confirmation link (a new one each time).
+	 *
+	 * @param WP_User $user Account.
+	 * @return bool Whether the email was sent.
+	 */
+	public static function send_confirmation( WP_User $user ): bool {
+		$key = wp_generate_password( 32, false );
+		update_user_meta(
+			$user->ID,
+			self::META_CONFIRM,
+			[
+				'hash'    => wp_hash( $key ),
+				'expires' => time() + self::CONFIRM_SECONDS,
+			]
+		);
+		$page = self::page_id();
+		$base = $page ? (string) get_permalink( $page ) : home_url( '/' );
+		$link = add_query_arg( 'wormiss_confirm', $user->ID . '.' . $key, $base );
+		$site = wp_specialchars_decode( (string) get_bloginfo( 'name' ), ENT_QUOTES );
+		/* translators: %s: site name. */
+		$subject = sprintf( __( 'Confirm your email for %s', 'wormiss' ), $site );
+		$body    = sprintf(
+			/* translators: 1: name, 2: site name, 3: link. */
+			__( "Hello %1\$s,\n\nPlease confirm your email to finish making your %2\$s website account:\n\n%3\$s\n\nThe link works for 48 hours. If you did not ask for an account, you can ignore this email.", 'wormiss' ),
+			$user->display_name,
+			$site,
+			$link
+		);
+		return wp_mail( $user->user_email, $subject, $body );
+	}
+
+	/**
+	 * Use an email confirmation link (user ID, a dot, and the key).
+	 *
+	 * @param string $token From the link.
+	 * @return WP_User|null The confirmed account, or null if the link is wrong, used or expired.
+	 */
+	public static function confirm( string $token ): ?WP_User {
+		[ $id, $key ] = array_pad( explode( '.', $token, 2 ), 2, '' );
+		$user         = get_userdata( absint( $id ) );
+		if ( ! $user instanceof WP_User || '' === $key ) {
+			return null;
+		}
+		$saved = get_user_meta( $user->ID, self::META_CONFIRM, true );
+		if ( ! is_array( $saved ) || (int) ( $saved['expires'] ?? 0 ) < time() || ! hash_equals( (string) ( $saved['hash'] ?? '' ), wp_hash( $key ) ) ) {
+			return null;
+		}
+		delete_user_meta( $user->ID, self::META_CONFIRM );
+		return $user;
 	}
 
 	/**
@@ -325,7 +408,17 @@ class Wormiss_Sign_In {
 			/* translators: %d: number of characters. */
 			return new WP_Error( 'wormiss_sign_up', sprintf( __( 'Please choose a password of at least %d characters.', 'wormiss' ), self::MIN_PASSWORD ) );
 		}
-		if ( email_exists( $email ) ) {
+		$existing = email_exists( $email );
+		if ( $existing && get_user_meta( (int) $existing, self::META_CONFIRM, true ) && get_user_meta( (int) $existing, self::META_FREE, true ) ) {
+			// Not confirmed yet: a new link to the same address (the password is left as it was).
+			set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+			$pending = get_userdata( (int) $existing );
+			if ( $pending instanceof WP_User ) {
+				self::send_confirmation( $pending );
+				return $pending;
+			}
+		}
+		if ( $existing ) {
 			return new WP_Error( 'wormiss_sign_up', __( 'There is already an account with that email. Please sign in instead.', 'wormiss' ) );
 		}
 		$base  = sanitize_user( strtolower( (string) strtok( $email, '@' ) ), true );
@@ -355,7 +448,14 @@ class Wormiss_Sign_In {
 		update_user_meta( (int) $user_id, self::META_FREE, 1 );
 		set_transient( $key, $count + 1, HOUR_IN_SECONDS );
 		$user = get_userdata( (int) $user_id );
-		return $user instanceof WP_User ? $user : new WP_Error( 'wormiss_sign_up', __( 'Your account could not be made. Please try again.', 'wormiss' ) );
+		if ( ! $user instanceof WP_User ) {
+			return new WP_Error( 'wormiss_sign_up', __( 'Your account could not be made. Please try again.', 'wormiss' ) );
+		}
+		if ( Wormiss_Settings::get( 'signin_confirm_email' ) ) {
+			// Usable once the owner of the email opens the link.
+			self::send_confirmation( $user );
+		}
+		return $user;
 	}
 
 	/**
@@ -448,10 +548,15 @@ class Wormiss_Sign_In {
 		if ( is_user_logged_in() ) {
 			$user = wp_get_current_user();
 			$out  = add_query_arg( 'wormiss_sign_out', wp_create_nonce( 'wormiss_sign_out' ), (string) get_permalink() );
+			$imis = self::is_member_account( $user ) ? Wormiss_Member::imis_id( $user->ID ) : '';
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only shows a notice.
+			$done = isset( $_GET['wormiss_confirmed'] ) ? '<p class="wormiss-sign-in__notice" role="status">' . esc_html__( 'Thank you: your email is confirmed.', 'wormiss' ) . '</p>' : '';
 			return '<div class="wormiss-sign-in wormiss-sign-in--done"><div class="wormiss-sign-in__card">'
-				. '<h2 class="wormiss-sign-in__title">' . esc_html__( 'You are signed in', 'wormiss' ) . '</h2>'
+				. '<h2 class="wormiss-sign-in__title">' . esc_html__( 'You are signed in', 'wormiss' ) . '</h2>' . $done
 				/* translators: %s: name. */
-				. '<p>' . esc_html( sprintf( __( 'Signed in as %s.', 'wormiss' ), $user->display_name ) ) . '</p>'
+				. '<p>' . esc_html( sprintf( __( 'Signed in as %s.', 'wormiss' ), $user->display_name ) )
+				/* translators: %s: iMIS ID. */
+				. ( '' !== $imis ? ' ' . esc_html( sprintf( __( 'iMIS ID %s.', 'wormiss' ), $imis ) ) : '' ) . '</p>'
 				. '<p class="wormiss-sign-in__actions"><a class="wormiss-sign-in__button" href="' . esc_url( $redirect ) . '">' . esc_html__( 'Continue', 'wormiss' ) . '</a>'
 				. '<a class="wormiss-sign-in__link" href="' . esc_url( $out ) . '">' . esc_html__( 'Sign out', 'wormiss' ) . '</a></p>'
 				. '</div></div>';
@@ -469,7 +574,7 @@ class Wormiss_Sign_In {
 		$html .= '<form method="post" class="wormiss-sign-in__form">' . $hidden
 			. '<input type="hidden" name="wormiss_action" value="sign_in" />' . wp_nonce_field( 'wormiss_sign_in', '_wormiss_nonce', false, false )
 			. '<p><label for="wormiss-log">' . esc_html__( 'iMIS ID or email', 'wormiss' ) . '</label>'
-			. '<input type="text" id="wormiss-log" name="log" autocomplete="username" required value="' . esc_attr( (string) ( self::$messages['login'] ?? '' ) ) . '" /></p>'
+			. '<input type="text" id="wormiss-log" name="log" autocomplete="username" required placeholder="' . esc_attr__( 'e.g. 20022 or you@example.com', 'wormiss' ) . '" value="' . esc_attr( (string) ( self::$messages['login'] ?? '' ) ) . '" /></p>'
 			. '<p><label for="wormiss-pwd">' . esc_html__( 'Password', 'wormiss' ) . '</label>'
 			. '<input type="password" id="wormiss-pwd" name="pwd" autocomplete="current-password" required /></p>'
 			. '<p class="wormiss-sign-in__row"><label class="wormiss-sign-in__check"><input type="checkbox" name="rememberme" value="1" /> ' . esc_html__( 'Keep me signed in', 'wormiss' ) . '</label>'
@@ -482,7 +587,12 @@ class Wormiss_Sign_In {
 		if ( '' !== $join ) {
 			$html .= '<p><a class="wormiss-sign-in__button wormiss-sign-in__button--join" href="' . esc_url( $join ) . '">' . esc_html__( 'Become a member', 'wormiss' ) . '</a></p>';
 		}
-		if ( get_option( 'users_can_register' ) ) {
+		if ( isset( self::$messages['sent'] ) ) {
+			$html .= '<p class="wormiss-sign-in__notice" role="status">' . esc_html(
+				/* translators: %s: email address. */
+				sprintf( __( 'Nearly done: we have emailed a link to %s. Open it to finish making your account.', 'wormiss' ), self::$messages['sent'] )
+			) . '</p>';
+		} elseif ( self::free_accounts() ) {
 			$html .= '<details class="wormiss-sign-in__free"' . ( isset( self::$messages['sign_up'] ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Or create a free website account', 'wormiss' ) . '</summary>'
 				. '<p class="wormiss-sign-in__note">' . esc_html__( 'For events and news. It does not include members\' content such as the blog.', 'wormiss' ) . '</p>'
 				. $error( 'sign_up' )

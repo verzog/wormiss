@@ -139,6 +139,9 @@ class Wormiss_Settings {
 			'signin_page'                => 0,
 			'signin_forgot_url'          => '',
 			'signin_join_url'            => '',
+			// Free website accounts on the sign-in page, and email confirmation for them: off until turned on.
+			'signin_free_accounts'       => false,
+			'signin_confirm_email'       => false,
 		];
 	}
 
@@ -547,6 +550,13 @@ class Wormiss_Settings {
 		if ( isset( $input['signin_page'] ) ) {
 			$page                 = absint( $input['signin_page'] );
 			$clean['signin_page'] = $page && 'page' === get_post_type( $page ) ? $page : 0;
+		}
+		foreach ( [ 'signin_free_accounts', 'signin_confirm_email' ] as $box ) {
+			if ( isset( $input['signin_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
 		}
 		foreach ( [ 'signin_forgot_url', 'signin_join_url' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
