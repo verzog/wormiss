@@ -47,6 +47,8 @@ class Wormiss_Member {
 		add_action( 'edit_user_profile', [ __CLASS__, 'profile_field' ] );
 		add_action( 'personal_options_update', [ __CLASS__, 'save_profile_field' ] );
 		add_action( 'edit_user_profile_update', [ __CLASS__, 'save_profile_field' ] );
+		add_filter( 'manage_users_columns', [ __CLASS__, 'users_column' ] );
+		add_filter( 'manage_users_custom_column', [ __CLASS__, 'users_column_value' ], 10, 3 );
 	}
 
 	/**
@@ -124,12 +126,42 @@ class Wormiss_Member {
 				(int) self::MAX_ID_LENGTH
 			);
 			echo '<p class="description">'
-				. esc_html__( 'Usually filled in by single sign-on. It decides whose iMIS data this person sees.', 'wormiss' )
+				. esc_html__( 'The member\'s iMIS ID, e.g. 20022 (set by the member sync or single sign-on). It decides whose iMIS data this person sees.', 'wormiss' )
 				. '</p>';
 		} else {
 			echo '<code>' . esc_html( $value ) . '</code>';
 		}
 		echo '</td></tr></table>';
+	}
+
+	/**
+	 * An iMIS ID column on the Users screen.
+	 *
+	 * @param array $columns Columns.
+	 * @return array
+	 */
+	public static function users_column( $columns ): array {
+		$columns                    = (array) $columns;
+		$columns['wormiss_imis_id'] = __( 'iMIS ID', 'wormiss' );
+		return $columns;
+	}
+
+	/**
+	 * A user's iMIS ID in the Users screen's column ("Free account" for free website accounts).
+	 *
+	 * @param string $output  Output so far.
+	 * @param string $column  Column.
+	 * @param int    $user_id User ID.
+	 * @return string
+	 */
+	public static function users_column_value( $output, $column, $user_id ) {
+		if ( 'wormiss_imis_id' !== $column ) {
+			return $output;
+		}
+		if ( get_user_meta( (int) $user_id, Wormiss_Sign_In::META_FREE, true ) ) {
+			return esc_html__( 'Free account', 'wormiss' );
+		}
+		return esc_html( self::imis_id( (int) $user_id ) );
 	}
 
 	/**

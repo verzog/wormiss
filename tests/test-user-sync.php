@@ -190,6 +190,21 @@ class Test_Wormiss_User_Sync extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A free website account with a member's email is never linked to that member (its email
+	 * was never proven), so it cannot pick up the member's iMIS ID.
+	 *
+	 * @return void
+	 */
+	public function test_free_accounts_not_linked(): void {
+		$free = self::factory()->user->create( [ 'user_email' => 'm203@example.org' ] );
+		update_user_meta( $free, Wormiss_Sign_In::META_FREE, 1 );
+		$this->serve( [ self::row( '203' ) ] );
+		$report = Wormiss_User_Sync::run();
+		$this->assertSame( 0, $report['updated'] );
+		$this->assertSame( '', (string) get_user_meta( $free, 'imis_id', true ) );
+	}
+
+	/**
 	 * A lapsed member is blocked from signing in and signed out; current again, unblocked.
 	 *
 	 * @return void

@@ -1,0 +1,168 @@
+/* The Wormiss sign-in page: two cards side by side (stacked on phones). */
+.wormiss-sign-in {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1.5rem;
+	max-width: 960px;
+	margin: 2rem auto;
+}
+
+@media (min-width: 768px) {
+	.wormiss-sign-in {
+		grid-template-columns: 3fr 2fr;
+	}
+
+	.wormiss-sign-in--done {
+		grid-template-columns: minmax(0, 480px);
+		justify-content: center;
+	}
+}
+
+.wormiss-sign-in__card {
+	padding: 2rem;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.wormiss-sign-in__card--join {
+	border-color: transparent;
+	background: var(--wp--preset--color--purple, #44277f);
+	color: #fff;
+}
+
+.wormiss-sign-in__title {
+	margin: 0 0 0.5rem;
+	color: var(--wp--preset--color--purple, #44277f);
+}
+
+.wormiss-sign-in__card--join .wormiss-sign-in__title {
+	color: #fff;
+}
+
+.wormiss-sign-in__lead,
+.wormiss-sign-in__note {
+	opacity: 0.8;
+}
+
+.wormiss-sign-in__form p {
+	margin: 0 0 1rem;
+}
+
+.wormiss-sign-in__form label {
+	display: block;
+	margin-bottom: 0.3rem;
+	font-size: 0.875rem;
+	font-weight: 600;
+}
+
+.wormiss-sign-in__form input[type="text"],
+.wormiss-sign-in__form input[type="email"],
+.wormiss-sign-in__form input[type="password"] {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid rgba(0, 0, 0, 0.2);
+	border-radius: 6px;
+	background: #fff;
+	color: #222;
+	font: inherit;
+}
+
+.wormiss-sign-in__form input:focus {
+	outline: 2px solid var(--wp--preset--color--orange, #f47b20);
+	outline-offset: 1px;
+}
+
+.wormiss-sign-in__row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.wormiss-sign-in__form .wormiss-sign-in__check {
+	display: inline-flex;
+	gap: 0.4rem;
+	align-items: center;
+	margin: 0;
+	font-weight: 400;
+}
+
+.wormiss-sign-in__button {
+	display: inline-block;
+	width: 100%;
+	padding: 0.75rem 1.25rem;
+	border: 0;
+	border-radius: 6px;
+	background: var(--wp--preset--color--purple, #44277f);
+	color: #fff;
+	font: inherit;
+	font-weight: 700;
+	text-align: center;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.wormiss-sign-in__button:hover,
+.wormiss-sign-in__button:focus {
+	color: #fff;
+	opacity: 0.92;
+}
+
+.wormiss-sign-in__button--join {
+	background: var(--wp--preset--color--orange, #f47b20);
+}
+
+.wormiss-sign-in__button--quiet {
+	background: #fff;
+	color: var(--wp--preset--color--purple, #44277f);
+}
+
+.wormiss-sign-in__button--quiet:hover,
+.wormiss-sign-in__button--quiet:focus {
+	color: var(--wp--preset--color--purple, #44277f);
+}
+
+.wormiss-sign-in__link {
+	color: inherit;
+	font-size: 0.875rem;
+}
+
+.wormiss-sign-in__actions {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+}
+
+.wormiss-sign-in__actions .wormiss-sign-in__button {
+	width: auto;
+}
+
+.wormiss-sign-in__error {
+	padding: 0.75rem 1rem;
+	border-left: 4px solid #b42318;
+	border-radius: 4px;
+	background: #fef3f2;
+	color: #7a271a;
+}
+
+.wormiss-sign-in__free {
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.wormiss-sign-in__free summary {
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* Robots fill in this field; people never see it. */
+.wormiss-sign-in__trap {
+	position: absolute;
+	left: -9999px;
+}
