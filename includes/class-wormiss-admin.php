@@ -329,6 +329,12 @@ class Wormiss_Admin {
 		self::field( 'blog_batch_minutes', __( 'Minutes between blog batches', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_seconds', __( 'Seconds per blog batch', 'wormiss' ), 'wormiss_blog' );
 
+		$title = __( 'Sign-in page', 'wormiss' );
+		add_settings_section( 'wormiss_sign_in', $title, [ __CLASS__, 'sign_in_intro' ], self::PAGE );
+		self::field( 'signin_page', __( 'Sign-in page', 'wormiss' ), 'wormiss_sign_in' );
+		self::field( 'signin_forgot_url', __( 'iMIS forgot-password page', 'wormiss' ), 'wormiss_sign_in' );
+		self::field( 'signin_join_url', __( 'iMIS join page', 'wormiss' ), 'wormiss_sign_in' );
+
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
 		self::field( 'user_sync_enabled', __( 'Sync members daily', 'wormiss' ), 'wormiss_user_sync' );
@@ -522,6 +528,18 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * Intro text for the sign-in page section.
+	 *
+	 * @return void
+	 */
+	public static function sign_in_intro(): void {
+		echo '<p id="wormiss-sign-in">'
+			. esc_html__( 'A sign-in page on this site, so members never see the server\'s own login. Sign-ups for free website', 'wormiss' )
+			. ' ' . esc_html__( 'accounts show there when Settings > General > "Anyone can register" is ticked.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
 	 * Intro text for the member sync section (and the marker that its checkboxes were shown).
 	 *
 	 * @return void
@@ -693,6 +711,37 @@ class Wormiss_Admin {
 					. esc_html__( 'For historical records: finished events that started on or after this date are imported too,', 'wormiss' )
 					. ' ' . esc_html__( 'in small batches (5 pages, 2 images) every 2 minutes in the background. Blank imports upcoming events only.', 'wormiss' )
 					. '</p>';
+				return;
+			case 'signin_page':
+				wp_dropdown_pages(
+					[
+						'name'              => esc_attr( $name ),
+						'id'                => esc_attr( $id ),
+						'selected'          => (int) $value,
+						'show_option_none'  => esc_html__( 'WordPress\'s own sign-in', 'wormiss' ),
+						'option_none_value' => '0',
+					]
+				);
+				echo '<p class="description">'
+					. esc_html__( 'Every "Sign in" link and redirect (including the members\' blog) goes to this page. Members sign in with', 'wormiss' )
+					. ' ' . esc_html__( 'their iMIS ID or email and iMIS password; staff and other website accounts with their website password.', 'wormiss' )
+					. '</p>';
+				if ( ! Wormiss_Sign_In::page_id() ) {
+					$url = wp_nonce_url( admin_url( 'admin-post.php?action=wormiss_create_sign_in_page' ), 'wormiss_create_sign_in_page' );
+					echo '<p><a class="button" href="' . esc_url( $url ) . '">' . esc_html__( 'Create the sign-in page', 'wormiss' ) . '</a></p>';
+				}
+				return;
+			case 'signin_forgot_url':
+			case 'signin_join_url':
+				printf(
+					'<input type="url" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" placeholder="https://" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">' . ( 'signin_forgot_url' === $key
+					? esc_html__( 'Where "Forgot your password?" goes: the iMIS page for resetting a password. Blank hides the link.', 'wormiss' )
+					: esc_html__( 'Where "Become a member" goes: the iMIS page for joining. Blank hides the button.', 'wormiss' ) ) . '</p>';
 				return;
 			case 'blog_reader_roles':
 				$chosen = array_map( 'strval', (array) $value );

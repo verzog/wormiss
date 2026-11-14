@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.40.0)
+## What it does (0.41.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -78,6 +78,10 @@ whose iMIS REST client and audit log it reuses.
   update the post unless "Stop updating from iMIS" is ticked on it. Batches of 5 posts,
   a dry run, and nothing is ever changed in iMIS.
 
+* **Sign-in page**: members sign in with their iMIS ID or email and iMIS password (checked with
+  iMIS); staff and other website accounts with their website password. Beside it, Become a member
+  (the iMIS join page) and, when sign-ups are on, a free website account. Every Sign in link goes
+  there, so the server's own login (such as YunoHost's) is never shown.
 * **Members' blog** (at `/blogs/`): imported from iMIS Smart Blogs with all posts, intros,
   solutions (shown from their reveal time), categories, topics, authors, threaded comments
   and pictures. Readers are the roles chosen in settings (e.g. a paid membership role) plus

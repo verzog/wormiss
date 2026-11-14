@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.40.0
+Stable tag: 0.41.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.41.0 =
+* Sign-in page: a "Sign in" block and page (Wormiss > Settings > Sign-in page > Create the sign-in page). Members sign in with their iMIS ID or email and iMIS password, checked with iMIS, into the website account the member sync made for them; staff and other website accounts use their website password. "Forgot your password?" goes to the iMIS page you set, and a "Not a member yet?" panel has a Become a member button (to the iMIS join page you set) and, when Settings > General > "Anyone can register" is ticked, a small form for a free website account (not a membership). With the page chosen, every Sign in link and redirect, including the members' blog's, goes there instead of the server's own login (such as YunoHost's). Repeated wrong passwords pause sign-ins for 15 minutes; lapsed members stay out.
 
 = 0.40.0 =
 * Members' blog: comments on blog posts, with their writers' names, are now left out of every public comment list (a post's discussion, "Latest comments" and the REST API) for people who cannot read the blog.

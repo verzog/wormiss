@@ -1,0 +1,19 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/sign-in",
+	"version": "0.41.0",
+	"title": "Sign in",
+	"category": "widgets",
+	"icon": "lock",
+	"description": "The sign-in page: members sign in with their iMIS ID or email and iMIS password; beside it, Become a member and (when sign-ups are on) a free website account.",
+	"keywords": [ "login", "sign in", "member", "register", "imis" ],
+	"textdomain": "wormiss",
+	"supports": {
+		"html": false,
+		"multiple": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "wormiss-sign-in",
+	"render": "file:./render.php"
+}

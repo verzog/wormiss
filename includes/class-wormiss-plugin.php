@@ -62,6 +62,7 @@ class Wormiss_Plugin {
 		Wormiss_Images::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
+		Wormiss_Sign_In::init();
 		Wormiss_Blog_Filters::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();
@@ -97,6 +98,8 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/events' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-filters' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-meta' );
+		wp_register_style( 'wormiss-sign-in', plugins_url( 'assets/sign-in.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		register_block_type( WORMISS_DIR . '/blocks/sign-in' );
 		// The event blocks share one editor script and style.
 		wp_register_script(
 			'wormiss-event-blocks',

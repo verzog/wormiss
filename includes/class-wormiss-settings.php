@@ -135,6 +135,10 @@ class Wormiss_Settings {
 			'blog_batch_posts'           => 10,
 			'blog_batch_minutes'         => 1,
 			'blog_batch_seconds'         => 40,
+			// The sign-in page (page ID; 0 for WordPress's own), and the iMIS forgot-password and join pages.
+			'signin_page'                => 0,
+			'signin_forgot_url'          => '',
+			'signin_join_url'            => '',
 		];
 	}
 
@@ -539,6 +543,19 @@ class Wormiss_Settings {
 		}
 		if ( isset( $input['blog_batch_minutes'] ) ) {
 			$clean['blog_batch_minutes'] = min( Wormiss_Blog_Import::GAP_MAX, max( 1, absint( $input['blog_batch_minutes'] ) ) );
+		}
+		if ( isset( $input['signin_page'] ) ) {
+			$page                 = absint( $input['signin_page'] );
+			$clean['signin_page'] = $page && 'page' === get_post_type( $page ) ? $page : 0;
+		}
+		foreach ( [ 'signin_forgot_url', 'signin_join_url' ] as $key ) {
+			if ( isset( $input[ $key ] ) ) {
+				$url           = esc_url_raw( trim( (string) $input[ $key ] ), [ 'https' ] );
+				$clean[ $key ] = $url;
+				if ( '' === $url && '' !== trim( (string) $input[ $key ] ) ) {
+					add_settings_error( self::OPTION, $key, __( 'The sign-in page\'s iMIS addresses must be https:// web addresses.', 'wormiss' ) );
+				}
+			}
 		}
 		foreach ( [ 'blog_import_enabled', 'blog_import_dry_run' ] as $box ) {
 			if ( isset( $input['blog_section'] ) ) {
