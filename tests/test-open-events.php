@@ -160,4 +160,55 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 		);
 		$this->assertStringContainsString( 'No courses open right now.', $none );
 	}
+
+	/**
+	 * A linked event follows iMIS's current closing date, not the one kept when it was linked.
+	 *
+	 * @return void
+	 */
+	public function test_linked_event_uses_current_imis_dates(): void {
+		$type = (int) self::factory()->term->create(
+			[
+				'taxonomy' => Wormiss_Event_Types::TAXONOMY,
+				'name'     => 'Courses',
+			]
+		);
+		$this->event(
+			'Extended course',
+			$type,
+			[
+				Wormiss_Event_Sync::META_IMIS_ID        => 'EXT1',
+				Wormiss_Event_Sync::META_LINKED         => 1,
+				Wormiss_Event_Sync::META_LINKED_DETAILS => [
+					'start'   => self::day( 30 ),
+					'reg_end' => self::day( -1 ),
+				],
+			]
+		);
+		$this->assertSame( [], Wormiss_Open_Events::find( 'courses', true, 12, time() ), 'Closed by the kept date while iMIS cannot be read.' );
+
+		$this->imis->token()->reply(
+			'/api/Event?',
+			200,
+			[
+				'Items' => [
+					'$values' => [
+						[
+							'EventId'             => 'EXT1',
+							'EventCode'           => 'EXT1',
+							'Name'                => 'Extended course',
+							'StartDateTime'       => self::day( 30 ),
+							'EndDateTime'         => self::day( 30 ),
+							'RegistrationEndDate' => self::day( 10 ),
+							'Status'              => 'A',
+							'TemplateState'       => 'None',
+						],
+					],
+				],
+			]
+		);
+		$found = Wormiss_Open_Events::find( 'courses', true, 12, time() );
+		$this->assertCount( 1, $found, 'iMIS extended the closing date.' );
+		$this->assertSame( self::day( 10 ), $found[0]['facts']['reg_end'] );
+	}
 }
