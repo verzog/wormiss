@@ -50,7 +50,12 @@
 		const data = new FormData( form );
 		data.append( button.name, button.value );
 		data.append( 'wormiss_ajax', '1' );
-		button.disabled = true;
+		// One press at a time per rail: each answer carries both states, so an older one must not
+		// land after a newer one.
+		const buttons = form.querySelectorAll( 'button[type="submit"]' );
+		buttons.forEach( function ( item ) {
+			item.disabled = true;
+		} );
 		window.fetch( form.action, { method: 'POST', body: data, credentials: 'same-origin' } )
 			.then( function ( response ) {
 				return response.json();
@@ -71,7 +76,9 @@
 				say( rail, error && error.message ? error.message : '' );
 			} )
 			.finally( function () {
-				button.disabled = false;
+				buttons.forEach( function ( item ) {
+					item.disabled = false;
+				} );
 			} );
 	}
 
