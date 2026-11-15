@@ -45,7 +45,7 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 	 * A published event of a type.
 	 *
 	 * @param string $title Title.
-	 * @param int    $type  Event type term ID.
+	 * @param int    $type  Event category term ID.
 	 * @param array  $meta  Post meta.
 	 * @return int
 	 */
@@ -75,7 +75,7 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * Closed events drop off (iMIS registration close first, else the start); sub-types count;
+	 * Closed events drop off (iMIS registration close first, else the start); sub-categories count;
 	 * other types do not; soonest first; nothing open shows the message.
 	 *
 	 * @return void
@@ -131,7 +131,7 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 
 		$titles = static fn( array $found ): array => array_map( static fn( array $e ): string => $e['post']->post_title, $found );
 		$this->assertSame( [ 'Sooner course', 'Still enrolling', 'Later course' ], $titles( Wormiss_Open_Events::find( 'courses', true, 12, time() ) ) );
-		$this->assertSame( [ 'Still enrolling' ], $titles( Wormiss_Open_Events::find( 'courses', false, 12, time() ) ), 'Without its sub-types.' );
+		$this->assertSame( [ 'Still enrolling' ], $titles( Wormiss_Open_Events::find( 'courses', false, 12, time() ) ), 'Without its sub-categories.' );
 		$this->assertSame( [ 'Sooner course' ], $titles( Wormiss_Open_Events::find( 'essential', true, 1, time() ) ), 'At most the limit.' );
 
 		$html = Wormiss_Open_Events::render(

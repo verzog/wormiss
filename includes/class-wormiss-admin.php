@@ -42,6 +42,11 @@ class Wormiss_Admin {
 	const LOG_PAGE = 'wormiss-log';
 
 	/**
+	 * The "What are you adding?" page (an event or an event category).
+	 */
+	const ADD_PAGE = 'wormiss-add-new';
+
+	/**
 	 * Hook the admin screens.
 	 *
 	 * @return void
@@ -54,6 +59,7 @@ class Wormiss_Admin {
 		add_filter( 'parent_file', [ __CLASS__, 'parent_file' ] );
 		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
 		add_action( 'admin_post_wormiss_test_connection', [ __CLASS__, 'test_connection' ] );
+		add_action( 'load-post-new.php', [ __CLASS__, 'choose_first' ] );
 		add_action( 'admin_post_wormiss_log_export', [ __CLASS__, 'export_log' ] );
 		Wormiss_Content_Check::init();
 		Wormiss_Blog_Check::init();
@@ -86,18 +92,27 @@ class Wormiss_Admin {
 	 * @return void
 	 */
 	public static function more_menus(): void {
-		$type = get_post_type_object( Wormiss_Event_Sync::POST_TYPE );
+		$type     = get_post_type_object( Wormiss_Event_Sync::POST_TYPE );
+		$taxonomy = get_taxonomy( Wormiss_Event_Types::TAXONOMY );
 		if ( $type ) {
+			// First asks whether it is an event or an event category.
 			add_submenu_page(
 				self::MENU,
 				$type->labels->add_new_item,
 				$type->labels->add_new_item,
 				'edit_posts',
-				'post-new.php?post_type=' . Wormiss_Event_Sync::POST_TYPE
+				self::ADD_PAGE,
+				[ __CLASS__, 'render_add_chooser' ]
 			);
 		}
-		$taxonomy = get_taxonomy( Wormiss_Event_Types::TAXONOMY );
 		if ( $taxonomy ) {
+			add_submenu_page(
+				self::MENU,
+				$taxonomy->labels->add_new_item,
+				$taxonomy->labels->add_new_item,
+				'manage_categories',
+				self::types_page() . '&wormiss_add=1'
+			);
 			add_submenu_page(
 				self::MENU,
 				$taxonomy->labels->name,
@@ -125,7 +140,7 @@ class Wormiss_Admin {
 	}
 
 	/**
-	 * The Event types screen, as a menu path.
+	 * The Event categories screen, as a menu path.
 	 *
 	 * @return string
 	 */
@@ -134,7 +149,7 @@ class Wormiss_Admin {
 	}
 
 	/**
-	 * Keep the Wormiss menu open on the Event types screens (WordPress would look for an
+	 * Keep the Wormiss menu open on the Event categories screens (WordPress would look for an
 	 * Events menu of their own).
 	 *
 	 * @param string $parent_file Parent menu.
@@ -144,10 +159,80 @@ class Wormiss_Admin {
 		global $submenu_file;
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 		if ( $screen && Wormiss_Event_Types::TAXONOMY === $screen->taxonomy ) {
-			$submenu_file = self::types_page(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Highlights the menu item.
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the menu item to highlight.
+			$adding       = isset( $_GET['wormiss_add'] ) && 'edit-tags' === $screen->base;
+			$submenu_file = self::types_page() . ( $adding ? '&wormiss_add=1' : '' ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Highlights the menu item.
+			return self::MENU;
+		}
+		if ( $screen && 'post' === $screen->base && 'add' === $screen->action && Wormiss_Event_Sync::POST_TYPE === $screen->post_type ) {
+			$submenu_file = self::ADD_PAGE; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Highlights the menu item.
 			return self::MENU;
 		}
 		return $parent_file;
+	}
+
+	/**
+	 * Adding a new event first asks what is being added, for people who may add event
+	 * categories too (the Events list's "Add New Event" button included). The chooser's
+	 * "An event" link carries wormiss_new, so it goes straight through.
+	 *
+	 * @return void
+	 */
+	public static function choose_first(): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Only decides which page to show.
+		$type = isset( $_GET['post_type'] ) ? sanitize_key( wp_unslash( $_GET['post_type'] ) ) : '';
+		$skip = isset( $_GET['wormiss_new'] );
+		// phpcs:enable
+		if ( Wormiss_Event_Sync::POST_TYPE !== $type || $skip || ! current_user_can( 'manage_categories' ) ) {
+			return;
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::ADD_PAGE ) );
+		exit;
+	}
+
+	/**
+	 * The choices on the "What are you adding?" page.
+	 *
+	 * @return array[] Each: url, title, text.
+	 */
+	public static function add_choices(): array {
+		$choices = [
+			[
+				'url'   => admin_url( 'post-new.php?post_type=' . Wormiss_Event_Sync::POST_TYPE . '&wormiss_new=1' ),
+				'title' => __( 'An event', 'wormiss' ),
+				'text'  => __( 'One course, workshop or other event on a date, with its own page (sent to iMIS when sending is on).', 'wormiss' ),
+			],
+		];
+		if ( current_user_can( 'manage_categories' ) ) {
+			$choices[] = [
+				'url'   => admin_url( self::types_page() . '&wormiss_add=1#tag-name' ),
+				'title' => __( 'An event category', 'wormiss' ),
+				'text'  => __( 'A group that events belong to, such as Course or Essential (under Course), with its iMIS template and category. Events are then put into it.', 'wormiss' ),
+			];
+		}
+		return $choices;
+	}
+
+	/**
+	 * The "What are you adding?" page.
+	 *
+	 * @return void
+	 */
+	public static function render_add_chooser(): void {
+		$choices = self::add_choices();
+		if ( 1 === count( $choices ) ) {
+			// Only events can be added by this person: no question to ask.
+			echo '<script>window.location.replace(' . wp_json_encode( $choices[0]['url'] ) . ');</script>';
+		}
+		echo '<div class="wrap"><h1>' . esc_html__( 'What are you adding?', 'wormiss' ) . '</h1>';
+		echo '<div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-top:1.5rem">';
+		foreach ( $choices as $choice ) {
+			echo '<a class="card" style="display:block;max-width:24rem;margin:0;padding:1.5rem;text-decoration:none" href="' . esc_url( $choice['url'] ) . '">'
+				. '<h2 style="margin-top:0">' . esc_html( $choice['title'] ) . '</h2>'
+				. '<p>' . esc_html( $choice['text'] ) . '</p>'
+				. '<span class="button button-primary">' . esc_html__( 'Add', 'wormiss' ) . ' ' . esc_html( strtolower( $choice['title'] ) ) . '</span></a>';
+		}
+		echo '</div></div>';
 	}
 
 	/**
@@ -236,7 +321,7 @@ class Wormiss_Admin {
 		echo '</tbody></table><h2>' . esc_html__( 'Go to', 'wormiss' ) . '</h2><ul class="ul-disc">';
 		$items = [ [ admin_url( 'edit.php?post_type=' . Wormiss_Event_Sync::POST_TYPE ), __( 'Events', 'wormiss' ) ] ];
 		if ( current_user_can( 'manage_categories' ) ) {
-			$items[] = [ admin_url( self::types_page() ), __( 'Event types (iMIS templates, categories and capacity)', 'wormiss' ) ];
+			$items[] = [ admin_url( self::types_page() ), __( 'Event categories (iMIS templates, categories and capacity)', 'wormiss' ) ];
 		}
 		if ( current_user_can( 'manage_options' ) ) {
 			$items[] = [ self::settings_url(), __( 'Settings', 'wormiss' ) ];
@@ -498,7 +583,7 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[event_import_section]" value="1" />';
 		echo '<p>'
 			. esc_html__( 'Once a day, each upcoming iMIS event (the same ones the events block lists) gets an Event page', 'wormiss' )
-			. ' ' . esc_html__( 'linked to it, with its iMIS description, image and event type, published or as a draft.', 'wormiss' )
+			. ' ' . esc_html__( 'linked to it, with its iMIS description, image and event category, published or as a draft.', 'wormiss' )
 			. ' ' . esc_html__( 'Title and description follow iMIS; dates, place and places left always come from iMIS.', 'wormiss' )
 			. ' ' . esc_html__( 'Nothing is changed in iMIS, and pages are never removed.', 'wormiss' )
 			. '</p>';
@@ -888,7 +973,7 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'The event code of an iMIS event template set up with your usual prices and options.', 'wormiss' )
-					. ' ' . esc_html__( 'Used for events with no type, or whose type has no template (Events > Event types).', 'wormiss' )
+					. ' ' . esc_html__( 'Used for events with no event category, or whose category has no template (Events > Event categories).', 'wormiss' )
 					. '</p>';
 				return;
 			case 'event_url':
@@ -977,7 +1062,7 @@ class Wormiss_Admin {
 				}
 				if ( 'event_import_publish' === $key ) {
 					echo ' <span class="description">'
-						. esc_html__( 'Imported pages go live with their iMIS description, image and event type. Off: drafts.', 'wormiss' )
+						. esc_html__( 'Imported pages go live with their iMIS description, image and event category. Off: drafts.', 'wormiss' )
 						. ' ' . esc_html__( 'Drafts made earlier are published too; a page an editor unpublishes stays a draft.', 'wormiss' )
 						. '</span>';
 				}

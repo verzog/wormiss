@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Tests for the Events list's bulk event type actions.
+ * Tests for the Events list's bulk event category actions.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -23,7 +23,7 @@
  */
 
 /**
- * "Set event type" and "Remove event type" in Bulk actions.
+ * "Set event category" and "Remove event category" in Bulk actions.
  *
  * @covers Wormiss_Event_Type_Bulk
  */
@@ -43,7 +43,7 @@ class Test_Wormiss_Event_Type_Bulk extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * An event type.
+	 * An event category.
 	 *
 	 * @param string $name   Name.
 	 * @param int    $main   Main type's term ID.
@@ -60,7 +60,7 @@ class Test_Wormiss_Event_Type_Bulk extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The groups list every type, sub-types under their main type; nobody without the right
+	 * The groups list every type, sub-categories under their main type; nobody without the right
 	 * to assign types gets them.
 	 *
 	 * @return void
@@ -71,9 +71,9 @@ class Test_Wormiss_Event_Type_Bulk extends Wormiss_Test_Case {
 		$this->type( 'Essential', $courses );
 		$actions = Wormiss_Event_Type_Bulk::actions( [ 'edit' => 'Edit' ] );
 		$this->assertSame( 'Edit', $actions['edit'] );
-		$add = $actions['Set event type'];
+		$add = $actions['Set event category'];
 		$this->assertSame( [ 'Courses', '— Advanced', '— Essential' ], array_values( $add ) );
-		$this->assertArrayHasKey( Wormiss_Event_Type_Bulk::REMOVE . $advanced, $actions['Remove event type'] );
+		$this->assertArrayHasKey( Wormiss_Event_Type_Bulk::REMOVE . $advanced, $actions['Remove event category'] );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
 		$this->assertSame( [ 'edit' => 'Edit' ], Wormiss_Event_Type_Bulk::actions( [ 'edit' => 'Edit' ] ) );

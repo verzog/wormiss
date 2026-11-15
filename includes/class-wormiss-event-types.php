@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Event types: each has its own iMIS template event and, optionally, an iMIS event category.
+ * Event categories: each has its own iMIS template event and, optionally, an iMIS event category.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -25,7 +25,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * The Event types taxonomy and its iMIS settings.
+ * The Event categories taxonomy and its iMIS settings.
  */
 class Wormiss_Event_Types {
 
@@ -91,16 +91,16 @@ class Wormiss_Event_Types {
 			'wormiss_event',
 			[
 				'labels'            => [
-					'name'          => __( 'Event types', 'wormiss' ),
-					'singular_name' => __( 'Event type', 'wormiss' ),
-					'add_new_item'  => __( 'Add New Event Type', 'wormiss' ),
-					'edit_item'     => __( 'Edit Event Type', 'wormiss' ),
-					'search_items'  => __( 'Search Event Types', 'wormiss' ),
-					'not_found'     => __( 'No event types found.', 'wormiss' ),
-					'all_items'     => __( 'All Event Types', 'wormiss' ),
-					'menu_name'     => __( 'Event types', 'wormiss' ),
+					'name'          => __( 'Event categories', 'wormiss' ),
+					'singular_name' => __( 'Event category', 'wormiss' ),
+					'add_new_item'  => __( 'Add New Event Category', 'wormiss' ),
+					'edit_item'     => __( 'Edit Event Category', 'wormiss' ),
+					'search_items'  => __( 'Search Event Categories', 'wormiss' ),
+					'not_found'     => __( 'No event categories found.', 'wormiss' ),
+					'all_items'     => __( 'All Event Categories', 'wormiss' ),
+					'menu_name'     => __( 'Event categories', 'wormiss' ),
 				],
-				// Hierarchical: a checkbox list in the editor, and sub-types (e.g. Courses > Essential).
+				// Hierarchical: a checkbox list in the editor, and sub-categories (e.g. Courses > Essential).
 				'hierarchical'      => true,
 				'public'            => true,
 				'show_in_rest'      => true,
@@ -251,7 +251,7 @@ class Wormiss_Event_Types {
 			return $out;
 		}
 		if ( count( $terms ) > 1 ) {
-			$out['problem'] = __( 'Choose only one event type: each type has its own iMIS template.', 'wormiss' );
+			$out['problem'] = __( 'Choose only one event category: each category has its own iMIS template.', 'wormiss' );
 			return $out;
 		}
 		$term            = reset( $terms );
@@ -268,7 +268,7 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * The form fields on the Add Event Type screen.
+	 * The form fields on the Add Event Category screen.
 	 *
 	 * @return void
 	 */
@@ -309,7 +309,7 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * The form fields on the Edit Event Type screen.
+	 * The form fields on the Edit Event Category screen.
 	 *
 	 * @param WP_Term $term Term.
 	 * @return void
@@ -371,7 +371,7 @@ class Wormiss_Event_Types {
 		return [
 			self::META_CAPACITY => [
 				__( 'Default capacity', 'wormiss' ),
-				__( 'Places for events of this type when an event leaves its own Capacity at 0. Blank keeps the template\'s.', 'wormiss' ),
+				__( 'Places for events in this category when an event leaves its own Capacity at 0. Blank keeps the template\'s.', 'wormiss' ),
 			],
 			self::META_MINIMUM  => [
 				__( 'Default minimum attendance', 'wormiss' ),
@@ -419,7 +419,7 @@ class Wormiss_Event_Types {
 	 * @return string
 	 */
 	private static function create_help(): string {
-		return __( 'Makes the iMIS event category if it does not exist yet, named after this type.', 'wormiss' )
+		return __( 'Makes the iMIS event category if it does not exist yet, named after this event category.', 'wormiss' )
 			. ' ' . __( 'With no category ID, one is made from the name (e.g. WORKS).', 'wormiss' )
 			. ' ' . __( 'Some iMIS sites do not allow this: then create the category in iMIS.', 'wormiss' )
 			. ' ' . __( 'Uses the event sending switch and dry run in Wormiss > Settings.', 'wormiss' );
@@ -434,11 +434,11 @@ class Wormiss_Event_Types {
 		return [
 			self::META_TEMPLATE => [
 				__( 'iMIS template event ID', 'wormiss' ),
-				__( 'New events of this type are copied from this iMIS event. Blank uses the default template in Settings.', 'wormiss' ),
+				__( 'New events in this category are copied from this iMIS event. Blank uses the default template in Settings.', 'wormiss' ),
 			],
 			self::META_CATEGORY => [
 				__( 'iMIS event category ID', 'wormiss' ),
-				__( 'Events of this type get this iMIS event category each time they are sent. Up to 5 characters: the category\'s ID in iMIS (e.g. COUR), not its name. Blank keeps the one in iMIS.', 'wormiss' ),
+				__( 'Events in this category get this iMIS event category each time they are sent. Up to 5 characters: the category\'s ID in iMIS (e.g. COUR), not its name. Blank keeps the one in iMIS.', 'wormiss' ),
 			],
 		];
 	}
@@ -547,7 +547,7 @@ class Wormiss_Event_Types {
 					'error',
 					sprintf(
 						/* translators: %s: category ID. */
-						__( 'Your iMIS does not let Wormiss create event categories. Create %s in iMIS (Events settings), then save this type again, or use a category iMIS already has.', 'wormiss' ),
+						__( 'Your iMIS does not let Wormiss create event categories. Create %s in iMIS (Events settings), then save this event category again, or use a category iMIS already has.', 'wormiss' ),
 						$category
 					),
 				];
@@ -584,7 +584,7 @@ class Wormiss_Event_Types {
 	}
 
 	/**
-	 * Add the template column to the Event types list.
+	 * Add the template column to the Event categories list.
 	 *
 	 * @param string[] $columns Columns.
 	 * @return string[]

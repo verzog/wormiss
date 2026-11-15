@@ -154,7 +154,7 @@
 						ev.sync.places && el('span', {className: 'wormiss-editor-note'}, ' (' + ev.sync.places + ')'))),
 				el('p', {className: 'wormiss-event-register'},
 					el('span', {className: 'wp-element-button', 'aria-disabled': 'true'}, __('Register', 'wormiss'))),
-				note(__('A blank state or country keeps the iMIS template\'s. Capacity 0 uses the event type\'s.', 'wormiss')));
+				note(__('A blank state or country keeps the iMIS template\'s. Capacity 0 uses the event category\'s.', 'wormiss')));
 		},
 		save: () => null,
 	});
@@ -168,7 +168,7 @@
 			}
 			const imisId = ev.sync.imis_id || '';
 			const linked = ev.sync.linked || !!ev.meta._wormiss_event_existing;
-			const typeDefault = __('Event type\'s default, else iMIS\'s', 'wormiss');
+			const typeDefault = __('Event category\'s default, else iMIS\'s', 'wormiss');
 			const status = ev.sync.status || '';
 			const kinds = {synced: 'success', linked: 'success', cancelled: 'warning', error: 'error'};
 			const text = (key, label, help, extra) => el(TextControl, Object.assign({
@@ -202,8 +202,8 @@
 					text('_wormiss_event_code', __('Event code', 'wormiss'), imisId
 						? sprintf(__('In iMIS as %s. The code cannot change now.', 'wormiss'), imisId)
 						: __('Up to 10 letters, digits, _ and -, e.g. CONF27.', 'wormiss'), {disabled: !!imisId, maxLength: 10}),
-					number('_wormiss_event_minimum', __('Minimum attendance', 'wormiss'), __('0 uses the event type\'s.', 'wormiss')),
-					number('_wormiss_event_expected', __('Expected attendance', 'wormiss'), __('0 uses the event type\'s.', 'wormiss')),
+					number('_wormiss_event_minimum', __('Minimum attendance', 'wormiss'), __('0 uses the event category\'s.', 'wormiss')),
+					number('_wormiss_event_expected', __('Expected attendance', 'wormiss'), __('0 uses the event category\'s.', 'wormiss')),
 					choose('_wormiss_event_waitlist', __('Waitlist', 'wormiss'), [
 						{label: typeDefault, value: ''},
 						{label: __('No waitlist', 'wormiss'), value: 'None'},

@@ -93,7 +93,7 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 
 	/**
 	 * Everything Wormiss adds sits under one Wormiss menu: Overview, Events, Add New Event,
-	 * Event types, Settings and the audit log.
+	 * Event categories, Settings and the audit log.
 	 *
 	 * @return void
 	 */
@@ -111,11 +111,31 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		Wormiss_Admin::more_menus();
 		$slugs = array_column( $submenu[ Wormiss_Admin::MENU ] ?? [], 2 );
 		$this->assertSame( Wormiss_Admin::MENU, $slugs[0] );
-		$this->assertContains( 'post-new.php?post_type=wormiss_event', $slugs );
+		$this->assertContains( Wormiss_Admin::ADD_PAGE, $slugs, 'Add New Event asks what is being added.' );
+		$this->assertContains( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event&wormiss_add=1', $slugs, 'Add New Event Category.' );
 		$this->assertContains( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event', $slugs );
+		$this->assertLessThan( array_search( Wormiss_Admin::SETTINGS_PAGE, $slugs, true ), array_search( Wormiss_Admin::ADD_PAGE, $slugs, true ) );
 		$this->assertContains( Wormiss_Admin::SETTINGS_PAGE, $slugs );
 		$this->assertContains( Wormiss_Admin::LOG_PAGE, $slugs );
 		$this->assertSame( 'wormiss', get_post_type_object( Wormiss_Event_Sync::POST_TYPE )->show_in_menu );
+	}
+
+	/**
+	 * "What are you adding?" offers an event, and an event category to those who may add one.
+	 *
+	 * @return void
+	 */
+	public function test_add_choices(): void {
+		Wormiss_Event_Types::register();
+		Wormiss_Event_Sync::register();
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		$choices = Wormiss_Admin::add_choices();
+		$this->assertCount( 2, $choices );
+		$this->assertStringContainsString( 'post-new.php?post_type=wormiss_event&wormiss_new=1', $choices[0]['url'] );
+		$this->assertStringContainsString( 'taxonomy=wormiss_event_type', $choices[1]['url'] );
+
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'author' ] ) );
+		$this->assertCount( 1, Wormiss_Admin::add_choices(), 'Only events for someone who cannot add categories.' );
 	}
 
 	/**

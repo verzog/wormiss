@@ -65,9 +65,9 @@
 			{name: 'wormiss-event', title: __('iMIS event', 'wormiss')},
 			el('p', {className: 'description'}, state),
 			!imisId && !sync.linked && el('p', {className: 'description'}, template
-				? sprintf(__('A new event is copied from iMIS template %s (chosen by its event type, or the default).',
+				? sprintf(__('A new event is copied from iMIS template %s (chosen by its event category, or the default).',
 					'wormiss'), template)
-				: __('No iMIS template yet: give the event type one, or set the default in Wormiss > Settings.', 'wormiss')),
+				: __('No iMIS template yet: give the event category one, or set the default in Wormiss > Settings.', 'wormiss')),
 			syncNotice(sync),
 			imisId && el('p', {className: 'description'}, sprintf(__('iMIS event: %s', 'wormiss'), imisId)),
 			sync.places && el('p', {className: 'description'},

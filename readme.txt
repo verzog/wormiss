@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.47.1
+Stable tag: 0.48.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -145,7 +145,7 @@ In iMIS, set up a template event with your usual prices, registration options an
 
 = Can different kinds of event use different iMIS templates? =
 
-Yes. Under Events > Event types, add a type (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. A type can also have a default capacity (used when an event leaves its own Capacity at 0), and "Create this category in iMIS when saved" makes the type's iMIS event category for you if it does not exist yet. Events with no type, or whose type has no template, use the default template in Wormiss > Settings. The template only matters when the event is first created in iMIS.
+Yes. Under Events > Event categories, add a category (e.g. Workshop, Conference, Webinar) with its iMIS template event ID and, optionally, an iMIS event category ID. Tick one type on each event. A new event is copied from its type's template; the category, if set, is written to the event each time it is sent. A type can also have a default capacity (used when an event leaves its own Capacity at 0), and "Create this category in iMIS when saved" makes the type's iMIS event category for you if it does not exist yet. Events with no type, or whose type has no template, use the default template in Wormiss > Settings. The template only matters when the event is first created in iMIS.
 
 = Can members register for events on the website? =
 
@@ -161,7 +161,7 @@ Yes. Add an Event (Wormiss > Add New Event), give it a title and any text you li
 
 = Can Wormiss make pages for all our iMIS events? =
 
-Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page with its iMIS description, image and event type, saved as a draft (or published straight away with "Publish imported pages"). Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again. For historical records, set "Also import past events since" to a date to bring in finished events from then on as well.
+Yes. Under Wormiss > Settings > Import iMIS events, tick "Import iMIS events daily" and press "Import iMIS events now". Each upcoming iMIS event (the same ones the events block lists) gets a linked Event page with its iMIS description, image and event category, saved as a draft (or published straight away with "Publish imported pages"). Titles follow iMIS; dates, place and places left always come from iMIS. Nothing is changed in iMIS, finished events keep their pages, and a page you trash is not made again. For historical records, set "Also import past events since" to a date to bring in finished events from then on as well.
 
 = Can I bring our iMIS news articles into WordPress? =
 
@@ -169,7 +169,7 @@ Yes. In iMIS, save an IQA that lists your news articles, one row per article and
 
 = Can members join a waitlist on the website? =
 
-Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event type, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
+Yes, for free events. Set the event's waitlist to "Anyone can join" (in its iMIS event panel, its event category, or in iMIS) and set up the places count IQA. When the event is full, its page shows "Join the waitlist" to signed-in members. Members already on the waitlist see "You're on the waitlist" and can leave it. iMIS offers freed places to the waitlist as set in iMIS (or by "When a place frees up").
 
 = How do I show CPD hours on event pages? =
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.48.0 =
+* "Event types" are now called "Event categories" everywhere in the admin (menu, screens, bulk actions, the Open events block and messages), as iMIS calls them; levels such as Essential are sub-categories. Their web addresses (/event-type/…) and settings are unchanged.
+* Wormiss menu: a new "Add New Event Category" item under "Add New Event". "Add New Event" (and the Events list's Add New button) first asks "What are you adding?": an event or an event category. People who cannot add categories go straight to a new event.
 
 = 0.47.1 =
 * Open events block: an event linked to iMIS follows the closing date iMIS lists now (an extended or brought-forward closing date counts at once), not the one kept when it was linked; an event made here and sent to iMIS also uses its iMIS closing date. Every event of the type is checked, so an open one is never missed when there are many.

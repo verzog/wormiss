@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Tests for event types and their iMIS templates.
+ * Tests for event categories and their iMIS templates.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -23,7 +23,7 @@
  */
 
 /**
- * Event types: one iMIS template (and optional category) per type.
+ * Event categories: one iMIS template (and optional category) per type.
  *
  * @covers Wormiss_Event_Types
  * @covers Wormiss_Event_Sync
@@ -66,7 +66,7 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * An event type.
+	 * An event category.
 	 *
 	 * @param string $name     Name.
 	 * @param string $template Template event ID ('' for none).
@@ -145,7 +145,7 @@ class Test_Wormiss_Event_Types extends Wormiss_Test_Case {
 		$both = $this->event( [ $workshop, $plain ] );
 		$this->assertNotSame( '', Wormiss_Event_Types::for_event( $both )['problem'] );
 		$this->assertSame( 'error', Wormiss_Event_Sync::sync( $both ) );
-		$this->assertStringContainsString( 'only one event type', get_post_meta( $both, Wormiss_Event_Sync::META_MESSAGE, true ) );
+		$this->assertStringContainsString( 'only one event category', get_post_meta( $both, Wormiss_Event_Sync::META_MESSAGE, true ) );
 		$this->assertSame( [], $this->imis->requests );
 	}
 
