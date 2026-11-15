@@ -205,8 +205,8 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 		wp_set_current_user( $member );
 		$this->assertSame( [], $this->titles( [ 'blog_saved' => '1' ] ), 'Nothing saved yet.' );
 		Wormiss_Blog_Actions::toggle( $pink, $member, 'save' );
-		$this->assertSame( [ 'Going Pink' ], $this->titles( [ 'blog_saved' => '1' ] ) );
 		$this->assertCount( 2, $this->titles( [] ) );
+		$this->assertSame( [ 'Going Pink' ], $this->titles( [ 'blog_saved' => '1' ] ) );
 		$this->assertStringContainsString( 'name="blog_saved" value="1" checked=', Wormiss_Blog_Filters::render() );
 
 		wp_set_current_user( 0 );
