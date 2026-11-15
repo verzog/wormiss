@@ -110,8 +110,11 @@ class Wormiss_Sign_In {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.NonceVerification.Missing -- Only read, and checked as a safe address.
 		$asked = isset( $_REQUEST['redirect_to'] ) ? esc_url_raw( wp_unslash( (string) $_REQUEST['redirect_to'] ) ) : '';
 		$home  = home_url( '/' );
-		$to    = wp_validate_redirect( $asked, $home );
-		$page  = self::page_id();
+		// Nothing asked for: the home page. wp_validate_redirect() gives an empty address back
+		// as it is, and a redirect to nowhere is a blank page.
+		$to   = '' === trim( $asked ) ? $home : wp_validate_redirect( $asked, $home );
+		$to   = '' === $to ? $home : $to;
+		$page = self::page_id();
 		// Never back to the sign-in page itself.
 		return $page && untrailingslashit( strtok( $to, '?' ) ) === untrailingslashit( (string) get_permalink( $page ) ) ? $home : $to;
 	}
