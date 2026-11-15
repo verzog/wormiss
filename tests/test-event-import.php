@@ -502,6 +502,54 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A sub-type of the category's type chosen here stays on later imports; a type renamed
+	 * here is still found by its iMIS category ID (no second type is made).
+	 *
+	 * @return void
+	 */
+	public function test_event_type_keeps_sub_type(): void {
+		$category = [
+			'Category' => [
+				'EventCategoryId' => 'COUR',
+				'Name'            => 'Courses',
+			],
+		];
+		$this->serve( [ self::imis_event( 'C1', $category ) ] );
+		Wormiss_Event_Import::run();
+		$courses = get_term_by( 'name', 'Courses', Wormiss_Event_Types::TAXONOMY );
+		$this->assertInstanceOf( WP_Term::class, $courses );
+		$essential = (int) self::factory()->term->create(
+			[
+				'taxonomy' => Wormiss_Event_Types::TAXONOMY,
+				'name'     => 'Essential',
+				'parent'   => $courses->term_id,
+			]
+		);
+		$page      = self::pages( 'C1' )[0];
+		wp_set_object_terms( $page, [ $essential ], Wormiss_Event_Types::TAXONOMY );
+		wp_update_term( $courses->term_id, Wormiss_Event_Types::TAXONOMY, [ 'name' => 'Our courses' ] );
+		delete_option( Wormiss_Event_Import::LIST_OPTION );
+
+		$this->serve( [ self::imis_event( 'C1', $category ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( [ $essential ], wp_get_object_terms( $page, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ), 'The sub-type stays.' );
+		$this->assertFalse( get_term_by( 'name', 'Courses', Wormiss_Event_Types::TAXONOMY ), 'No second type for the renamed one.' );
+
+		// A type from outside the category is put back to the category's type.
+		$other = (int) self::factory()->term->create(
+			[
+				'taxonomy' => Wormiss_Event_Types::TAXONOMY,
+				'name'     => 'Webinar',
+			]
+		);
+		wp_set_object_terms( $page, [ $other ], Wormiss_Event_Types::TAXONOMY );
+		delete_option( Wormiss_Event_Import::LIST_OPTION );
+		$this->serve( [ self::imis_event( 'C1', $category ) ] );
+		Wormiss_Event_Import::run();
+		$this->assertSame( [ $courses->term_id ], wp_get_object_terms( $page, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
+	}
+
+	/**
 	 * The iMIS event image becomes the featured image, downloaded once.
 	 *
 	 * @return void

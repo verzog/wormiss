@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.45.6)
+## What it does (0.46.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -99,7 +99,7 @@ whose iMIS REST client and audit log it reuses.
 
 * **Uploads** are scaled down to 1600 pixels on their longest side (`wormiss_image_max_size` filter).
 
-* **Event types** (Events > Event types): each type has its own iMIS template
+* **Event types** (Events > Event types), with sub-types (e.g. Courses > Essential, Advanced) and bulk "Set event type" / "Remove event type" in the Events list's Bulk actions: each type has its own iMIS template
   event, and optionally an iMIS event category (its ID in iMIS, up to 5 characters, e.g. COUR) given to its events on every send.
   An event with no type, or a type with no template, uses the default template.
   Types also have their own archive pages (`/event-type/<type>/`), a default

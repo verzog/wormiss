@@ -579,8 +579,44 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Give an imported page its event type (from the iMIS category) and featured image (from
-	 * the iMIS event image).
+	 * The event type for an iMIS category: the one holding its category ID (so a type renamed
+	 * here is still found), else a main type with its name.
+	 *
+	 * @param string $category_id iMIS category ID ('' if none).
+	 * @param string $name        Category name.
+	 * @return WP_Term|null
+	 */
+	private static function type_for_category( string $category_id, string $name ): ?WP_Term {
+		if ( '' !== $category_id ) {
+			$found = get_terms(
+				[
+					'taxonomy'   => Wormiss_Event_Types::TAXONOMY,
+					'hide_empty' => false,
+					'number'     => 1,
+					'orderby'    => 'term_id',
+					'meta_key'   => Wormiss_Event_Types::META_CATEGORY, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- One small lookup per imported category.
+					'meta_value' => $category_id, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- As above.
+				]
+			);
+			if ( is_array( $found ) && $found && $found[0] instanceof WP_Term ) {
+				return $found[0];
+			}
+		}
+		$found = get_terms(
+			[
+				'taxonomy'   => Wormiss_Event_Types::TAXONOMY,
+				'hide_empty' => false,
+				'name'       => $name,
+				'parent'     => 0,
+				'number'     => 1,
+			]
+		);
+		return is_array( $found ) && $found && $found[0] instanceof WP_Term ? $found[0] : null;
+	}
+
+	/**
+	 * Give an imported page its event type (from the iMIS category: kept when it is a sub-type of
+	 * the category's type) and featured image (from the iMIS event image).
 	 *
 	 * @param int   $post_id Post ID.
 	 * @param array $event   Event from Wormiss_Events::normalise().
@@ -591,7 +627,7 @@ class Wormiss_Event_Import {
 	private static function apply_extras( int $post_id, array $event, array $extra, array &$report ): bool {
 		$changed = false;
 		if ( '' !== $extra['category'] ) {
-			$term = get_term_by( 'name', $extra['category'], Wormiss_Event_Types::TAXONOMY );
+			$term = self::type_for_category( $extra['category_id'], $extra['category'] );
 			if ( ! $term instanceof WP_Term ) {
 				$made = wp_insert_term( $extra['category'], Wormiss_Event_Types::TAXONOMY );
 				$term = is_wp_error( $made ) ? null : get_term( (int) $made['term_id'], Wormiss_Event_Types::TAXONOMY );
@@ -601,7 +637,11 @@ class Wormiss_Event_Import {
 			}
 			if ( $term instanceof WP_Term ) {
 				$now = wp_get_object_terms( $post_id, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] );
-				if ( ! is_array( $now ) || array_map( 'intval', $now ) !== [ $term->term_id ] ) {
+				$now = is_array( $now ) ? array_map( 'intval', $now ) : [];
+				// A sub-type of the category's type (e.g. Essential under Courses), chosen here, stays.
+				$kept = 1 === count( $now ) && ( $now[0] === (int) $term->term_id
+					|| term_is_ancestor_of( $term, $now[0], Wormiss_Event_Types::TAXONOMY ) );
+				if ( ! $kept ) {
 					wp_set_object_terms( $post_id, [ $term->term_id ], Wormiss_Event_Types::TAXONOMY );
 					$changed = true;
 				}
