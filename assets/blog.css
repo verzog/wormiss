@@ -208,7 +208,8 @@
  */
 @media (min-width: 768px) {
 	.wormiss-blog-post .row:has(> .col-md + .col-md) > .col-md > .figure .img-fluid,
-	.wormiss-blog-post .wormiss-blog-grid:not(.wormiss-blog-grid--cols-1) .figure .img-fluid {
+	.wormiss-blog-post .wormiss-blog-grid:not(.wormiss-blog-grid--cols-1) .figure .img-fluid,
+	.wormiss-blog-post .wormiss-blog-gallery img {
 		width: 100%;
 		aspect-ratio: 3 / 2;
 		object-fit: cover;
@@ -372,4 +373,69 @@
 
 .wormiss-blog-locked__actions .wormiss-blog-locked__join {
 	background: var(--wp--preset--color--orange, #f47b20);
+}
+
+/* Pictures grouped from one after another: no gap below each, as in the iMIS rows. */
+.wormiss-blog-post .wormiss-blog-gallery img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
+
+/* A picture opens large on a click or tap. */
+.wormiss-blog-post img.wormiss-blog-zoomable {
+	cursor: zoom-in;
+}
+
+.wormiss-blog-post img.wormiss-blog-zoomable:focus-visible {
+	outline: 3px solid currentColor;
+	outline-offset: 2px;
+}
+
+.wormiss-blog-lightbox {
+	width: 100vw;
+	max-width: 100vw;
+	height: 100vh;
+	max-height: 100vh;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.wormiss-blog-lightbox::backdrop {
+	background: rgba(0, 0, 0, 0.85);
+}
+
+.wormiss-blog-lightbox__inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	padding: 3rem 1rem 1rem;
+	box-sizing: border-box;
+	cursor: zoom-out;
+}
+
+.wormiss-blog-lightbox__image {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	border-radius: 4px;
+}
+
+.wormiss-blog-lightbox__close {
+	position: absolute;
+	top: 0.75rem;
+	right: 0.75rem;
+	padding: 0.4rem 0.9rem;
+	border: 1px solid rgba(255, 255, 255, 0.6);
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.4);
+	color: #fff;
+	font: inherit;
+	font-size: 0.875rem;
+	cursor: pointer;
 }
