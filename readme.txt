@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.41.0
+Stable tag: 0.42.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.42.0 =
+* Email testing, like Moodle's "divert all emails": in Wormiss > Settings > Email testing, "Divert all emails to" sends every email the site sends (with its copies) to one address instead, its subject starting "[Diverted from ...]"; "Do not divert emails to" lists addresses and whole domains that still get theirs (an email goes out as normal only when all its recipients are on that list; otherwise it comes to you alone, so no hidden copy is shown to anyone). WORMISS_DIVERT_EMAILS_TO and WORMISS_DIVERT_EMAILS_EXCEPT in wp-config.php do the same and win, for a test copy of the site. A warning shows across the admin screens while it is on.
 
 = 0.41.0 =
 * Sign-in page: a "Sign in" block and page (Wormiss > Settings > Sign-in page > Create the sign-in page). Members sign in with their iMIS ID or email and iMIS password, checked with iMIS, into the website account the member sync made for them; staff and other website accounts use their website password. "Forgot your password?" goes to the iMIS page you set, and a "Not a member yet?" panel has a Become a member button (to the iMIS join page you set) and, when "Free website accounts" is ticked, a small form for a free website account (not a membership). With "Confirm free accounts' email" ticked, a free account works only once its owner opens a link emailed to them (48 hours). Both are off by default. Free accounts are never linked to a member by the member sync. With the page chosen, every Sign in link and redirect, including the members' blog's, goes there instead of the server's own login (such as YunoHost's). Repeated wrong passwords pause sign-ins for 15 minutes; lapsed members stay out.

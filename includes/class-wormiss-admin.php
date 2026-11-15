@@ -337,6 +337,11 @@ class Wormiss_Admin {
 		self::field( 'signin_free_accounts', __( 'Free website accounts', 'wormiss' ), 'wormiss_sign_in' );
 		self::field( 'signin_confirm_email', __( 'Confirm free accounts\' email', 'wormiss' ), 'wormiss_sign_in' );
 
+		$title = __( 'Email testing', 'wormiss' );
+		add_settings_section( 'wormiss_mail_divert', $title, [ __CLASS__, 'mail_divert_intro' ], self::PAGE );
+		self::field( 'mail_divert_to', __( 'Divert all emails to', 'wormiss' ), 'wormiss_mail_divert' );
+		self::field( 'mail_divert_except', __( 'Do not divert emails to', 'wormiss' ), 'wormiss_mail_divert' );
+
 		$title = __( 'Sync members into WordPress', 'wormiss' );
 		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
 		self::field( 'user_sync_enabled', __( 'Sync members daily', 'wormiss' ), 'wormiss_user_sync' );
@@ -526,6 +531,19 @@ class Wormiss_Admin {
 			. ' ' . esc_html__( 'and administrators) can always read. The import copies every published iMIS (Smart Blogs) post', 'wormiss' )
 			. ' ' . esc_html__( 'with its comments and pictures, in small batches; no CPD is recorded for imported activity and', 'wormiss' )
 			. ' ' . esc_html__( 'nothing is changed in iMIS.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the email testing section.
+	 *
+	 * @return void
+	 */
+	public static function mail_divert_intro(): void {
+		echo '<p>'
+			. esc_html__( 'Like Moodle\'s "divert all emails": while testing, send every email to yourself instead of the people it is for.', 'wormiss' )
+			. ' ' . esc_html__( 'A warning shows across the admin screens while it is on. On a test copy of the site, set it in wp-config.php', 'wormiss' )
+			. ' ' . esc_html__( 'instead (WORMISS_DIVERT_EMAILS_TO and WORMISS_DIVERT_EMAILS_EXCEPT), so it cannot be turned off by accident.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -733,6 +751,34 @@ class Wormiss_Admin {
 					$url = wp_nonce_url( admin_url( 'admin-post.php?action=wormiss_create_sign_in_page' ), 'wormiss_create_sign_in_page' );
 					echo '<p><a class="button" href="' . esc_url( $url ) . '">' . esc_html__( 'Create the sign-in page', 'wormiss' ) . '</a></p>';
 				}
+				return;
+			case 'mail_divert_to':
+				$locked = defined( Wormiss_Mail_Divert::CONSTANT_TO );
+				printf(
+					'<input type="email" class="regular-text" id="%1$s" name="%2$s" value="%3$s" placeholder="you@example.com" %4$s />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( $locked ? Wormiss_Mail_Divert::to() : (string) $value ),
+					disabled( $locked, true, false )
+				);
+				echo '<p class="description">' . ( $locked
+					? esc_html__( 'Set in wp-config.php (WORMISS_DIVERT_EMAILS_TO).', 'wormiss' )
+					: esc_html__( 'Every email this site sends goes here instead, its subject naming who it was for. Blank: emails go out as normal.', 'wormiss' ) )
+					. '</p>';
+				return;
+			case 'mail_divert_except':
+				$locked = defined( Wormiss_Mail_Divert::CONSTANT_EXCEPT );
+				printf(
+					'<textarea class="large-text code" rows="3" id="%1$s" name="%2$s" placeholder="@example.org, tester@example.com" %4$s>%3$s</textarea>',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_textarea( $locked ? implode( ', ', Wormiss_Mail_Divert::exceptions() ) : (string) $value ),
+					disabled( $locked, true, false )
+				);
+				echo '<p class="description">' . ( $locked
+					? esc_html__( 'Set in wp-config.php (WORMISS_DIVERT_EMAILS_EXCEPT).', 'wormiss' )
+					: esc_html__( 'Addresses (tester@example.com) or whole domains (@example.org) that still get their emails, separated by commas or new lines. An email sent to anyone else as well comes to you alone.', 'wormiss' ) )
+					. '</p>';
 				return;
 			case 'signin_free_accounts':
 			case 'signin_confirm_email':

@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.41.0)
+## What it does (0.42.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -78,6 +78,9 @@ whose iMIS REST client and audit log it reuses.
   update the post unless "Stop updating from iMIS" is ticked on it. Batches of 5 posts,
   a dry run, and nothing is ever changed in iMIS.
 
+* **Email testing**: like Moodle's "divert all emails", every email can go to one address
+  (subject "[Diverted from ...]"), except to listed addresses and domains; also settable in
+  `wp-config.php` (`WORMISS_DIVERT_EMAILS_TO`, `WORMISS_DIVERT_EMAILS_EXCEPT`).
 * **Sign-in page**: members sign in with their iMIS ID or email and iMIS password (checked with
   iMIS); staff and other website accounts with their website password. Beside it, Become a member
   (the iMIS join page) and, when turned on, a free website account (optionally confirmed by email). Every Sign in link goes

@@ -142,6 +142,9 @@ class Wormiss_Settings {
 			// Free website accounts on the sign-in page, and email confirmation for them: off until turned on.
 			'signin_free_accounts'       => false,
 			'signin_confirm_email'       => false,
+			// Email testing: divert every email to one address, except to these addresses and domains.
+			'mail_divert_to'             => '',
+			'mail_divert_except'         => '',
 		];
 	}
 
@@ -550,6 +553,25 @@ class Wormiss_Settings {
 		if ( isset( $input['signin_page'] ) ) {
 			$page                 = absint( $input['signin_page'] );
 			$clean['signin_page'] = $page && 'page' === get_post_type( $page ) ? $page : 0;
+		}
+		if ( isset( $input['mail_divert_to'] ) ) {
+			$divert                  = sanitize_email( trim( (string) $input['mail_divert_to'] ) );
+			$clean['mail_divert_to'] = is_email( $divert ) ? $divert : '';
+			if ( '' === $clean['mail_divert_to'] && '' !== trim( (string) $input['mail_divert_to'] ) ) {
+				add_settings_error( self::OPTION, 'mail_divert_to', __( 'The divert address must be an email address.', 'wormiss' ) );
+			}
+		}
+		if ( isset( $input['mail_divert_except'] ) ) {
+			$rules = preg_split( '/[\s,;]+/', strtolower( (string) $input['mail_divert_except'] ) );
+			$keep  = [];
+			foreach ( (array) $rules as $rule ) {
+				$rule = trim( $rule );
+				// An address, or a domain with or without its @.
+				if ( is_email( $rule ) || preg_match( '/^@?[a-z0-9-]+(\.[a-z0-9-]+)+$/', $rule ) ) {
+					$keep[] = $rule;
+				}
+			}
+			$clean['mail_divert_except'] = implode( ', ', array_unique( $keep ) );
 		}
 		foreach ( [ 'signin_free_accounts', 'signin_confirm_email' ] as $box ) {
 			if ( isset( $input['signin_section'] ) ) {
