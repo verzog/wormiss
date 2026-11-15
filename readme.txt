@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.6
+Stable tag: 0.46.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.46.0 =
+* Events list: Bulk actions has "Add to event type" and "Remove from event type", with an entry for each type (sub-types under their main type). Tick events, choose a type and Apply; a message says how many were changed. Only people who may assign event types see them.
 
 = 0.45.6 =
 * Sign-in page: signing in from the sign-in page itself (not from a "Sign in" link that says where to go back to) showed a blank white page, though it had signed you in. It now goes to the home page, as intended.

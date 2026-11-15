@@ -100,7 +100,7 @@ class Wormiss_Event_Types {
 					'all_items'     => __( 'All Event Types', 'wormiss' ),
 					'menu_name'     => __( 'Event types', 'wormiss' ),
 				],
-				// Hierarchical for the checkbox list in the editor (types are not meant to nest).
+				// Hierarchical: a checkbox list in the editor, and sub-types (e.g. Courses > Essential).
 				'hierarchical'      => true,
 				'public'            => true,
 				'show_in_rest'      => true,
