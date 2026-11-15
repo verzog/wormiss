@@ -220,10 +220,17 @@ class Wormiss_Sign_In {
 			if ( ! $user ) {
 				return new WP_Error( 'wormiss_sign_in', __( 'Your iMIS sign-in worked, but your website account is not ready yet. It is made from iMIS each night; please try again tomorrow.', 'wormiss' ) );
 			}
-		} elseif ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) )
-			|| ! wp_check_password( $password, $user->user_pass, $user->ID ) ) {
+		} else {
 			// Members always use their iMIS password; staff and other accounts their website one.
-			return $wrong;
+			if ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) ) ) {
+				return $wrong;
+			}
+			// Through WordPress's own sign-in checks, as wp-login.php does, so a password kept
+			// elsewhere (such as YunoHost's directory, through its LDAP plugin) works too.
+			$checked = wp_authenticate( $user->user_login, $password );
+			if ( ! $checked instanceof WP_User || (int) $checked->ID !== (int) $user->ID ) {
+				return $wrong;
+			}
 		}
 		if ( get_user_meta( $user->ID, self::META_CONFIRM, true ) ) {
 			return new WP_Error( 'wormiss_sign_in', __( 'Please confirm your email first: open the link we emailed you.', 'wormiss' ) );
