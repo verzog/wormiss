@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.46.1
+Stable tag: 0.47.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -206,7 +206,8 @@ the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
 
-= 0.46.1 =
+= 0.47.0 =
+* New "Open events" block: the events of one event type (and its sub-types) still open for enrolment, soonest first, as cards with the place, dates, "Enrolments close" date, summary and a Learn more button to the event page. An event drops off once its iMIS registration closes, else when it starts. Choose the type in the block's settings; a message shows when none are open. For pages such as a Course Education Pathway with a section per level.
 * Import iMIS events: an event's iMIS category becomes its event type even when iMIS sends the category without a Name (its Description, else its ID, is used). The import report now says how many events had an iMIS category, and which, or that iMIS sent none.
 
 = 0.46.0 =

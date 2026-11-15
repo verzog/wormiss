@@ -100,6 +100,8 @@ class Wormiss_Plugin {
 			]
 		);
 		register_block_type( WORMISS_DIR . '/blocks/events' );
+		wp_register_style( 'wormiss-open-events', plugins_url( 'assets/open-events.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		register_block_type( WORMISS_DIR . '/blocks/open-events' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-filters' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-meta' );
 		wp_register_style( 'wormiss-blog-actions', plugins_url( 'assets/blog-actions.css', WORMISS_FILE ), [], WORMISS_VERSION );
