@@ -154,7 +154,7 @@ class Wormiss_User_Sync {
 		}
 		check_admin_referer( 'wormiss_user_sync_now' );
 		self::run();
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-user-sync' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'members' ) . '#wormiss-user-sync' );
 		exit;
 	}
 

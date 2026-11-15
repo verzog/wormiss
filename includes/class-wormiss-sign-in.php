@@ -557,7 +557,7 @@ class Wormiss_Sign_In {
 				update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'signin_page' => $page ] ) );
 			}
 		}
-		wp_safe_redirect( admin_url( 'admin.php?page=' . Wormiss_Admin::SETTINGS_PAGE . '#wormiss-sign-in' ) );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'sign-in' ) . '#wormiss-sign-in' );
 		exit;
 	}
 

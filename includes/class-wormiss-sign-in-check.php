@@ -214,7 +214,7 @@ class Wormiss_Sign_In_Check {
 			: self::run( $login, $password );
 		unset( $password );
 		set_transient( self::transient(), $steps, 10 * MINUTE_IN_SECONDS );
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-sign-in-check' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'sign-in' ) . '#wormiss-sign-in-check' );
 		exit;
 	}
 

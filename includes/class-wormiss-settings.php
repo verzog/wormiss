@@ -665,8 +665,13 @@ class Wormiss_Settings {
 				$clean[ $box ] = (bool) $input[ $box ];
 			}
 		}
-		$clean['log_enabled'] = ! empty( $input['log_enabled'] );
-		$clean['log_capture'] = ! empty( $input['log_capture'] );
+		foreach ( [ 'log_enabled', 'log_capture' ] as $box ) {
+			if ( isset( $input['log_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
+		}
 
 		// The password lives in its own option; a blank field keeps the current one.
 		if ( isset( $input['password'] ) && '' !== (string) $input['password'] && ! self::is_constant( 'password' ) ) {

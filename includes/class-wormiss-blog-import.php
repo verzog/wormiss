@@ -256,7 +256,7 @@ class Wormiss_Blog_Import {
 		}
 		check_admin_referer( 'wormiss_blog_import_now' );
 		self::run();
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-blog-import' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'blog' ) . '#wormiss-blog-import' );
 		exit;
 	}
 
