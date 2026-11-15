@@ -94,33 +94,11 @@ class Wormiss_Sign_In {
 	 */
 	public static function login_url( $url, $redirect = '' ) {
 		$page = self::page_id();
-		if ( ! $page || self::for_admin( (string) $redirect ) ) {
+		if ( ! $page ) {
 			return $url;
 		}
 		$link = (string) get_permalink( $page );
 		return '' !== (string) $redirect ? add_query_arg( 'redirect_to', rawurlencode( (string) $redirect ), $link ) : $link;
-	}
-
-	/**
-	 * Whether a sign-in is on the way to the admin area (wp-admin). Those keep WordPress's own
-	 * sign-in (wp-login.php), so a host that signs staff in there, such as YunoHost's single
-	 * sign-on, still does: staff accounts there may have no website password anyone knows.
-	 *
-	 * @param string $redirect Where to go after signing in.
-	 * @return bool
-	 */
-	private static function for_admin( string $redirect ): bool {
-		if ( '' === $redirect ) {
-			return false;
-		}
-		$admin = wp_parse_url( admin_url() );
-		$to    = wp_parse_url( $redirect );
-		if ( ! is_array( $admin ) || ! is_array( $to ) ) {
-			return false;
-		}
-		// Same host (or a relative address), and a path inside wp-admin.
-		$same = empty( $to['host'] ) || strtolower( (string) $to['host'] ) === strtolower( (string) ( $admin['host'] ?? '' ) );
-		return $same && 0 === strpos( (string) ( $to['path'] ?? '' ), (string) ( $admin['path'] ?? '/wp-admin/' ) );
 	}
 
 	/**
@@ -242,17 +220,10 @@ class Wormiss_Sign_In {
 			if ( ! $user ) {
 				return new WP_Error( 'wormiss_sign_in', __( 'Your iMIS sign-in worked, but your website account is not ready yet. It is made from iMIS each night; please try again tomorrow.', 'wormiss' ) );
 			}
-		} else {
+		} elseif ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) )
+			|| ! wp_check_password( $password, $user->user_pass, $user->ID ) ) {
 			// Members always use their iMIS password; staff and other accounts their website one.
-			if ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) ) ) {
-				return $wrong;
-			}
-			// Through WordPress's own sign-in checks, as wp-login.php does, so a password kept
-			// elsewhere (such as YunoHost's directory, through its LDAP plugin) works too.
-			$checked = wp_authenticate( $user->user_login, $password );
-			if ( ! $checked instanceof WP_User || (int) $checked->ID !== (int) $user->ID ) {
-				return $wrong;
-			}
+			return $wrong;
 		}
 		if ( get_user_meta( $user->ID, self::META_CONFIRM, true ) ) {
 			return new WP_Error( 'wormiss_sign_in', __( 'Please confirm your email first: open the link we emailed you.', 'wormiss' ) );
@@ -493,7 +464,7 @@ class Wormiss_Sign_In {
 	 * @param string $login What was typed.
 	 * @return bool
 	 */
-	private static function locked( string $login ): bool {
+	public static function locked( string $login ): bool {
 		foreach ( self::fail_keys( $login ) as $key ) {
 			if ( (int) get_transient( $key ) >= self::MAX_FAILS ) {
 				return true;

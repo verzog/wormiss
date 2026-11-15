@@ -57,6 +57,7 @@ class Wormiss_Admin {
 		add_action( 'admin_post_wormiss_log_export', [ __CLASS__, 'export_log' ] );
 		Wormiss_Content_Check::init();
 		Wormiss_Blog_Check::init();
+		Wormiss_Sign_In_Check::init();
 		add_filter( 'plugin_action_links_' . plugin_basename( WORMISS_FILE ), [ __CLASS__, 'action_links' ] );
 	}
 
@@ -1176,6 +1177,7 @@ class Wormiss_Admin {
 
 		Wormiss_Content_Check::render();
 		Wormiss_Blog_Check::render();
+		Wormiss_Sign_In_Check::render();
 
 		$log = self::log_url();
 		echo '<p><a href="' . esc_url( $log ) . '">' . esc_html__( 'Open the audit log', 'wormiss' ) . '</a></p></div>';

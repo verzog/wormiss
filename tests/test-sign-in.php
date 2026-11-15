@@ -73,10 +73,6 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'signin_page' => $page ] ) );
 		$this->assertSame( get_permalink( $page ), wp_login_url() );
 		$this->assertStringContainsString( 'redirect_to=' . rawurlencode( home_url( '/blogs/' ) ), wp_login_url( home_url( '/blogs/' ) ) );
-		// The admin area keeps WordPress's own sign-in (where YunoHost signs staff in).
-		$this->assertStringContainsString( 'wp-login.php', wp_login_url( admin_url( 'edit.php' ) ) );
-		$this->assertStringContainsString( 'wp-login.php', wp_login_url( admin_url() ) );
-		$this->assertStringNotContainsString( 'wp-login.php', wp_login_url( 'https://elsewhere.example/wp-admin/' ), 'Another site\'s admin is not ours.' );
 	}
 
 	/**
@@ -131,15 +127,6 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 		$this->imis->token();
 		$this->assertWPError( Wormiss_Sign_In::authenticate( 'boss', 'imis-pass' ), 'iMIS cannot open an unlinked account.' );
 		$this->assertWPError( Wormiss_Sign_In::authenticate( '', '' ) );
-
-		// A password another sign-in plugin accepts (as YunoHost's LDAP plugin does) works too.
-		$directory = static function ( $user, $login, $password ) use ( $admin ) {
-			return 'boss' === $login && 'directory-pass' === $password ? get_userdata( $admin ) : $user;
-		};
-		add_filter( 'authenticate', $directory, 10, 3 );
-		$this->refuse();
-		$this->assertSame( $admin, Wormiss_Sign_In::authenticate( 'boss', 'directory-pass' )->ID );
-		remove_filter( 'authenticate', $directory, 10 );
 	}
 
 	/**

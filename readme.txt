@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.3
+Stable tag: 0.45.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.45.4 =
+* The sign-in changes in 0.45.2 and 0.45.3 are undone: signing in works exactly as in 0.45.1 again (wp-admin sign-ins go to the sign-in page, and website passwords are checked as before).
+* New "Check a sign-in" on Wormiss > Settings, for administrators: type a username, email or iMIS ID and a password to see each step the sign-in page takes (iMIS, the account found, whether it is linked to iMIS or is staff, whether the website password matches, confirmation, blocks and pauses) and its answer, to see why a sign-in is refused. Nobody is signed in, no failed try is counted, and the password is never kept or shown.
 
 = 0.45.3 =
 * Signing in to the admin area (wp-admin) uses WordPress's own sign-in page (wp-login.php) again, not the members' sign-in page, so a host that signs staff in there, such as YunoHost's single sign-on, works as before. Every other Sign in link and redirect, including the members' blog's, still goes to the sign-in page.
