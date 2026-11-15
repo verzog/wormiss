@@ -94,9 +94,18 @@ class Wormiss_Sign_In_Check {
 			$hash    = (string) $user->user_pass;
 			$steps[] = self::step(
 				__( 'The website password matches', 'wormiss' ),
-				wp_check_password( $password, $hash, $user->ID ),
+				Wormiss_Sign_In::password_matches( $user, $password ),
 				/* translators: %s: how the password is stored, e.g. bcrypt. */
 				sprintf( __( 'Stored as: %s.', 'wormiss' ), self::hash_kind( $hash ) )
+			);
+			// WordPress's own password functions can be replaced by a plugin: say where they come from,
+			// and whether they agree with themselves on a made-up password.
+			$probe   = wp_generate_password( 20, false );
+			$steps[] = self::step(
+				__( 'WordPress password checking works', 'wormiss' ),
+				wp_check_password( $probe, wp_hash_password( $probe ) ),
+				/* translators: %s: where wp_check_password() is defined. */
+				sprintf( __( 'Password functions from: %s.', 'wormiss' ), self::defined_in( 'wp_check_password' ) )
 			);
 			$steps[] = self::step(
 				__( 'Waiting for an email confirmation', 'wormiss' ),
@@ -144,6 +153,23 @@ class Wormiss_Sign_In_Check {
 			'ok'     => $ok,
 			'detail' => $detail,
 		];
+	}
+
+	/**
+	 * Where a function is defined, relative to the WordPress folder (wp-includes/pluggable.php
+	 * for WordPress's own).
+	 *
+	 * @param string $name Function name.
+	 * @return string
+	 */
+	public static function defined_in( string $name ): string {
+		if ( ! function_exists( $name ) ) {
+			return __( 'not defined', 'wormiss' );
+		}
+		$file = (string) ( new ReflectionFunction( $name ) )->getFileName();
+		$root = wp_normalize_path( untrailingslashit( ABSPATH ) );
+		$file = wp_normalize_path( $file );
+		return str_starts_with( $file, $root . '/' ) ? substr( $file, strlen( $root ) + 1 ) : $file;
 	}
 
 	/**

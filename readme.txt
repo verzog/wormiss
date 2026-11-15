@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.4
+Stable tag: 0.45.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.45.5 =
+* Sign-in page: a website password containing ', " or \ now works. WordPress keeps a password set on the Profile screen with a backslash before those characters (as it checks them on wp-login.php); the sign-in page now accepts it either way.
+* Check a sign-in also says whether WordPress's own password checking works on this site, and where its password functions come from (a plugin can replace them).
 
 = 0.45.4 =
 * The sign-in changes in 0.45.2 and 0.45.3 are undone: signing in works exactly as in 0.45.1 again (wp-admin sign-ins go to the sign-in page, and website passwords are checked as before).

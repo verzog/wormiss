@@ -127,6 +127,19 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 		$this->imis->token();
 		$this->assertWPError( Wormiss_Sign_In::authenticate( 'boss', 'imis-pass' ), 'iMIS cannot open an unlinked account.' );
 		$this->assertWPError( Wormiss_Sign_In::authenticate( '', '' ) );
+
+		// A password with a quote set on the Profile screen is kept with a backslash before it.
+		$quoted = self::factory()->user->create(
+			[
+				'user_login' => 'quoted',
+				'user_pass'  => wp_slash( 'it\'s "mine" \\ ok' ),
+				'role'       => 'administrator',
+			]
+		);
+		$this->refuse();
+		$this->assertSame( $quoted, Wormiss_Sign_In::authenticate( 'quoted', 'it\'s "mine" \\ ok' )->ID );
+		$this->refuse();
+		$this->assertWPError( Wormiss_Sign_In::authenticate( 'quoted', 'its mine ok' ) );
 	}
 
 	/**

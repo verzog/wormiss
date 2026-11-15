@@ -221,7 +221,7 @@ class Wormiss_Sign_In {
 				return new WP_Error( 'wormiss_sign_in', __( 'Your iMIS sign-in worked, but your website account is not ready yet. It is made from iMIS each night; please try again tomorrow.', 'wormiss' ) );
 			}
 		} elseif ( ! $user || ( self::is_member_account( $user ) && ! user_can( $user, 'edit_posts' ) )
-			|| ! wp_check_password( $password, $user->user_pass, $user->ID ) ) {
+			|| ! self::password_matches( $user, $password ) ) {
 			// Members always use their iMIS password; staff and other accounts their website one.
 			return $wrong;
 		}
@@ -232,6 +232,27 @@ class Wormiss_Sign_In {
 			return new WP_Error( 'wormiss_sign_in', __( 'Your membership is not current, so you cannot sign in. Please contact the College.', 'wormiss' ) );
 		}
 		return $user;
+	}
+
+	/**
+	 * Whether a password is a website account's. WordPress keeps a password set on the Profile
+	 * screen (and checks one typed on wp-login.php) with a backslash added before each ', " and
+	 * \, as PHP form data arrives; one set here is kept as typed. Both are accepted.
+	 *
+	 * @param WP_User $user     Account.
+	 * @param string  $password Password, as typed.
+	 * @return bool
+	 */
+	public static function password_matches( WP_User $user, string $password ): bool {
+		if ( '' === $password ) {
+			return false;
+		}
+		foreach ( array_unique( [ $password, wp_slash( $password ) ] ) as $candidate ) {
+			if ( wp_check_password( $candidate, $user->user_pass, $user->ID ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
