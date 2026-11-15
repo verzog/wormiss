@@ -92,7 +92,8 @@ class Wormiss_Mail_Divert {
 	}
 
 	/**
-	 * The email addresses in a To, Cc or Bcc value ("Name <a@b.c>, d@e.f" or a list).
+	 * The recipients in a To, Cc or Bcc value ("Name <a@b.c>, d@e.f" or a list), as written
+	 * (trimmed); one that is not a valid address is kept too, so it is diverted, never let through.
 	 *
 	 * @param string|array $value Value.
 	 * @return string[]
@@ -101,10 +102,10 @@ class Wormiss_Mail_Divert {
 		$found = [];
 		foreach ( is_array( $value ) ? $value : explode( ',', (string) $value ) as $part ) {
 			$part = trim( (string) $part );
-			if ( preg_match( '/<([^>]+)>/', $part, $match ) ) {
-				$part = $match[1];
+			if ( preg_match( '/<([^>]*)>/', $part, $match ) ) {
+				$part = trim( $match[1] );
 			}
-			if ( is_email( $part ) ) {
+			if ( '' !== $part ) {
 				$found[] = $part;
 			}
 		}
@@ -112,8 +113,9 @@ class Wormiss_Mail_Divert {
 	}
 
 	/**
-	 * Divert an email: recipients not excepted (including Cc and Bcc) are replaced by the divert
-	 * address, and the subject names them.
+	 * Divert an email. Only an email whose every recipient (To, Cc and Bcc) is excepted goes out
+	 * as it is; any other goes to the divert address alone, its subject naming all its recipients
+	 * (seen only by the tester, so no hidden copy is shown to anyone else).
 	 *
 	 * @param array $args wp_mail() arguments (to, subject, message, headers, attachments).
 	 * @return array
@@ -138,17 +140,21 @@ class Wormiss_Mail_Divert {
 				$kept[] = $line;
 			}
 		}
-		$keep     = array_values( array_filter( $recipients, [ __CLASS__, 'excepted' ] ) );
-		$diverted = array_values( array_diff( $recipients, $keep ) );
-		if ( ! $diverted ) {
+		$all_excepted = (bool) $recipients;
+		foreach ( $recipients as $recipient ) {
+			if ( ! is_email( $recipient ) || ! self::excepted( $recipient ) ) {
+				$all_excepted = false;
+			}
+		}
+		if ( $all_excepted ) {
 			return $args;
 		}
-		$args['to']      = array_values( array_unique( array_merge( $keep, [ $to ] ) ) );
+		$args['to']      = [ $to ];
 		$args['headers'] = $kept;
 		$args['subject'] = '[' . sprintf(
 			/* translators: %s: the addresses the email was for. */
 			__( 'Diverted from %s', 'wormiss' ),
-			implode( ', ', array_unique( $diverted ) )
+			$recipients ? implode( ', ', array_unique( $recipients ) ) : __( 'no one', 'wormiss' )
 		) . '] ' . (string) ( $args['subject'] ?? '' );
 		return $args;
 	}

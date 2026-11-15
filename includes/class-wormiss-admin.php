@@ -777,7 +777,7 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">' . ( $locked
 					? esc_html__( 'Set in wp-config.php (WORMISS_DIVERT_EMAILS_EXCEPT).', 'wormiss' )
-					: esc_html__( 'Addresses (tester@example.com) or whole domains (@example.org) that still get their emails, separated by commas or new lines.', 'wormiss' ) )
+					: esc_html__( 'Addresses (tester@example.com) or whole domains (@example.org) that still get their emails, separated by commas or new lines. An email sent to anyone else as well comes to you alone.', 'wormiss' ) )
 					. '</p>';
 				return;
 			case 'signin_free_accounts':

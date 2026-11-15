@@ -73,7 +73,7 @@ class Test_Wormiss_Mail_Divert extends Wormiss_Test_Case {
 
 	/**
 	 * On: emails (copies too) go to the divert address, the subject naming who they were for;
-	 * excepted addresses and domains still get theirs.
+	 * an email only to excepted addresses and domains still goes to them.
 	 *
 	 * @return void
 	 */
@@ -90,10 +90,16 @@ class Test_Wormiss_Mail_Divert extends Wormiss_Test_Case {
 		$this->assertSame( [ 'staff@college.example', 'keep@example.net' ], $this->sent_to() );
 		$this->assertSame( 'Kept', tests_retrieve_phpmailer_instance()->get_sent()->subject );
 
+		// Mixed: only the tester gets it, so a hidden copy is never shown to the others.
 		$this->divert( 'college.example' );
-		wp_mail( 'staff@college.example, ann@example.org', 'Mixed', 'Text' );
-		$this->assertSame( [ 'staff@college.example', 'tester@example.com' ], $this->sent_to() );
-		$this->assertSame( '[Diverted from ann@example.org] Mixed', tests_retrieve_phpmailer_instance()->get_sent()->subject );
+		wp_mail( 'staff@college.example', 'Mixed', 'Text', [ 'Bcc: auditor@example.org' ] );
+		$this->assertSame( [ 'tester@example.com' ], $this->sent_to() );
+		$this->assertSame( '[Diverted from staff@college.example, auditor@example.org] Mixed', tests_retrieve_phpmailer_instance()->get_sent()->subject );
+
+		// Spaces inside the brackets do not slip past.
+		$this->divert();
+		wp_mail( 'Ann < ann@example.org >', 'Spaced', 'Text' );
+		$this->assertSame( [ 'tester@example.com' ], $this->sent_to() );
 	}
 
 	/**
