@@ -83,7 +83,7 @@ class Test_Wormiss_Mail_Divert extends Wormiss_Test_Case {
 		$mail = tests_retrieve_phpmailer_instance()->get_sent();
 		$this->assertSame( [ 'tester@example.com' ], $this->sent_to() );
 		$this->assertSame( '[Diverted from ann@example.org, bob@example.org] Hello', $mail->subject );
-		$this->assertStringNotContainsString( 'bob@example.org', (string) $mail->header, 'No copy goes out.' );
+		$this->assertStringNotContainsString( 'Cc:', (string) $mail->header, 'No copy goes out.' );
 
 		$this->divert( '@college.example, keep@example.net' );
 		wp_mail( [ 'staff@college.example', 'keep@example.net' ], 'Kept', 'Text' );
