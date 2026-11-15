@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.46.0
+Stable tag: 0.46.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.46.1 =
+* Import iMIS events: an event's iMIS category becomes its event type even when iMIS sends the category without a Name (its Description, else its ID, is used). The import report now says how many events had an iMIS category, and which, or that iMIS sent none.
 
 = 0.46.0 =
 * Events list: Bulk actions has "Set event type" and "Remove event type", with an entry for each type (sub-types under their main type). Tick events, choose a type and Apply; a message says how many were changed. An event has one type (each type has its own iMIS template), so setting a type replaces the old one. Changed events are queued for iMIS as a save would queue them. Only people who may assign event types see them.

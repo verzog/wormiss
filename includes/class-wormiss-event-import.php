@@ -299,6 +299,7 @@ class Wormiss_Event_Import {
 		// The events the events block shows (real, public, listed statuses, not finished), plus
 		// finished ones since the past-events date when one is set.
 		$events = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
+		self::note_categories( $report, $events, $extras );
 		return self::write( $report, $done, $events, $extras, time() );
 	}
 
@@ -401,7 +402,15 @@ class Wormiss_Event_Import {
 		$category    = $data->Category ?? null;
 		if ( is_object( $category ) ) {
 			$out['category_id'] = Wormiss_Event_Types::clean_category( $category->EventCategoryId ?? '' );
-			$out['category']    = is_scalar( $category->Name ?? null ) ? trim( sanitize_text_field( (string) $category->Name ) ) : '';
+			// The type's name: the category's Name, else its Description, else its ID (e.g. COURSE).
+			foreach ( [ 'Name', 'Description', 'EventCategoryId' ] as $field ) {
+				$value = $category->{$field} ?? null;
+				$value = is_scalar( $value ) ? trim( sanitize_text_field( (string) $value ) ) : '';
+				if ( '' !== $value ) {
+					$out['category'] = $value;
+					break;
+				}
+			}
 		}
 		// phpcs:enable
 		return $out;
@@ -709,6 +718,48 @@ class Wormiss_Event_Import {
 		set_post_thumbnail( $post_id, (int) $attachment );
 		update_post_meta( $post_id, self::META_IMAGE_ID, (int) $attachment );
 		return true;
+	}
+
+	/**
+	 * Say in the report how many events iMIS sent with a category (which becomes the event type)
+	 * and which categories, so a missing one is plain to see.
+	 *
+	 * @param array   $report Report.
+	 * @param array[] $events Events to import.
+	 * @param array   $extras Each event's extras (ID => extras()).
+	 * @return void
+	 */
+	private static function note_categories( array &$report, array $events, array $extras ): void {
+		if ( ! $events ) {
+			return;
+		}
+		$names = [];
+		$none  = 0;
+		foreach ( $events as $event ) {
+			$name = (string) ( $extras[ $event['id'] ]['category'] ?? '' );
+			if ( '' === $name ) {
+				++$none;
+			} else {
+				$names[ $name ] = true;
+			}
+		}
+		$with = count( $events ) - $none;
+		self::note(
+			$report,
+			$with
+				? sprintf(
+					/* translators: 1: number of events with a category, 2: the categories, 3: number without. */
+					__( 'Event types from iMIS categories: %1$d events have one (%2$s); %3$d have none.', 'wormiss' ),
+					$with,
+					implode( ', ', array_slice( array_keys( $names ), 0, 10 ) ),
+					$none
+				)
+				: sprintf(
+					/* translators: %d: number of events. */
+					__( 'Event types from iMIS categories: iMIS sent no category for any of the %d events, so none was given a type.', 'wormiss' ),
+					$none
+				)
+		);
 	}
 
 	/**

@@ -502,6 +502,35 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A category without a Name is named from its Description (else its ID), and the report says
+	 * how many events had a category.
+	 *
+	 * @return void
+	 */
+	public function test_category_without_name(): void {
+		$this->serve(
+			[
+				self::imis_event(
+					'R1',
+					[
+						'Category' => [
+							'EventCategoryId' => 'RESIT',
+							'Description'     => 'Resit',
+						],
+					]
+				),
+				self::imis_event( 'N1' ),
+			]
+		);
+		Wormiss_Event_Import::run();
+		$resit = get_term_by( 'name', 'Resit', Wormiss_Event_Types::TAXONOMY );
+		$this->assertInstanceOf( WP_Term::class, $resit );
+		$this->assertSame( [ $resit->term_id ], wp_get_object_terms( self::pages( 'R1' )[0], Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
+		$notes = implode( ' ', (array) get_option( Wormiss_Event_Import::REPORT_OPTION )['notes'] );
+		$this->assertStringContainsString( '1 events have one (Resit); 1 have none', $notes );
+	}
+
+	/**
 	 * A sub-type of the category's type chosen here stays on later imports; a type renamed
 	 * here is still found by its iMIS category ID (no second type is made).
 	 *
