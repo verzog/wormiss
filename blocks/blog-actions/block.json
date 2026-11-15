@@ -1,0 +1,21 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/blog-actions",
+	"version": "0.44.0",
+	"title": "Blog post actions",
+	"category": "theme",
+	"icon": "heart",
+	"description": "The rail beside a members' blog post, as on the iMIS blog: like (with how many have), save to find again, jump to the comments and share the link.",
+	"keywords": [ "blog", "like", "save", "share", "imis" ],
+	"textdomain": "wormiss",
+	"usesContext": [ "postId", "postType" ],
+	"supports": {
+		"html": false,
+		"align": false
+	},
+	"editorScript": "file:./index.js",
+	"style": "wormiss-blog-actions",
+	"viewScript": "wormiss-blog-actions-view",
+	"render": "file:./render.php"
+}

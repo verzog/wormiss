@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.43.0
+Stable tag: 0.44.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.44.0 =
+* New "Blog post actions" block, the rail beside a members' blog post as on the iMIS blog: Like (with how many members like the post), Save (to find it again), Comments (with the count; jumps to the discussion) and Share (the device's share menu, or copies the link). Likes and saves change without reloading the page; without JavaScript the page reloads instead. Only members who can read the blog can like or save.
+* Blog filters: a "Saved posts only" tick box, for signed-in members, shows just the posts they have saved.
+* A member's likes and saved posts are removed when their account is deleted, and by Tools > Erase Personal Data.
 
 = 0.43.0 =
 * Members' blog posts closer to the iMIS blog: pictures side by side (a row of columns, or a grid of two or more) are cropped to one shape so each row lines up; on phones, stacked, they keep their own shape.

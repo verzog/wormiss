@@ -40,6 +40,25 @@
 	font-size: 0.875rem;
 }
 
+/* Saved posts only: a tick box beside its words, not a full-width field. */
+.wormiss-blog-filters__saved label {
+	display: inline-flex;
+	gap: 0.5rem;
+	align-items: center;
+	min-height: 2.5rem;
+	font-size: 0.875rem;
+	font-weight: 400;
+	cursor: pointer;
+}
+
+.wormiss-blog-filters__saved input[type="checkbox"] {
+	width: 1.125rem;
+	min-height: 0;
+	height: 1.125rem;
+	margin: 0;
+	padding: 0;
+}
+
 /* Published date: from and to side by side in one field. */
 .wormiss-blog-filters__range {
 	display: flex;

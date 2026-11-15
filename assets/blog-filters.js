@@ -14,7 +14,7 @@
 		form.classList.add( 'wormiss-blog-filters--auto' );
 		form.addEventListener( 'change', function ( event ) {
 			const field = event.target;
-			if ( field.matches( 'select, input[type="date"], input[type="search"]' ) ) {
+			if ( field.matches( 'select, input[type="date"], input[type="search"], input[type="checkbox"]' ) ) {
 				form.requestSubmit ? form.requestSubmit() : form.submit();
 			}
 		} );

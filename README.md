@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.43.0)
+## What it does (0.44.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -93,6 +93,8 @@ whose iMIS REST client and audit log it reuses.
   listings, the REST API, embeds and the XML sitemaps. Links to old iMIS blog addresses go to the posts here.
   Posts use a simple Bootstrap-style layout (rows and columns, cards, responsive
   pictures and tables), styled by a small stylesheet on blog pages only.
+  A Blog post actions block puts Like (with a count), Save, Comments and Share beside a post;
+  the blog filters can show a member's saved posts only.
 
 * **Uploads** are scaled down to 1600 pixels on their longest side (`wormiss_image_max_size` filter).
 
