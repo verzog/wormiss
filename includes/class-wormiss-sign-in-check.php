@@ -109,20 +109,23 @@ class Wormiss_Sign_In_Check {
 				Wormiss_User_Sync::is_blocked( $user->ID ) ? __( 'Yes.', 'wormiss' ) : __( 'No.', 'wormiss' )
 			);
 		}
+		// The sign-in page checks the pause first (for this name and this computer's address).
+		$locked  = Wormiss_Sign_In::locked( $login );
 		$steps[] = self::step(
 			__( 'Paused after too many tries', 'wormiss' ),
-			Wormiss_Sign_In::locked( $login ) ? false : true,
-			Wormiss_Sign_In::locked( $login ) ? __( 'Yes: wait 15 minutes.', 'wormiss' ) : __( 'No.', 'wormiss' )
+			! $locked,
+			$locked ? __( 'Yes: wait 15 minutes.', 'wormiss' ) : __( 'No.', 'wormiss' )
 		);
 
-		$result  = Wormiss_Sign_In::authenticate( $login, $password );
+		$result  = $locked ? null : Wormiss_Sign_In::authenticate( $login, $password );
 		$steps[] = self::step(
 			__( 'The sign-in page\'s answer', 'wormiss' ),
 			$result instanceof WP_User,
-			$result instanceof WP_User
-				/* translators: %s: username. */
-				? sprintf( __( 'Signs in as %s.', 'wormiss' ), $result->user_login )
-				: ( is_wp_error( $result ) ? $result->get_error_message() : __( 'Refused.', 'wormiss' ) )
+			$locked ? __( 'Too many tries. Please wait 15 minutes and try again.', 'wormiss' )
+				: ( $result instanceof WP_User
+					/* translators: %s: username. */
+					? sprintf( __( 'Signs in as %s.', 'wormiss' ), $result->user_login )
+					: ( is_wp_error( $result ) ? $result->get_error_message() : __( 'Refused.', 'wormiss' ) ) )
 		);
 		return $steps;
 	}

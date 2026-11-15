@@ -70,6 +70,15 @@ class Test_Wormiss_Sign_In_Check extends Wormiss_Test_Case {
 		$this->refuse_twice();
 		$steps = wp_list_pluck( Wormiss_Sign_In_Check::run( 'nobody', 'x' ), 'ok', 'label' );
 		$this->assertFalse( $steps['Website account found'] );
+
+		// Paused: the right password still does not sign in, as on the sign-in page.
+		set_transient( 'wormiss_sign_in_name_' . md5( 'boss' ), Wormiss_Sign_In::MAX_FAILS, MINUTE_IN_SECONDS );
+		$this->imis->reply( '/token', 400, [ 'error_description' => 'The user name or password is incorrect.' ] );
+		$steps = wp_list_pluck( Wormiss_Sign_In_Check::run( 'boss', 'admin-pass' ), 'ok', 'label' );
+		$this->assertTrue( $steps['The website password matches'] );
+		$this->assertFalse( $steps['Paused after too many tries'] );
+		$this->assertFalse( $steps['The sign-in page\'s answer'] );
+		delete_transient( 'wormiss_sign_in_name_' . md5( 'boss' ) );
 		unset( $admin );
 	}
 
