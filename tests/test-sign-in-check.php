@@ -58,6 +58,8 @@ class Test_Wormiss_Sign_In_Check extends Wormiss_Test_Case {
 		$this->assertFalse( $steps['iMIS accepts these details'] );
 		$this->assertTrue( $steps['Website account found'] );
 		$this->assertTrue( $steps['The website password matches'] );
+		$this->assertTrue( $steps['WordPress password checking works'] );
+		$this->assertSame( 'wp-includes/pluggable.php', Wormiss_Sign_In_Check::defined_in( 'wp_check_password' ) );
 		$this->assertTrue( $steps['The sign-in page\'s answer'] );
 		$this->assertSame( 0, get_current_user_id(), 'Nobody is signed in.' );
 
