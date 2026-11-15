@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.1
+Stable tag: 0.45.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.45.2 =
+* Sign-in page: staff and other website accounts are now checked through WordPress's normal sign-in (as wp-login.php does), so a password kept elsewhere works there too. On YunoHost, whose WordPress checks your YunoHost password through its LDAP plugin, administrators can sign in on the sign-in page with that password again. Members still sign in with their iMIS password.
 
 = 0.45.1 =
 * Members' blog pictures side by side are no longer cropped: each sits whole in a box of the row's shape (on a light grey background), so nothing at a clinical picture's edges is cut off and the row still lines up.
