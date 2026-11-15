@@ -299,7 +299,6 @@ class Wormiss_Event_Import {
 		// The events the events block shows (real, public, listed statuses, not finished), plus
 		// finished ones since the past-events date when one is set.
 		$events = '' !== $since ? self::with_past( $events, $since ) : Wormiss_Events::upcoming( $events, '', time() );
-		self::note_categories( $report, $events, $extras );
 		return self::write( $report, $done, $events, $extras, time() );
 	}
 
@@ -315,6 +314,8 @@ class Wormiss_Event_Import {
 	 */
 	private static function write( array $report, array $done, array $events, array $extras, int $read ): array {
 		$report['read'] = count( $events );
+		// In every batch (each one's report replaces the last), so the final report has it too.
+		self::note_categories( $report, $events, $extras );
 		// At most BATCH page changes per run; the rest carry on in the background BATCH_GAP later.
 		// Batches remember the events they dealt with by ID (not by place in the list, which
 		// shifts as events finish or change), so none is skipped and none holds others back.
