@@ -189,4 +189,28 @@ class Test_Wormiss_Blog_Filters extends Wormiss_Test_Case {
 			$this->assertStringContainsString( '<input type="hidden" name="post_type" value="wormiss_blog" />', $html, 'Plain permalinks keep the post type.' );
 		}
 	}
+
+	/**
+	 * "Saved posts only" shows the member's saved posts (none saved: none); the tick box is for
+	 * signed-in people only.
+	 *
+	 * @return void
+	 */
+	public function test_saved(): void {
+		$ann    = self::factory()->user->create();
+		$pink   = $this->post( 'Going Pink', '', '2026-11-01 09:00:00', $ann );
+		$neck   = $this->post( 'R Neck Surgical Case', '', '2026-06-17 09:00:00', $ann );
+		$member = self::factory()->user->create( [ 'role' => 'subscriber' ] );
+		unset( $neck );
+		wp_set_current_user( $member );
+		$this->assertSame( [], $this->titles( [ 'blog_saved' => '1' ] ), 'Nothing saved yet.' );
+		Wormiss_Blog_Actions::toggle( $pink, $member, 'save' );
+		$this->assertSame( [ 'Going Pink' ], $this->titles( [ 'blog_saved' => '1' ] ) );
+		$this->assertCount( 2, $this->titles( [] ) );
+		$this->assertStringContainsString( 'name="blog_saved" value="1" checked=', Wormiss_Blog_Filters::render() );
+
+		wp_set_current_user( 0 );
+		$this->assertCount( 2, $this->titles( [ 'blog_saved' => '1' ] ), 'Ignored for visitors.' );
+		$this->assertStringNotContainsString( 'blog_saved', Wormiss_Blog_Filters::render() );
+	}
 }

@@ -62,6 +62,7 @@ class Wormiss_Plugin {
 		Wormiss_Images::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
+		Wormiss_Blog_Actions::init();
 		Wormiss_Sign_In::init();
 		Wormiss_Mail_Divert::init();
 		Wormiss_Blog_Filters::init();
@@ -99,6 +100,18 @@ class Wormiss_Plugin {
 		register_block_type( WORMISS_DIR . '/blocks/events' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-filters' );
 		register_block_type( WORMISS_DIR . '/blocks/blog-meta' );
+		wp_register_style( 'wormiss-blog-actions', plugins_url( 'assets/blog-actions.css', WORMISS_FILE ), [], WORMISS_VERSION );
+		wp_register_script(
+			'wormiss-blog-actions-view',
+			plugins_url( 'assets/blog-actions.js', WORMISS_FILE ),
+			[],
+			WORMISS_VERSION,
+			[
+				'in_footer' => true,
+				'strategy'  => 'defer',
+			]
+		);
+		register_block_type( WORMISS_DIR . '/blocks/blog-actions' );
 		wp_register_style( 'wormiss-sign-in', plugins_url( 'assets/sign-in.css', WORMISS_FILE ), [], WORMISS_VERSION );
 		register_block_type( WORMISS_DIR . '/blocks/sign-in' );
 		// The event blocks share one editor script and style.
@@ -303,10 +316,12 @@ class Wormiss_Plugin {
 		$user    = get_user_by( 'email', $email );
 		$removed = $user ? Wormiss_Logger::delete_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) ) : 0;
 		if ( $user ) {
-			// "Mark as done" completions stored on the account, and records not yet sent to iMIS
+			// "Mark as done" completions stored on the account, records not yet sent to iMIS
 			// (records already in iMIS stay there).
 			$removed += Wormiss_Completion::delete_for_user( $user->ID );
 			$removed += Wormiss_Activity::unschedule_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) );
+			// Blog likes and saved posts.
+			$removed += Wormiss_Blog_Actions::delete_for_user( $user->ID );
 		}
 		return [
 			'items_removed'  => $removed > 0,

@@ -33,7 +33,7 @@ class Wormiss_Blog_Filters {
 	/**
 	 * The form's fields (query string names).
 	 */
-	const FIELDS = [ 'blog_category', 'blog_level', 'blog_topic', 'blog_author', 'blog_from', 'blog_to', 'blog_q', 'blog_order' ];
+	const FIELDS = [ 'blog_category', 'blog_level', 'blog_topic', 'blog_author', 'blog_from', 'blog_to', 'blog_q', 'blog_order', 'blog_saved' ];
 
 	/**
 	 * Transient: the blog's authors (user IDs).
@@ -64,7 +64,8 @@ class Wormiss_Blog_Filters {
 	/**
 	 * The choices made, cleaned.
 	 *
-	 * @return array category, level, topic (slugs), author (user ID), from, to (Y-m-d), q.
+	 * @return array category, level, topic (slugs), author (user ID), from, to (Y-m-d), q, order,
+	 *               saved (whether to show the member's saved posts only).
 	 */
 	public static function chosen(): array {
 		$date = static function ( string $value ): string {
@@ -84,6 +85,7 @@ class Wormiss_Blog_Filters {
 			'to'       => $date( (string) get_query_var( 'blog_to' ) ),
 			'q'        => sanitize_text_field( (string) get_query_var( 'blog_q' ) ),
 			'order'    => 'asc' === strtolower( (string) get_query_var( 'blog_order' ) ) ? 'asc' : 'desc',
+			'saved'    => is_user_logged_in() && '1' === (string) get_query_var( 'blog_saved' ),
 		];
 	}
 
@@ -130,6 +132,11 @@ class Wormiss_Blog_Filters {
 		}
 		if ( $chosen['author'] ) {
 			$query->set( 'author', $chosen['author'] );
+		}
+		if ( $chosen['saved'] ) {
+			// None saved: nothing matches (an empty list would mean no limit).
+			$saved = Wormiss_Blog_Actions::saved( get_current_user_id() );
+			$query->set( 'post__in', $saved ? $saved : [ 0 ] );
 		}
 		$dates = array_filter(
 			[
@@ -315,6 +322,7 @@ class Wormiss_Blog_Filters {
 			'<span class="wormiss-blog-filters__range">' . $date( 'blog_from', $chosen['from'], __( 'Published from', 'wormiss' ) )
 				. '<span aria-hidden="true">&ndash;</span>' . $date( 'blog_to', $chosen['to'], __( 'Published to', 'wormiss' ) ) . '</span>'
 		);
+		$html .= self::saved_field( $chosen['saved'] );
 		$html .= self::field( 'blog_q', __( 'Keyword', 'wormiss' ), '<input type="search" id="wormiss-blog_q" name="blog_q" value="' . esc_attr( $chosen['q'] ) . '" placeholder="' . esc_attr__( 'Keyword', 'wormiss' ) . '" />' );
 		// Oldest first stays with every change; the sort button's own value comes after it and wins.
 		$html .= $newest ? '' : '<input type="hidden" name="blog_order" value="asc" />';
@@ -323,6 +331,22 @@ class Wormiss_Blog_Filters {
 			. '<button type="submit" class="wormiss-blog-filters__apply">' . esc_html__( 'Filter', 'wormiss' ) . '</button>' . $sort
 			. '<a class="wormiss-blog-filters__reset" href="' . esc_url( $action ) . '">' . esc_html__( 'Reset', 'wormiss' ) . '</a></p>';
 		return $html . '</form>';
+	}
+
+	/**
+	 * The "Saved posts only" tick box, for people who are signed in (they are the ones who can
+	 * save posts).
+	 *
+	 * @param bool $checked Whether it is ticked.
+	 * @return string
+	 */
+	private static function saved_field( bool $checked ): string {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+		return '<p class="wormiss-blog-filters__field wormiss-blog-filters__saved"><label for="wormiss-blog_saved">'
+			. '<input type="checkbox" id="wormiss-blog_saved" name="blog_saved" value="1"' . checked( $checked, true, false ) . ' /> '
+			. esc_html__( 'Saved posts only', 'wormiss' ) . '</label></p>';
 	}
 
 	/**
