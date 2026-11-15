@@ -63,6 +63,7 @@ class Wormiss_Plugin {
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
 		Wormiss_Sign_In::init();
+		Wormiss_Mail_Divert::init();
 		Wormiss_Blog_Filters::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();
