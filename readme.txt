@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.47.0
+Stable tag: 0.47.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.47.1 =
+* Open events block: an event linked to iMIS follows the closing date iMIS lists now (an extended or brought-forward closing date counts at once), not the one kept when it was linked; an event made here and sent to iMIS also uses its iMIS closing date. Every event of the type is checked, so an open one is never missed when there are many.
 
 = 0.47.0 =
 * New "Open events" block: the events of one event type (and its sub-types) still open for enrolment, soonest first, as cards with the place, dates, "Enrolments close" date, summary and a Learn more button to the event page. An event drops off once its iMIS registration closes, else when it starts. Choose the type in the block's settings; a message shows when none are open. For pages such as a Course Education Pathway with a section per level.

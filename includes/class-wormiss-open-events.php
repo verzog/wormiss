@@ -32,32 +32,51 @@ defined( 'ABSPATH' ) || exit;
 class Wormiss_Open_Events {
 
 	/**
-	 * Most Event pages read for one block (before those closed are left out).
+	 * The current iMIS events list (cached), by iMIS event ID; empty when iMIS cannot be read.
+	 *
+	 * @return array[]
 	 */
-	const MAX_READ = 200;
+	public static function listed(): array {
+		$out = [];
+		try {
+			foreach ( Wormiss_Events::get_events() as $event ) {
+				$out[ (string) $event['id'] ] = $event;
+			}
+		} catch ( Wormiss_Exception $e ) {
+			unset( $e ); // iMIS unavailable: the details kept on each page are used.
+		}
+		return $out;
+	}
 
 	/**
-	 * An Event page's dates and place: from iMIS for a linked or imported event, else as saved.
+	 * An Event page's dates and place. For an event linked to or imported from iMIS: as iMIS
+	 * lists it now (so a changed closing date counts), else the details kept when it was linked.
+	 * For an event made here: as saved, with its closing date from iMIS once it is there.
 	 *
-	 * @param int $post_id Event page.
+	 * @param int   $post_id Event page.
+	 * @param array $listed  From listed() (iMIS event ID => event).
 	 * @return array start, end, reg_end, location, online.
 	 */
-	public static function facts( int $post_id ): array {
-		$linked = get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, true );
-		if ( is_array( $linked ) && ! empty( $linked['start'] ) ) {
-			return [
-				'start'    => (string) $linked['start'],
-				'end'      => (string) ( $linked['end'] ?? '' ),
-				'reg_end'  => (string) ( $linked['reg_end'] ?? '' ),
-				'location' => (string) ( $linked['location'] ?? '' ),
-				'online'   => (string) ( $linked['online'] ?? '' ),
-			];
+	public static function facts( int $post_id, array $listed = [] ): array {
+		$imis_id = (string) get_post_meta( $post_id, Wormiss_Event_Sync::META_IMIS_ID, true );
+		$current = '' !== $imis_id && isset( $listed[ $imis_id ] ) ? $listed[ $imis_id ] : null;
+		if ( get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED, true ) ) {
+			$from = $current ?? get_post_meta( $post_id, Wormiss_Event_Sync::META_LINKED_DETAILS, true );
+			if ( is_array( $from ) && ! empty( $from['start'] ) ) {
+				return [
+					'start'    => (string) $from['start'],
+					'end'      => (string) ( $from['end'] ?? '' ),
+					'reg_end'  => (string) ( $from['reg_end'] ?? '' ),
+					'location' => (string) ( $from['location'] ?? '' ),
+					'online'   => (string) ( $from['online'] ?? '' ),
+				];
+			}
 		}
 		$meta = static fn( string $key ): string => (string) get_post_meta( $post_id, $key, true );
 		return [
 			'start'    => $meta( Wormiss_Event_Sync::META_START ),
 			'end'      => $meta( Wormiss_Event_Sync::META_END ),
-			'reg_end'  => '',
+			'reg_end'  => null !== $current ? (string) ( $current['reg_end'] ?? '' ) : '',
 			'location' => $meta( Wormiss_Event_Sync::META_LOCATION ),
 			'online'   => $meta( Wormiss_Event_Sync::META_ONLINE ),
 		];
@@ -87,7 +106,9 @@ class Wormiss_Open_Events {
 		$args = [
 			'post_type'      => Wormiss_Event_Sync::POST_TYPE,
 			'post_status'    => 'publish',
-			'posts_per_page' => self::MAX_READ,
+			// Every page of the type: which are open, and their order, depend on dates, not on
+			// when the pages were made, so none may be cut before they are checked.
+			'posts_per_page' => -1,
 			'no_found_rows'  => true,
 		];
 		if ( '' !== $type ) {
@@ -100,9 +121,10 @@ class Wormiss_Open_Events {
 				],
 			];
 		}
-		$open = [];
+		$open   = [];
+		$listed = self::listed();
 		foreach ( get_posts( $args ) as $post ) {
-			$facts  = self::facts( $post->ID );
+			$facts  = self::facts( $post->ID, $listed );
 			$closes = self::closes( $facts );
 			if ( null !== $closes && $closes < $now ) {
 				continue; // Enrolment has closed.
