@@ -1,0 +1,28 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/open-events",
+	"version": "0.47.0",
+	"title": "Open events",
+	"category": "widgets",
+	"icon": "welcome-learn-more",
+	"description": "The events of one event type (and its sub-types) that are still open for enrolment, soonest first, as cards. Each drops off once its iMIS registration closes (else when it starts). For pages such as the Course Education Pathway.",
+	"keywords": [ "events", "courses", "enrolment", "event type" ],
+	"textdomain": "wormiss",
+	"attributes": {
+		"type": { "type": "string", "default": "" },
+		"children": { "type": "boolean", "default": true },
+		"limit": { "type": "number", "default": 12 },
+		"showDescription": { "type": "boolean", "default": true },
+		"buttonText": { "type": "string", "default": "" },
+		"emptyText": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"anchor": true,
+		"html": false
+	},
+	"editorScript": "file:./index.js",
+	"style": [ "wormiss-events-style", "wormiss-open-events" ],
+	"render": "file:./render.php"
+}

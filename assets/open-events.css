@@ -1,0 +1,20 @@
+/*
+ * Open events block: the place (Online, or where) as a small label above each card's title.
+ * The cards themselves use the Upcoming iMIS events block's styles.
+ * Copyright 2026 Vernon Spain. GNU GPL v3 or later.
+ */
+
+.wormiss-open-events__label {
+	margin: 1rem 1.25rem -0.75rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	opacity: 0.85;
+}
+
+.wormiss-open-events__closes {
+	margin: 0.25rem 0 0;
+	font-size: 0.875rem;
+	opacity: 0.85;
+}
