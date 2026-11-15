@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.0
+Stable tag: 0.45.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.45.1 =
+* Members' blog pictures side by side are no longer cropped: each sits whole in a box of the row's shape (on a light grey background), so nothing at a clinical picture's edges is cut off and the row still lines up.
 
 = 0.45.0 =
 * Members' blog pictures grouped as on the iMIS blog: two or more pictures one after another, with nothing between them, now show side by side (two as a pair, three across, four as two pairs, more in threes; stacked on phones) instead of one under another at full width. Pictures already in a row or grid are left as they are. This happens as a post is shown, so every post gets it without a new import.
