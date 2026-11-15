@@ -195,9 +195,9 @@ class Wormiss_Blog {
 		// What shows depends on who is looking: never page-cached.
 		Wormiss_Members_Only::no_page_cache();
 		if ( ! self::can_read() ) {
-			$html = self::link_old_addresses( (string) get_post_meta( $post_id, self::META_INTRO, true ) ) . self::locked_notice();
+			$html = Wormiss_Blog_Pictures::group( self::link_old_addresses( (string) get_post_meta( $post_id, self::META_INTRO, true ) ) ) . self::locked_notice();
 		} else {
-			$html = self::link_old_addresses( (string) $content ) . self::solution_html( $post_id );
+			$html = Wormiss_Blog_Pictures::group( self::link_old_addresses( (string) $content ) ) . self::solution_html( $post_id );
 		}
 		// In an excerpt just the text; on the page, in a wrapper the blog styles hang off.
 		$template = (string) get_post_meta( $post_id, Wormiss_Blog_Import::META_TEMPLATE, true );
@@ -394,7 +394,7 @@ class Wormiss_Blog {
 			. '<span class="wormiss-blog-solution__show">' . esc_html__( 'Show the solution', 'wormiss' ) . '</span>'
 			. '<span class="wormiss-blog-solution__hide">' . esc_html__( 'Hide the solution', 'wormiss' ) . '</span>'
 			. '</span></summary><div class="card-body">'
-			. $note . self::link_old_addresses( $solution ) . '</div></details>';
+			. $note . Wormiss_Blog_Pictures::group( self::link_old_addresses( $solution ) ) . '</div></details>';
 	}
 
 	/**
