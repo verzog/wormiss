@@ -26,5 +26,5 @@ defined( 'ABSPATH' ) || exit;
 
 return [
 	'dependencies' => [ 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'wp-server-side-render' ],
-	'version'      => '0.40.0',
+	'version'      => '0.43.0',
 ];

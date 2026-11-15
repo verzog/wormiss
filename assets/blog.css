@@ -202,6 +202,19 @@
 	}
 }
 
+/*
+ * Pictures side by side (a row of columns, or a grid of two or more) are cropped to one shape,
+ * so a row lines up as on the iMIS blog. On phones, stacked, they keep their own shape.
+ */
+@media (min-width: 768px) {
+	.wormiss-blog-post .row:has(> .col-md + .col-md) > .col-md > .figure .img-fluid,
+	.wormiss-blog-post .wormiss-blog-grid:not(.wormiss-blog-grid--cols-1) .figure .img-fluid {
+		width: 100%;
+		aspect-ratio: 3 / 2;
+		object-fit: cover;
+	}
+}
+
 .wormiss-blog-post .wormiss-blog-grid__item > :first-child {
 	margin-top: 0;
 }
@@ -282,6 +295,36 @@
 .wormiss-blog-meta__initials {
 	font-size: 0.75em;
 	letter-spacing: 0.02em;
+}
+
+/* The author card below the post: initials, "By" and the name, then their biography. */
+.wp-block-wormiss-blog-meta:has(.wormiss-blog-meta__avatar) {
+	display: flex;
+	gap: 1rem;
+	align-items: flex-start;
+}
+
+.wormiss-blog-meta__avatar {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.05);
+	font-size: 0.8125rem;
+}
+
+.wormiss-blog-meta__about {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.wormiss-blog-meta__bio {
+	font-size: 0.875rem;
+	opacity: 0.75;
 }
 
 /* Access restricted: what people who cannot read see after the intro. */
