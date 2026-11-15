@@ -5,7 +5,7 @@ API. Adapted from the Moodle plugin
 [`local_membershipbridge`](https://github.com/verzog/moodle-local_membershipbridge),
 whose iMIS REST client and audit log it reuses.
 
-## What it does (0.47.1)
+## What it does (0.48.0)
 
 * **iMIS data block and shortcode:** show an iMIS IQA query's results on a page as a
   table, cards or a list, with chosen columns and headings, site-formatted dates
@@ -65,7 +65,7 @@ whose iMIS REST client and audit log it reuses.
   places left and Register button, and WordPress never changes or cancels it.
 
 * **iMIS event import:** daily (or on demand), each upcoming iMIS event (and optionally
-  past ones) gets a linked Event page with its iMIS description, image and event type,
+  past ones) gets a linked Event page with its iMIS description, image and event category,
   published or as a draft, kept in step with iMIS. Nothing is changed in
   iMIS and no page is removed.
 
@@ -99,15 +99,15 @@ whose iMIS REST client and audit log it reuses.
 
 * **Uploads** are scaled down to 1600 pixels on their longest side (`wormiss_image_max_size` filter).
 
-* **Open events block:** one event type's events (sub-types included) still open for enrolment, soonest first, as cards; each drops off when its iMIS registration closes (else at its start).
-* **Event types** (Events > Event types), with sub-types (e.g. Courses > Essential, Advanced) and bulk "Set event type" / "Remove event type" in the Events list's Bulk actions: each type has its own iMIS template
+* **Open events block:** one event category's events (sub-categories included) still open for enrolment, soonest first, as cards; each drops off when its iMIS registration closes (else at its start).
+* **Event categories** (Events > Event categories), with sub-categories (e.g. Courses > Essential, Advanced) and bulk "Set event category" / "Remove event category" in the Events list's Bulk actions: each type has its own iMIS template
   event, and optionally an iMIS event category (its ID in iMIS, up to 5 characters, e.g. COUR) given to its events on every send.
   An event with no type, or a type with no template, uses the default template.
   Types also have their own archive pages (`/event-type/<type>/`), a default
   capacity, and can create their iMIS event category when saved.
 
 * **Event numbers and waitlist:** minimum and expected attendance, who may join
-  the iMIS waitlist and automatic release, per event or as event type defaults.
+  the iMIS waitlist and automatic release, per event or as event category defaults.
   Event pages show the event code and, with a places-count IQA, places left
   ("12 of 30 places left", "Full", or "Places available" for 1000 or more).
   Optionally follows iMIS publish dates.
@@ -123,7 +123,7 @@ whose iMIS REST client and audit log it reuses.
   On a full event whose waitlist is open to everyone, they can join (and leave) the
   iMIS waitlist from the Event page.
 
-* **One Wormiss admin menu:** Overview, Events, Add New Event, Event types,
+* **One Wormiss admin menu:** Overview, Events, Add New Event, Event categories,
   Settings and the audit log in one place (the old Settings and Tools addresses
   redirect). Editors see the Overview and events; Settings and the log are for
   administrators.

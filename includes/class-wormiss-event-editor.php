@@ -55,7 +55,7 @@ class Wormiss_Event_Editor {
 	 * @return array
 	 */
 	public static function tabs(): array {
-		$type_default = __( 'Event type\'s default, else iMIS\'s', 'wormiss' );
+		$type_default = __( 'Event category\'s default, else iMIS\'s', 'wormiss' );
 		return [
 			'when'     => [
 				__( 'When', 'wormiss' ),
@@ -94,19 +94,19 @@ class Wormiss_Event_Editor {
 					Wormiss_Event_Sync::META_CAPACITY => [
 						__( 'Capacity', 'wormiss' ),
 						'number',
-						__( '0 uses the event type\'s default, else the template\'s. 1000 or more shows as "Places available".', 'wormiss' ),
+						__( '0 uses the event category\'s default, else the template\'s. 1000 or more shows as "Places available".', 'wormiss' ),
 						[ 'min' => 0 ],
 					],
 					Wormiss_Event_Sync::META_MINIMUM  => [
 						__( 'Minimum attendance', 'wormiss' ),
 						'number',
-						__( 'Fewest people for the event to go ahead. 0 uses the event type\'s default.', 'wormiss' ),
+						__( 'Fewest people for the event to go ahead. 0 uses the event category\'s default.', 'wormiss' ),
 						[ 'min' => 0 ],
 					],
 					Wormiss_Event_Sync::META_EXPECTED => [
 						__( 'Expected attendance', 'wormiss' ),
 						'number',
-						__( 'For planning. 0 uses the event type\'s default.', 'wormiss' ),
+						__( 'For planning. 0 uses the event category\'s default.', 'wormiss' ),
 						[ 'min' => 0 ],
 					],
 				],

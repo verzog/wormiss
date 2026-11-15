@@ -6,8 +6,8 @@
 	"title": "Open events",
 	"category": "widgets",
 	"icon": "welcome-learn-more",
-	"description": "The events of one event type (and its sub-types) that are still open for enrolment, soonest first, as cards. Each drops off once its iMIS registration closes (else when it starts). For pages such as the Course Education Pathway.",
-	"keywords": [ "events", "courses", "enrolment", "event type" ],
+	"description": "The events of one event category (and its sub-categories) that are still open for enrolment, soonest first, as cards. Each drops off once its iMIS registration closes (else when it starts). For pages such as the Course Education Pathway.",
+	"keywords": [ "events", "courses", "enrolment", "event category" ],
 	"textdomain": "wormiss",
 	"attributes": {
 		"type": { "type": "string", "default": "" },

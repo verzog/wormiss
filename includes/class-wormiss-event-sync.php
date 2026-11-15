@@ -478,7 +478,7 @@ class Wormiss_Event_Sync {
 				'error',
 				sprintf(
 					/* translators: %s: category ID. */
-					__( 'iMIS has no event category %s. On the event type, use the ID of a category iMIS has (e.g. COUR), or clear it to keep the template\'s.', 'wormiss' ),
+					__( 'iMIS has no event category %s. On the event category, use the ID of a category iMIS has (e.g. COUR), or clear it to keep the template\'s.', 'wormiss' ),
 					$details['category']
 				),
 			];
@@ -702,7 +702,7 @@ class Wormiss_Event_Sync {
 		}
 		// A template is only used to create the event; one already in iMIS is just updated.
 		if ( '' === ( $details['template'] ?? '' ) && '' === ( $details['imis_id'] ?? '' ) ) {
-			return __( 'No iMIS template event: give this event type one, or set the default in Wormiss > Settings.', 'wormiss' );
+			return __( 'No iMIS template event: give this event category one, or set the default in Wormiss > Settings.', 'wormiss' );
 		}
 		if ( '' === $details['code'] ) {
 			return __( 'Add an event code (letters, digits, _ and - only, up to 10 characters).', 'wormiss' );
@@ -710,7 +710,7 @@ class Wormiss_Event_Sync {
 		// A category saved before the 5-character limit was checked (e.g. COURSE).
 		$category = (string) ( $details['category'] ?? '' );
 		if ( '' !== $category && ! Wormiss_Rest_Client::is_category_id( $category ) ) {
-			return __( 'The event type\'s iMIS category ID is too long or not valid: use up to 5 characters, the ID iMIS uses (e.g. COUR).', 'wormiss' );
+			return __( 'The event category\'s iMIS category ID is too long or not valid: use up to 5 characters, the ID iMIS uses (e.g. COUR).', 'wormiss' );
 		}
 		$minimum  = (int) ( $details['minimum'] ?? 0 );
 		$expected = (int) ( $details['expected'] ?? 0 );

@@ -1,7 +1,7 @@
 /**
  * Open events block: editor script. Plain JavaScript (no build step).
  *
- * The cards are drawn on the server; the editor shows a live preview and the choice of event type.
+ * The cards are drawn on the server; the editor shows a live preview and the choice of event category.
  *
  * @copyright  2026 Vernon Spain
  * @license    GNU GPL v3 or later
@@ -31,7 +31,7 @@
 			const types = useSelect(function(select) {
 				return select('core').getEntityRecords('taxonomy', 'wormiss_event_type', {per_page: -1, orderby: 'name'});
 			}, []) || [];
-			const options = [{label: __('Every type', 'wormiss'), value: ''}].concat(types.map(function(type) {
+			const options = [{label: __('Every category', 'wormiss'), value: ''}].concat(types.map(function(type) {
 				return {label: (type.parent ? '— ' : '') + type.name, value: type.slug};
 			}));
 
@@ -45,14 +45,14 @@
 						PanelBody,
 						{title: __('Events', 'wormiss')},
 						el(SelectControl, {
-							label: __('Event type', 'wormiss'),
+							label: __('Event category', 'wormiss'),
 							value: a.type,
 							options: options,
 							onChange: (v) => set({type: v}),
 							__nextHasNoMarginBottom: true,
 						}),
 						el(ToggleControl, {
-							label: __('Include its sub-types', 'wormiss'),
+							label: __('Include its sub-categories', 'wormiss'),
 							checked: a.children,
 							onChange: (v) => set({children: v}),
 							__nextHasNoMarginBottom: true,

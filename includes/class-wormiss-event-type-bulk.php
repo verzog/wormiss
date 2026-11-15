@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Bulk actions on the Events list: give the ticked events an event type, or take one off.
+ * Bulk actions on the Events list: give the ticked events an event category, or take one off.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -25,8 +25,8 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Two groups in the Events list's Bulk actions, "Set event type" and "Remove event type", one
- * entry per type (sub-types shown under their main type), for people who may assign event types.
+ * Two groups in the Events list's Bulk actions, "Set event category" and "Remove event category", one
+ * entry per type (sub-categories shown under their main type), for people who may assign event categories.
  * An event has one type (each type has its own iMIS template), so setting a type replaces the
  * event's type. A changed event is queued for iMIS as a save would queue it. WordPress's own bulk
  * Edit can only add types, which could give an event two, and hides them a step further in.
@@ -56,7 +56,7 @@ class Wormiss_Event_Type_Bulk {
 	}
 
 	/**
-	 * Whether the current person may assign event types.
+	 * Whether the current person may assign event categories.
 	 *
 	 * @return bool
 	 */
@@ -67,9 +67,9 @@ class Wormiss_Event_Type_Bulk {
 	}
 
 	/**
-	 * The event types, main types first and each one's sub-types after it.
+	 * The event categories, main types first and each one's sub-categories after it.
 	 *
-	 * @return array Term ID => label (sub-types indented).
+	 * @return array Term ID => label (sub-categories indented).
 	 */
 	public static function types(): array {
 		$terms = get_terms(
@@ -116,8 +116,8 @@ class Wormiss_Event_Type_Bulk {
 			$remove[ self::REMOVE . $id ] = $label;
 		}
 		// A nested list is shown as a labelled group in the drop-down.
-		$actions[ __( 'Set event type', 'wormiss' ) ]    = $add;
-		$actions[ __( 'Remove event type', 'wormiss' ) ] = $remove;
+		$actions[ __( 'Set event category', 'wormiss' ) ]    = $add;
+		$actions[ __( 'Remove event category', 'wormiss' ) ] = $remove;
 		return $actions;
 	}
 
@@ -193,9 +193,9 @@ class Wormiss_Event_Type_Bulk {
 			return;
 		}
 		$text = $add
-			/* translators: 1: number of events, 2: event type. */
+			/* translators: 1: number of events, 2: event category. */
 			? sprintf( _n( '%1$d event set to %2$s.', '%1$d events set to %2$s.', $n, 'wormiss' ), $n, $term->name )
-			/* translators: 1: number of events, 2: event type. */
+			/* translators: 1: number of events, 2: event category. */
 			: sprintf( _n( '%1$d event removed from %2$s.', '%1$d events removed from %2$s.', $n, 'wormiss' ), $n, $term->name );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( $text ) . '</p></div>';
 	}

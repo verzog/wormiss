@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Open events: the Event pages of one event type (and its sub-types) whose enrolment is still
+ * Open events: the Event pages of one event category (and its sub-categories) whose enrolment is still
  * open, soonest first, as cards. For a page such as the Course Education Pathway.
  *
  * @package    wormiss
@@ -96,8 +96,8 @@ class Wormiss_Open_Events {
 	/**
 	 * The open events of a type, soonest first.
 	 *
-	 * @param string $type     Event type slug ('' for every type).
-	 * @param bool   $children Include the type's sub-types.
+	 * @param string $type     Event category slug ('' for every type).
+	 * @param bool   $children Include the type's sub-categories.
 	 * @param int    $limit    Most to return.
 	 * @param int    $now      Unix time.
 	 * @return array[] Each: post (WP_Post), facts, start (Unix time or null).

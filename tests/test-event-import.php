@@ -471,7 +471,7 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The iMIS category becomes the page's event type, made once with the category's ID.
+	 * The iMIS category becomes the page's event category, made once with the category's ID.
 	 *
 	 * @return void
 	 */
@@ -531,7 +531,7 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * A sub-type of the category's type chosen here stays on later imports; a type renamed
+	 * A sub-category of the category's type chosen here stays on later imports; a type renamed
 	 * here is still found by its iMIS category ID (no second type is made).
 	 *
 	 * @return void
@@ -561,7 +561,7 @@ class Test_Wormiss_Event_Import extends Wormiss_Test_Case {
 
 		$this->serve( [ self::imis_event( 'C1', $category ) ] );
 		Wormiss_Event_Import::run();
-		$this->assertSame( [ $essential ], wp_get_object_terms( $page, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ), 'The sub-type stays.' );
+		$this->assertSame( [ $essential ], wp_get_object_terms( $page, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ), 'The sub-category stays.' );
 		$this->assertFalse( get_term_by( 'name', 'Courses', Wormiss_Event_Types::TAXONOMY ), 'No second type for the renamed one.' );
 
 		// A type from outside the category is put back to the category's type.

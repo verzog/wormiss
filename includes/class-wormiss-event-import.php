@@ -27,7 +27,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Reads the iMIS events list (the same events the events block shows) and makes a linked
- * Event page for each one that has none yet, with iMIS's name, description, event type (from
+ * Event page for each one that has none yet, with iMIS's name, description, event category (from
  * its category) and image; published or a draft, as Settings says. Later imports keep those
  * in step with iMIS. Nothing is ever changed in iMIS, and pages are never
  * removed: finished events keep their pages. Off until an administrator turns it on.
@@ -525,7 +525,7 @@ class Wormiss_Event_Import {
 
 	/**
 	 * Bring a linked page up to date. Every linked page's title follows iMIS; pages the import
-	 * made also get iMIS's description, event type and image, and are published when Settings
+	 * made also get iMIS's description, event category and image, and are published when Settings
 	 * says so (unless an editor has since unpublished them). Pages WordPress sent to iMIS, and
 	 * trashed pages, are left alone.
 	 *
@@ -589,7 +589,7 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * The event type for an iMIS category: the one holding its category ID (so a type renamed
+	 * The event category for an iMIS category: the one holding its category ID (so a type renamed
 	 * here is still found), else a main type with its name.
 	 *
 	 * @param string $category_id iMIS category ID ('' if none).
@@ -625,7 +625,7 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Give an imported page its event type (from the iMIS category: kept when it is a sub-type of
+	 * Give an imported page its event category (from the iMIS category: kept when it is a sub-category of
 	 * the category's type) and featured image (from the iMIS event image).
 	 *
 	 * @param int   $post_id Post ID.
@@ -648,7 +648,7 @@ class Wormiss_Event_Import {
 			if ( $term instanceof WP_Term ) {
 				$now = wp_get_object_terms( $post_id, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] );
 				$now = is_array( $now ) ? array_map( 'intval', $now ) : [];
-				// A sub-type of the category's type (e.g. Essential under Courses), chosen here, stays.
+				// A sub-category of the category's type (e.g. Essential under Courses), chosen here, stays.
 				$kept = 1 === count( $now ) && ( $now[0] === (int) $term->term_id
 					|| term_is_ancestor_of( $term, $now[0], Wormiss_Event_Types::TAXONOMY ) );
 				if ( ! $kept ) {
@@ -722,7 +722,7 @@ class Wormiss_Event_Import {
 	}
 
 	/**
-	 * Say in the report how many events iMIS sent with a category (which becomes the event type)
+	 * Say in the report how many events iMIS sent with a category (which becomes the event category)
 	 * and which categories, so a missing one is plain to see.
 	 *
 	 * @param array   $report Report.
@@ -750,14 +750,14 @@ class Wormiss_Event_Import {
 			$with
 				? sprintf(
 					/* translators: 1: number of events with a category, 2: the categories, 3: number without. */
-					__( 'Event types from iMIS categories: %1$d events have one (%2$s); %3$d have none.', 'wormiss' ),
+					__( 'Event categories from iMIS: %1$d events have one (%2$s); %3$d have none.', 'wormiss' ),
 					$with,
 					implode( ', ', array_slice( array_keys( $names ), 0, 10 ) ),
 					$none
 				)
 				: sprintf(
 					/* translators: %d: number of events. */
-					__( 'Event types from iMIS categories: iMIS sent no category for any of the %d events, so none was given a type.', 'wormiss' ),
+					__( 'Event categories from iMIS: iMIS sent no category for any of the %d events, so none was given a category.', 'wormiss' ),
 					$none
 				)
 		);
