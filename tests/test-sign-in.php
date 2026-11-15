@@ -76,6 +76,24 @@ class Test_Wormiss_Sign_In extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * After signing in: the address asked for on this site, else the home page, including when
+	 * none (or an empty one) is given, as when someone opens the sign-in page directly.
+	 *
+	 * @return void
+	 */
+	public function test_redirect_to(): void {
+		unset( $_REQUEST['redirect_to'] );
+		$this->assertSame( home_url( '/' ), Wormiss_Sign_In::redirect_to() );
+		$_REQUEST['redirect_to'] = '';
+		$this->assertSame( home_url( '/' ), Wormiss_Sign_In::redirect_to(), 'An empty address is not a destination.' );
+		$_REQUEST['redirect_to'] = admin_url();
+		$this->assertSame( admin_url(), Wormiss_Sign_In::redirect_to() );
+		$_REQUEST['redirect_to'] = 'https://elsewhere.example/';
+		$this->assertSame( home_url( '/' ), Wormiss_Sign_In::redirect_to(), 'Never to another site.' );
+		unset( $_REQUEST['redirect_to'] );
+	}
+
+	/**
 	 * Members sign in with their iMIS ID or email and iMIS password, never their website password.
 	 *
 	 * @return void
