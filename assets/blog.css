@@ -203,8 +203,9 @@
 }
 
 /*
- * Pictures side by side (a row of columns, or a grid of two or more) are cropped to one shape,
- * so a row lines up as on the iMIS blog. On phones, stacked, they keep their own shape.
+ * Pictures side by side (a row of columns, or a grid of two or more) sit in boxes of one shape,
+ * so a row lines up as on the iMIS blog. Each picture is shrunk to fit its box whole, never
+ * cropped: a clinical picture's edges can matter. On phones, stacked, they keep their own shape.
  */
 @media (min-width: 768px) {
 	.wormiss-blog-post .row:has(> .col-md + .col-md) > .col-md > .figure .img-fluid,
@@ -212,7 +213,8 @@
 	.wormiss-blog-post .wormiss-blog-gallery img {
 		width: 100%;
 		aspect-ratio: 3 / 2;
-		object-fit: cover;
+		object-fit: contain;
+		background: rgba(0, 0, 0, 0.05);
 	}
 }
 
