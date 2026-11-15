@@ -216,7 +216,7 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		$this->assertStringContainsString( 'nav-tab-active" aria-current="page">Connection<', $html, 'First tab by default.' );
 		$this->assertStringContainsString( 'Test connection', $html );
 		$this->assertStringNotContainsString( 'Import iMIS events now', $html );
-		$this->assertStringContainsString( 'page=wormiss-settings&amp;tab=events', $html );
+		$this->assertStringContainsString( 'page=wormiss-settings&#038;tab=events', $html );
 
 		$_GET['tab'] = 'events';
 		ob_start();
