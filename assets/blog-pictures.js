@@ -51,7 +51,9 @@
 	 */
 	function open( picture ) {
 		const box = lightbox();
-		image.src = picture.currentSrc || picture.src;
+		// A picture linked to a larger copy of itself opens that copy.
+		const link = picture.closest( 'a' );
+		image.src = link && link.href ? link.href : ( picture.currentSrc || picture.src );
 		image.alt = picture.alt || '';
 		opener = picture;
 		box.showModal();
