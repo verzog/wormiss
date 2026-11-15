@@ -94,11 +94,33 @@ class Wormiss_Sign_In {
 	 */
 	public static function login_url( $url, $redirect = '' ) {
 		$page = self::page_id();
-		if ( ! $page ) {
+		if ( ! $page || self::for_admin( (string) $redirect ) ) {
 			return $url;
 		}
 		$link = (string) get_permalink( $page );
 		return '' !== (string) $redirect ? add_query_arg( 'redirect_to', rawurlencode( (string) $redirect ), $link ) : $link;
+	}
+
+	/**
+	 * Whether a sign-in is on the way to the admin area (wp-admin). Those keep WordPress's own
+	 * sign-in (wp-login.php), so a host that signs staff in there, such as YunoHost's single
+	 * sign-on, still does: staff accounts there may have no website password anyone knows.
+	 *
+	 * @param string $redirect Where to go after signing in.
+	 * @return bool
+	 */
+	private static function for_admin( string $redirect ): bool {
+		if ( '' === $redirect ) {
+			return false;
+		}
+		$admin = wp_parse_url( admin_url() );
+		$to    = wp_parse_url( $redirect );
+		if ( ! is_array( $admin ) || ! is_array( $to ) ) {
+			return false;
+		}
+		// Same host (or a relative address), and a path inside wp-admin.
+		$same = empty( $to['host'] ) || strtolower( (string) $to['host'] ) === strtolower( (string) ( $admin['host'] ?? '' ) );
+		return $same && 0 === strpos( (string) ( $to['path'] ?? '' ), (string) ( $admin['path'] ?? '/wp-admin/' ) );
 	}
 
 	/**

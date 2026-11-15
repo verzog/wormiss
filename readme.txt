@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.45.2
+Stable tag: 0.45.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.45.3 =
+* Signing in to the admin area (wp-admin) uses WordPress's own sign-in page (wp-login.php) again, not the members' sign-in page, so a host that signs staff in there, such as YunoHost's single sign-on, works as before. Every other Sign in link and redirect, including the members' blog's, still goes to the sign-in page.
 
 = 0.45.2 =
 * Sign-in page: staff and other website accounts are now checked through WordPress's normal sign-in (as wp-login.php does), so a password kept elsewhere works there too. On YunoHost, whose WordPress checks your YunoHost password through its LDAP plugin, administrators can sign in on the sign-in page with that password again. Members still sign in with their iMIS password.
