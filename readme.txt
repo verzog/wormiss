@@ -207,7 +207,7 @@ the Media Library can still be opened directly by anyone with their address.
 == Changelog ==
 
 = 0.46.0 =
-* Events list: Bulk actions has "Add to event type" and "Remove from event type", with an entry for each type (sub-types under their main type). Tick events, choose a type and Apply; a message says how many were changed. Only people who may assign event types see them.
+* Events list: Bulk actions has "Set event type" and "Remove event type", with an entry for each type (sub-types under their main type). Tick events, choose a type and Apply; a message says how many were changed. An event has one type (each type has its own iMIS template), so setting a type replaces the old one. Changed events are queued for iMIS as a save would queue them. Only people who may assign event types see them.
 
 = 0.45.6 =
 * Sign-in page: signing in from the sign-in page itself (not from a "Sign in" link that says where to go back to) showed a blank white page, though it had signed you in. It now goes to the home page, as intended.

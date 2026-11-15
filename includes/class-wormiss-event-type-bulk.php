@@ -15,7 +15,7 @@
 // along with Wormiss.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Bulk actions on the Events list: add the ticked events to an event type, or take them out of one.
+ * Bulk actions on the Events list: give the ticked events an event type, or take one off.
  *
  * @package    wormiss
  * @copyright  2026 Vernon Spain
@@ -25,16 +25,18 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Two groups in the Events list's Bulk actions, "Add to event type" and "Remove from event type",
- * one entry per type (sub-types shown under their main type), for people who may assign event
- * types. WordPress's own bulk Edit can only add types, and hides them a step further in.
+ * Two groups in the Events list's Bulk actions, "Set event type" and "Remove event type", one
+ * entry per type (sub-types shown under their main type), for people who may assign event types.
+ * An event has one type (each type has its own iMIS template), so setting a type replaces the
+ * event's type. A changed event is queued for iMIS as a save would queue it. WordPress's own bulk
+ * Edit can only add types, which could give an event two, and hides them a step further in.
  */
 class Wormiss_Event_Type_Bulk {
 
 	/**
 	 * Bulk action prefixes; the type's term ID follows.
 	 */
-	const ADD    = 'wormiss_type_add_';
+	const SET    = 'wormiss_type_set_';
 	const REMOVE = 'wormiss_type_remove_';
 
 	/**
@@ -110,17 +112,18 @@ class Wormiss_Event_Type_Bulk {
 		$add    = [];
 		$remove = [];
 		foreach ( $types as $id => $label ) {
-			$add[ self::ADD . $id ]       = $label;
+			$add[ self::SET . $id ]       = $label;
 			$remove[ self::REMOVE . $id ] = $label;
 		}
 		// A nested list is shown as a labelled group in the drop-down.
-		$actions[ __( 'Add to event type', 'wormiss' ) ]      = $add;
-		$actions[ __( 'Remove from event type', 'wormiss' ) ] = $remove;
+		$actions[ __( 'Set event type', 'wormiss' ) ]    = $add;
+		$actions[ __( 'Remove event type', 'wormiss' ) ] = $remove;
 		return $actions;
 	}
 
 	/**
-	 * Apply an add or remove action to the ticked events the person may edit.
+	 * Apply a set or remove action to the ticked events the person may edit, and queue each
+	 * changed event for iMIS as a save would (only events the iMIS link would send are queued).
 	 *
 	 * @param string $redirect Where to go afterwards.
 	 * @param string $action   The action chosen.
@@ -130,11 +133,11 @@ class Wormiss_Event_Type_Bulk {
 	public static function handle( $redirect, $action, $post_ids ): string {
 		$redirect = (string) $redirect;
 		$action   = (string) $action;
-		$add      = str_starts_with( $action, self::ADD );
+		$add      = str_starts_with( $action, self::SET );
 		if ( ! $add && ! str_starts_with( $action, self::REMOVE ) ) {
 			return $redirect;
 		}
-		$term = get_term( (int) substr( $action, strlen( $add ? self::ADD : self::REMOVE ) ), Wormiss_Event_Types::TAXONOMY );
+		$term = get_term( (int) substr( $action, strlen( $add ? self::SET : self::REMOVE ) ), Wormiss_Event_Types::TAXONOMY );
 		if ( ! $term instanceof WP_Term || ! self::allowed() ) {
 			return $redirect;
 		}
@@ -143,11 +146,23 @@ class Wormiss_Event_Type_Bulk {
 			if ( 'wormiss_event' !== get_post_type( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
 				continue;
 			}
+			$before = wp_get_object_terms( $post_id, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] );
+			$before = is_array( $before ) ? array_map( 'intval', $before ) : [];
+			$has    = in_array( (int) $term->term_id, $before, true );
+			// Nothing to change: already that type only, or does not have it.
+			if ( $add ? [ (int) $term->term_id ] === $before : ! $has ) {
+				continue;
+			}
 			$result = $add
-				? wp_set_object_terms( $post_id, [ (int) $term->term_id ], Wormiss_Event_Types::TAXONOMY, true )
+				? wp_set_object_terms( $post_id, [ (int) $term->term_id ], Wormiss_Event_Types::TAXONOMY, false )
 				: wp_remove_object_terms( $post_id, [ (int) $term->term_id ], Wormiss_Event_Types::TAXONOMY );
-			if ( ! is_wp_error( $result ) && false !== $result ) {
-				++$done;
+			if ( is_wp_error( $result ) || false === $result ) {
+				continue;
+			}
+			++$done;
+			$post = get_post( $post_id );
+			if ( $post instanceof WP_Post ) {
+				Wormiss_Event_Sync::maybe_queue( $post_id, $post );
 			}
 		}
 		return add_query_arg(
@@ -179,7 +194,7 @@ class Wormiss_Event_Type_Bulk {
 		}
 		$text = $add
 			/* translators: 1: number of events, 2: event type. */
-			? sprintf( _n( '%1$d event added to %2$s.', '%1$d events added to %2$s.', $n, 'wormiss' ), $n, $term->name )
+			? sprintf( _n( '%1$d event set to %2$s.', '%1$d events set to %2$s.', $n, 'wormiss' ), $n, $term->name )
 			/* translators: 1: number of events, 2: event type. */
 			: sprintf( _n( '%1$d event removed from %2$s.', '%1$d events removed from %2$s.', $n, 'wormiss' ), $n, $term->name );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( $text ) . '</p></div>';

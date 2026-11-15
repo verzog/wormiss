@@ -23,7 +23,7 @@
  */
 
 /**
- * "Add to event type" and "Remove from event type" in Bulk actions.
+ * "Set event type" and "Remove event type" in Bulk actions.
  *
  * @covers Wormiss_Event_Type_Bulk
  */
@@ -71,38 +71,52 @@ class Test_Wormiss_Event_Type_Bulk extends Wormiss_Test_Case {
 		$this->type( 'Essential', $courses );
 		$actions = Wormiss_Event_Type_Bulk::actions( [ 'edit' => 'Edit' ] );
 		$this->assertSame( 'Edit', $actions['edit'] );
-		$add = $actions['Add to event type'];
+		$add = $actions['Set event type'];
 		$this->assertSame( [ 'Courses', '— Advanced', '— Essential' ], array_values( $add ) );
-		$this->assertArrayHasKey( Wormiss_Event_Type_Bulk::REMOVE . $advanced, $actions['Remove from event type'] );
+		$this->assertArrayHasKey( Wormiss_Event_Type_Bulk::REMOVE . $advanced, $actions['Remove event type'] );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
 		$this->assertSame( [ 'edit' => 'Edit' ], Wormiss_Event_Type_Bulk::actions( [ 'edit' => 'Edit' ] ) );
 	}
 
 	/**
-	 * Adding keeps the event's other types; removing takes only that one off; other posts and
-	 * other actions are left alone.
+	 * Setting replaces the event's type (an event has one, for iMIS); removing takes only that
+	 * one off; unchanged events, other posts and other actions are left alone; a changed event is
+	 * queued for iMIS as a save would be.
 	 *
 	 * @return void
 	 */
 	public function test_handle(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'event_sync_enabled' => true ] ) );
 		$courses   = $this->type( 'Courses' );
 		$essential = $this->type( 'Essential', $courses );
-		$event     = self::factory()->post->create( [ 'post_type' => 'wormiss_event' ] );
+		$event     = self::factory()->post->create(
+			[
+				'post_type'   => 'wormiss_event',
+				'post_status' => 'publish',
+			]
+		);
 		$other     = self::factory()->post->create( [ 'post_type' => 'wormiss_event' ] );
 		$page      = self::factory()->post->create( [ 'post_type' => 'page' ] );
 		wp_set_object_terms( $event, [ $courses ], Wormiss_Event_Types::TAXONOMY );
+		delete_post_meta( $event, Wormiss_Event_Sync::META_STATUS );
 
-		$back = Wormiss_Event_Type_Bulk::handle( 'https://example.org/wp-admin/edit.php?post_type=wormiss_event', Wormiss_Event_Type_Bulk::ADD . $essential, [ $event, $other, $page ] );
+		$back = Wormiss_Event_Type_Bulk::handle( 'https://example.org/wp-admin/edit.php?post_type=wormiss_event', Wormiss_Event_Type_Bulk::SET . $essential, [ $event, $other, $page ] );
 		$this->assertStringContainsString( 'wormiss_type_bulk_n=2', $back );
-		$this->assertEqualsCanonicalizing( [ $courses, $essential ], wp_get_object_terms( $event, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
+		$this->assertSame( [ $essential ], wp_get_object_terms( $event, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ), 'Replaced, so one type.' );
+		$this->assertSame( '', Wormiss_Event_Types::for_event( $event )['problem'], 'Still sendable to iMIS.' );
+		$this->assertSame( 'queued', get_post_meta( $event, Wormiss_Event_Sync::META_STATUS, true ), 'Queued for iMIS.' );
 		$this->assertSame( [ $essential ], wp_get_object_terms( $other, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
 		$this->assertSame( [], wp_get_object_terms( $page, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ), 'Not an event.' );
 
+		$back = Wormiss_Event_Type_Bulk::handle( '', Wormiss_Event_Type_Bulk::SET . $essential, [ $event ] );
+		$this->assertStringContainsString( 'wormiss_type_bulk_n=0', $back, 'Already that type: nothing changed.' );
+
 		Wormiss_Event_Type_Bulk::handle( '', Wormiss_Event_Type_Bulk::REMOVE . $essential, [ $event ] );
-		$this->assertSame( [ $courses ], wp_get_object_terms( $event, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
+		$this->assertSame( [], wp_get_object_terms( $event, Wormiss_Event_Types::TAXONOMY, [ 'fields' => 'ids' ] ) );
 
 		$this->assertSame( 'back', Wormiss_Event_Type_Bulk::handle( 'back', 'trash', [ $event ] ), 'Other actions are not ours.' );
-		$this->assertSame( 'back', Wormiss_Event_Type_Bulk::handle( 'back', Wormiss_Event_Type_Bulk::ADD . '999999', [ $event ] ), 'No such type.' );
+		$this->assertSame( 'back', Wormiss_Event_Type_Bulk::handle( 'back', Wormiss_Event_Type_Bulk::SET . '999999', [ $event ] ), 'No such type.' );
+		wp_unschedule_hook( Wormiss_Event_Sync::SYNC_HOOK );
 	}
 }
