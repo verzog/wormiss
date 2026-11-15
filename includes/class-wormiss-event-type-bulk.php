@@ -60,6 +60,7 @@ class Wormiss_Event_Type_Bulk {
 	 */
 	private static function allowed(): bool {
 		$taxonomy = get_taxonomy( Wormiss_Event_Types::TAXONOMY );
+		// phpcs:ignore WordPress.WP.Capabilities.Undetermined -- The taxonomy's own "assign terms" capability.
 		return $taxonomy instanceof WP_Taxonomy && current_user_can( $taxonomy->cap->assign_terms );
 	}
 
