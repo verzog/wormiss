@@ -275,8 +275,8 @@ class Wormiss_Blog {
 
 	/**
 	 * A blog post's details for the Blog post details block: its comment count ('comments'),
-	 * author, date and comment count ('line'), or Back to posts, author, reading time and date
-	 * ('sidebar').
+	 * author, date and comment count ('line'), Back to posts, author, reading time and date
+	 * ('sidebar'), or the author card with their initials, name and biography ('author').
 	 *
 	 * @param int    $post_id Post ID.
 	 * @param string $show    comments, line or sidebar.
@@ -296,6 +296,14 @@ class Wormiss_Blog {
 			return $comments;
 		}
 		$author = get_the_author_meta( 'display_name', (int) $post->post_author );
+		if ( 'author' === $show ) {
+			$bio = trim( (string) get_the_author_meta( 'description', (int) $post->post_author ) );
+			return '<span class="wormiss-blog-meta__avatar" aria-hidden="true">' . esc_html( self::initials( $author ) ) . '</span>'
+				. '<span class="wormiss-blog-meta__about"><span class="wormiss-blog-meta__by">'
+				/* translators: %s: author's name. */
+				. sprintf( esc_html__( 'By %s', 'wormiss' ), '<strong>' . esc_html( $author ) . '</strong>' ) . '</span>'
+				. ( '' !== $bio ? '<span class="wormiss-blog-meta__bio">' . esc_html( $bio ) . '</span>' : '' ) . '</span>';
+		}
 		if ( 'line' === $show ) {
 			return '<span class="wormiss-blog-meta__author">' . esc_html( $author ) . '</span>'
 				. '<span class="wormiss-blog-meta__date">' . esc_html( get_the_date( 'd/m/Y', $post ) ) . '</span>' . $comments;

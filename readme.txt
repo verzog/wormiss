@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.42.0
+Stable tag: 0.43.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.43.0 =
+* Members' blog posts closer to the iMIS blog: pictures side by side (a row of columns, or a grid of two or more) are cropped to one shape so each row lines up; on phones, stacked, they keep their own shape.
+* The Blog post details block can show the author card: their initials, "By" and their name, and the biography from their WordPress profile.
 
 = 0.42.0 =
 * Email testing, like Moodle's "divert all emails": in Wormiss > Settings > Email testing, "Divert all emails to" sends every email the site sends (with its copies) to one address instead, its subject starting "[Diverted from ...]"; "Do not divert emails to" lists addresses and whole domains that still get theirs (an email goes out as normal only when all its recipients are on that list; otherwise it comes to you alone, so no hidden copy is shown to anyone). WORMISS_DIVERT_EMAILS_TO and WORMISS_DIVERT_EMAILS_EXCEPT in wp-config.php do the same and win, for a test copy of the site. A warning shows across the admin screens while it is on.

@@ -1044,7 +1044,12 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_meta(): void {
-		$author  = self::factory()->user->create( [ 'display_name' => 'Lloyd Peterson' ] );
+		$author  = self::factory()->user->create(
+			[
+				'display_name' => 'Lloyd Peterson',
+				'description'  => 'Fellow, Skin Cancer College Australasia',
+			]
+		);
 		$post_id = self::factory()->post->create(
 			[
 				'post_type'    => Wormiss_Blog::POST_TYPE,
@@ -1065,6 +1070,10 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		$this->assertStringContainsString( '>LP<', $side );
 		$this->assertStringContainsString( '3 min read', $side );
 		$this->assertStringContainsString( '13 Nov 2026', $side );
+		$card = Wormiss_Blog::meta_html( $post_id, 'author' );
+		$this->assertStringContainsString( 'By <strong>Lloyd Peterson</strong>', $card );
+		$this->assertStringContainsString( 'Fellow, Skin Cancer College Australasia', $card );
+		$this->assertStringContainsString( '>LP<', $card );
 		$this->assertSame( '', Wormiss_Blog::meta_html( self::factory()->post->create(), 'comments' ), 'Blog posts only.' );
 	}
 

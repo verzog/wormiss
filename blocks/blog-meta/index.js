@@ -41,7 +41,8 @@
 							options: [
 								{label: __('Comment count (cards)', 'wormiss'), value: 'comments'},
 								{label: __('Author, date and comments (under the title)', 'wormiss'), value: 'line'},
-								{label: __('Back to posts, author, reading time and date', 'wormiss'), value: 'sidebar'}
+								{label: __('Back to posts, author, reading time and date', 'wormiss'), value: 'sidebar'},
+								{label: __('Author card (initials, name and biography)', 'wormiss'), value: 'author'}
 							],
 							/**
 							 * Keep the choice.
