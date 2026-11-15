@@ -107,6 +107,7 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 			'Enrolment closed',
 			$essential,
 			[
+				Wormiss_Event_Sync::META_LINKED         => 1,
 				Wormiss_Event_Sync::META_LINKED_DETAILS => [
 					'start'   => self::day( 20 ),
 					'reg_end' => self::day( -2 ),
@@ -117,6 +118,7 @@ class Test_Wormiss_Open_Events extends Wormiss_Test_Case {
 			'Still enrolling',
 			$courses,
 			[
+				Wormiss_Event_Sync::META_LINKED         => 1,
 				Wormiss_Event_Sync::META_LINKED_DETAILS => [
 					'start'    => self::day( 30 ),
 					'reg_end'  => self::day( 5 ),
