@@ -262,7 +262,7 @@ class Wormiss_News_Import {
 		}
 		check_admin_referer( 'wormiss_news_import_now' );
 		self::run();
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-news-import' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'news' ) . '#wormiss-news-import' );
 		exit;
 	}
 

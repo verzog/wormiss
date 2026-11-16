@@ -94,7 +94,7 @@ class Wormiss_Event_Push {
 		}
 		check_admin_referer( 'wormiss_event_push_now' );
 		self::run();
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-event-push' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'events' ) . '#wormiss-event-push' );
 		exit;
 	}
 

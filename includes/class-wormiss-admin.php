@@ -47,6 +47,19 @@ class Wormiss_Admin {
 	const ADD_PAGE = 'wormiss-add-new';
 
 	/**
+	 * The settings tabs and the sections on each (the first tab is the default).
+	 */
+	const TABS = [
+		'connection' => [ 'wormiss_connection', 'wormiss_queries' ],
+		'members'    => [ 'wormiss_members', 'wormiss_access', 'wormiss_user_sync' ],
+		'sign-in'    => [ 'wormiss_sign_in' ],
+		'events'     => [ 'wormiss_events', 'wormiss_event_sync', 'wormiss_event_import' ],
+		'news'       => [ 'wormiss_news_import' ],
+		'blog'       => [ 'wormiss_blog' ],
+		'activity'   => [ 'wormiss_activity', 'wormiss_mail_divert', 'wormiss_log' ],
+	];
+
+	/**
 	 * Hook the admin screens.
 	 *
 	 * @return void
@@ -106,19 +119,20 @@ class Wormiss_Admin {
 			);
 		}
 		if ( $taxonomy ) {
-			add_submenu_page(
-				self::MENU,
-				$taxonomy->labels->add_new_item,
-				$taxonomy->labels->add_new_item,
-				'manage_categories',
-				self::types_page() . '&wormiss_add=1'
-			);
+			// Each list first, then its Add New.
 			add_submenu_page(
 				self::MENU,
 				$taxonomy->labels->name,
 				$taxonomy->labels->menu_name,
 				'manage_categories',
 				self::types_page()
+			);
+			add_submenu_page(
+				self::MENU,
+				$taxonomy->labels->add_new_item,
+				$taxonomy->labels->add_new_item,
+				'manage_categories',
+				self::types_page() . '&wormiss_add=1'
 			);
 		}
 		add_submenu_page(
@@ -271,10 +285,12 @@ class Wormiss_Admin {
 	/**
 	 * The Settings page address.
 	 *
+	 * @param string $tab Tab to open (the first when empty or unknown).
 	 * @return string
 	 */
-	public static function settings_url(): string {
-		return admin_url( 'admin.php?page=' . self::SETTINGS_PAGE );
+	public static function settings_url( string $tab = '' ): string {
+		$url = admin_url( 'admin.php?page=' . self::SETTINGS_PAGE );
+		return isset( self::TABS[ $tab ] ) ? $url . '&tab=' . $tab : $url;
 	}
 
 	/**
@@ -353,29 +369,29 @@ class Wormiss_Admin {
 	public static function register_settings(): void {
 		self::register_option();
 
-		add_settings_section( 'wormiss_connection', __( 'iMIS connection', 'wormiss' ), [ __CLASS__, 'connection_intro' ], self::PAGE );
+		self::section( 'wormiss_connection', __( 'iMIS connection', 'wormiss' ), [ __CLASS__, 'connection_intro' ] );
 		self::field( 'base_url', __( 'iMIS address', 'wormiss' ), 'wormiss_connection' );
 		self::field( 'username', __( 'Service-account username', 'wormiss' ), 'wormiss_connection' );
 		self::field( 'password', __( 'Service-account password', 'wormiss' ), 'wormiss_connection' );
 		self::field( 'timeout', __( 'Timeout (seconds)', 'wormiss' ), 'wormiss_connection' );
 
-		add_settings_section( 'wormiss_queries', __( 'iMIS data on pages', 'wormiss' ), [ __CLASS__, 'queries_intro' ], self::PAGE );
+		self::section( 'wormiss_queries', __( 'iMIS data on pages', 'wormiss' ), [ __CLASS__, 'queries_intro' ] );
 		self::field( 'allowed_queries', __( 'Approved IQA queries', 'wormiss' ), 'wormiss_queries' );
 		self::field( 'cache_minutes', __( 'Keep results for (minutes)', 'wormiss' ), 'wormiss_queries' );
 
-		add_settings_section( 'wormiss_members', __( "Members' own data", 'wormiss' ), [ __CLASS__, 'members_intro' ], self::PAGE );
+		self::section( 'wormiss_members', __( "Members' own data", 'wormiss' ), [ __CLASS__, 'members_intro' ] );
 		self::field( 'member_id_source', __( "Where each member's iMIS ID is kept", 'wormiss' ), 'wormiss_members' );
 		self::field( 'member_id_meta', __( 'User field name', 'wormiss' ), 'wormiss_members' );
 		self::field( 'member_queries', __( 'Approved member queries', 'wormiss' ), 'wormiss_members' );
 		self::field( 'member_cache_minutes', __( 'Keep member results for (minutes)', 'wormiss' ), 'wormiss_members' );
 
-		add_settings_section( 'wormiss_access', __( 'Members-only content', 'wormiss' ), [ __CLASS__, 'access_intro' ], self::PAGE );
+		self::section( 'wormiss_access', __( 'Members-only content', 'wormiss' ), [ __CLASS__, 'access_intro' ] );
 		self::field( 'access_query', __( 'Membership query', 'wormiss' ), 'wormiss_access' );
 		self::field( 'access_type_column', __( 'Membership type column', 'wormiss' ), 'wormiss_access' );
 		self::field( 'access_status_column', __( 'Membership status column', 'wormiss' ), 'wormiss_access' );
 		self::field( 'access_statuses', __( 'Current statuses', 'wormiss' ), 'wormiss_access' );
 
-		add_settings_section( 'wormiss_events', __( 'iMIS events', 'wormiss' ), [ __CLASS__, 'events_intro' ], self::PAGE );
+		self::section( 'wormiss_events', __( 'iMIS events', 'wormiss' ), [ __CLASS__, 'events_intro' ] );
 		self::field( 'event_statuses', __( 'Event statuses to show', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_url', __( 'Event page address', 'wormiss' ), 'wormiss_events' );
 		self::field( 'event_places_query', __( 'Places count IQA', 'wormiss' ), 'wormiss_events' );
@@ -385,20 +401,20 @@ class Wormiss_Admin {
 		self::field( 'event_registration_dry_run', __( 'Registration dry run (log only)', 'wormiss' ), 'wormiss_events' );
 
 		$title = __( 'Send WordPress events to iMIS', 'wormiss' );
-		add_settings_section( 'wormiss_event_sync', $title, [ __CLASS__, 'event_sync_intro' ], self::PAGE );
+		self::section( 'wormiss_event_sync', $title, [ __CLASS__, 'event_sync_intro' ] );
 		self::field( 'event_sync_enabled', __( 'Send events to iMIS', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_sync_dry_run', __( 'Dry run (check only)', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_template_id', __( 'Default iMIS template event ID', 'wormiss' ), 'wormiss_event_sync' );
 		self::field( 'event_cancel_on_trash', __( 'Cancel in iMIS when trashed', 'wormiss' ), 'wormiss_event_sync' );
 
 		$title = __( 'Import iMIS events', 'wormiss' );
-		add_settings_section( 'wormiss_event_import', $title, [ __CLASS__, 'event_import_intro' ], self::PAGE );
+		self::section( 'wormiss_event_import', $title, [ __CLASS__, 'event_import_intro' ] );
 		self::field( 'event_import_enabled', __( 'Import iMIS events daily', 'wormiss' ), 'wormiss_event_import' );
 		self::field( 'event_import_publish', __( 'Publish imported pages', 'wormiss' ), 'wormiss_event_import' );
 		self::field( 'event_import_since', __( 'Also import past events since', 'wormiss' ), 'wormiss_event_import' );
 
 		$title = __( 'Import iMIS news', 'wormiss' );
-		add_settings_section( 'wormiss_news_import', $title, [ __CLASS__, 'news_import_intro' ], self::PAGE );
+		self::section( 'wormiss_news_import', $title, [ __CLASS__, 'news_import_intro' ] );
 		self::field( 'news_import_enabled', __( 'Import iMIS news daily', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_dry_run', __( 'News import dry run (report only)', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_publish', __( 'Publish imported news', 'wormiss' ), 'wormiss_news_import' );
@@ -407,7 +423,7 @@ class Wormiss_Admin {
 		self::field( 'news_import_author', __( 'Author for imported news', 'wormiss' ), 'wormiss_news_import' );
 
 		$title = __( 'Members\' blog', 'wormiss' );
-		add_settings_section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ], self::PAGE );
+		self::section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ] );
 		self::field( 'blog_reader_roles', __( 'Who can read the members\' blog', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_enabled', __( 'Import the iMIS blog daily', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
@@ -416,7 +432,7 @@ class Wormiss_Admin {
 		self::field( 'blog_batch_seconds', __( 'Seconds per blog batch', 'wormiss' ), 'wormiss_blog' );
 
 		$title = __( 'Sign-in page', 'wormiss' );
-		add_settings_section( 'wormiss_sign_in', $title, [ __CLASS__, 'sign_in_intro' ], self::PAGE );
+		self::section( 'wormiss_sign_in', $title, [ __CLASS__, 'sign_in_intro' ] );
 		self::field( 'signin_page', __( 'Sign-in page', 'wormiss' ), 'wormiss_sign_in' );
 		self::field( 'signin_forgot_url', __( 'iMIS forgot-password page', 'wormiss' ), 'wormiss_sign_in' );
 		self::field( 'signin_join_url', __( 'iMIS join page', 'wormiss' ), 'wormiss_sign_in' );
@@ -424,12 +440,12 @@ class Wormiss_Admin {
 		self::field( 'signin_confirm_email', __( 'Confirm free accounts\' email', 'wormiss' ), 'wormiss_sign_in' );
 
 		$title = __( 'Email testing', 'wormiss' );
-		add_settings_section( 'wormiss_mail_divert', $title, [ __CLASS__, 'mail_divert_intro' ], self::PAGE );
+		self::section( 'wormiss_mail_divert', $title, [ __CLASS__, 'mail_divert_intro' ] );
 		self::field( 'mail_divert_to', __( 'Divert all emails to', 'wormiss' ), 'wormiss_mail_divert' );
 		self::field( 'mail_divert_except', __( 'Do not divert emails to', 'wormiss' ), 'wormiss_mail_divert' );
 
 		$title = __( 'Sync members into WordPress', 'wormiss' );
-		add_settings_section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ], self::PAGE );
+		self::section( 'wormiss_user_sync', $title, [ __CLASS__, 'user_sync_intro' ] );
 		self::field( 'user_sync_enabled', __( 'Sync members daily', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_dry_run', __( 'Member sync dry run (report only)', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_query', __( 'Members query', 'wormiss' ), 'wormiss_user_sync' );
@@ -438,7 +454,7 @@ class Wormiss_Admin {
 		self::field( 'member_push_dry_run', __( 'Member changes dry run (log only)', 'wormiss' ), 'wormiss_user_sync' );
 
 		$title = __( 'Record activity in iMIS', 'wormiss' );
-		add_settings_section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ], self::PAGE );
+		self::section( 'wormiss_activity', $title, [ __CLASS__, 'activity_intro' ] );
 		self::field( 'activity_enabled', __( 'Record activity', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'activity_dry_run', __( 'Dry run (log only)', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'activity_type', __( 'iMIS activity type', 'wormiss' ), 'wormiss_activity' );
@@ -448,7 +464,7 @@ class Wormiss_Admin {
 		self::field( 'record_forms', __( 'Form submissions', 'wormiss' ), 'wormiss_activity' );
 		self::field( 'record_purchases', __( 'WooCommerce purchases', 'wormiss' ), 'wormiss_activity' );
 
-		add_settings_section( 'wormiss_log', __( 'Audit log', 'wormiss' ), '__return_false', self::PAGE );
+		self::section( 'wormiss_log', __( 'Audit log', 'wormiss' ), [ __CLASS__, 'log_intro' ] );
 		self::field( 'log_enabled', __( 'Log calls to iMIS', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_capture', __( 'Keep full request and response bodies', 'wormiss' ), 'wormiss_log' );
 		self::field( 'log_retention_days', __( 'Keep log entries for (days)', 'wormiss' ), 'wormiss_log' );
@@ -472,6 +488,62 @@ class Wormiss_Admin {
 	}
 
 	/**
+	 * The settings tabs' names.
+	 *
+	 * @return string[] By tab.
+	 */
+	public static function tab_names(): array {
+		return [
+			'connection' => __( 'Connection', 'wormiss' ),
+			'members'    => __( 'Members', 'wormiss' ),
+			'sign-in'    => __( 'Sign-in', 'wormiss' ),
+			'events'     => __( 'Events', 'wormiss' ),
+			'news'       => __( 'News', 'wormiss' ),
+			'blog'       => __( 'Members\' blog', 'wormiss' ),
+			'activity'   => __( 'Activity & logs', 'wormiss' ),
+		];
+	}
+
+	/**
+	 * The settings tab being shown.
+	 *
+	 * @return string
+	 */
+	public static function current_tab(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the tab to show.
+		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+		return isset( self::TABS[ $tab ] ) ? $tab : (string) array_key_first( self::TABS );
+	}
+
+	/**
+	 * The settings "page" a section is drawn on: one per tab, so each tab shows (and saves)
+	 * only its own sections. Settings in other tabs keep their saved values.
+	 *
+	 * @param string $section Section id.
+	 * @return string
+	 */
+	public static function section_page( string $section ): string {
+		foreach ( self::TABS as $tab => $sections ) {
+			if ( in_array( $section, $sections, true ) ) {
+				return self::PAGE . '-' . $tab;
+			}
+		}
+		return self::PAGE;
+	}
+
+	/**
+	 * Add a settings section, on its tab.
+	 *
+	 * @param string   $id    Section id.
+	 * @param string   $title Heading.
+	 * @param callable $intro Intro text.
+	 * @return void
+	 */
+	private static function section( string $id, string $title, callable $intro ): void {
+		add_settings_section( $id, $title, $intro, self::section_page( $id ) );
+	}
+
+	/**
 	 * Add one settings field.
 	 *
 	 * @param string $key     Setting name.
@@ -484,7 +556,7 @@ class Wormiss_Admin {
 			'wormiss_' . $key,
 			$label,
 			[ __CLASS__, 'render_field' ],
-			self::PAGE,
+			self::section_page( $section ),
 			$section,
 			[
 				'key'       => $key,
@@ -673,6 +745,15 @@ class Wormiss_Admin {
 			. ' ' . esc_html__( 'Create the activity type in iMIS first. Mark as done buttons are recorded whenever this is on.', 'wormiss' )
 			. ' ' . esc_html__( 'Keep the dry run on until the audit log shows what you expect: it logs, but sends nothing.', 'wormiss' )
 			. '</p>';
+	}
+
+	/**
+	 * The audit log section: marks it, as its boxes are not submitted when unticked.
+	 *
+	 * @return void
+	 */
+	public static function log_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[log_section]" value="1" />';
 	}
 
 	/**
@@ -1158,17 +1239,93 @@ class Wormiss_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+		$tab = self::current_tab();
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss settings', 'wormiss' ) . '</h1>';
 		// Pages outside the Settings menu show "Settings saved" and errors themselves. Not filtered
 		// by option: WordPress files its "Settings saved" notice under "general".
 		settings_errors();
 		self::connection_result_notice();
+		echo '<nav class="nav-tab-wrapper wp-clearfix" aria-label="' . esc_attr__( 'Settings', 'wormiss' ) . '">';
+		foreach ( self::tab_names() as $key => $name ) {
+			$class   = 'nav-tab' . ( $key === $tab ? ' nav-tab-active' : '' );
+			$current = $key === $tab ? ' aria-current="page"' : '';
+			echo '<a href="' . esc_url( self::settings_url( $key ) ) . '" class="' . esc_attr( $class ) . '"' . $current . '>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup.
+				. esc_html( $name ) . '</a>';
+		}
+		echo '</nav>';
+		// Only this tab's settings are sent; the others keep their saved values.
 		echo '<form action="options.php" method="post">';
 		settings_fields( self::PAGE );
-		do_settings_sections( self::PAGE );
+		do_settings_sections( self::PAGE . '-' . $tab );
 		submit_button();
 		echo '</form>';
 
+		switch ( $tab ) {
+			case 'connection':
+				self::render_test_connection();
+				break;
+			case 'members':
+				self::render_run_now(
+					'wormiss-user-sync',
+					__( 'Sync members now', 'wormiss' ),
+					Wormiss_User_Sync::summary(),
+					__( 'The member sync has not run yet.', 'wormiss' ),
+					Wormiss_User_Sync::notes(),
+					'wormiss_user_sync_now',
+					__( 'Run the member sync now', 'wormiss' )
+				);
+				break;
+			case 'sign-in':
+				Wormiss_Sign_In_Check::render();
+				break;
+			case 'events':
+				self::render_event_push();
+				self::render_run_now(
+					'wormiss-event-import',
+					__( 'Import iMIS events now', 'wormiss' ),
+					Wormiss_Event_Import::summary(),
+					__( 'The event import has not run yet.', 'wormiss' ),
+					Wormiss_Event_Import::notes(),
+					'wormiss_event_import_now',
+					__( 'Import iMIS events now', 'wormiss' )
+				);
+				break;
+			case 'news':
+				self::render_run_now(
+					'wormiss-news-import',
+					__( 'Import iMIS news now', 'wormiss' ),
+					Wormiss_News_Import::summary(),
+					__( 'The news import has not run yet.', 'wormiss' ),
+					Wormiss_News_Import::notes(),
+					'wormiss_news_import_now',
+					__( 'Import iMIS news now', 'wormiss' )
+				);
+				Wormiss_Content_Check::render();
+				break;
+			case 'blog':
+				self::render_run_now(
+					'wormiss-blog-import',
+					__( 'Import the iMIS blog now', 'wormiss' ),
+					Wormiss_Blog_Import::summary(),
+					__( 'The blog import has not run yet.', 'wormiss' ),
+					Wormiss_Blog_Import::notes(),
+					'wormiss_blog_import_now',
+					__( 'Import the iMIS blog now', 'wormiss' )
+				);
+				Wormiss_Blog_Check::render();
+				break;
+		}
+
+		$log = self::log_url();
+		echo '<p><a href="' . esc_url( $log ) . '">' . esc_html__( 'Open the audit log', 'wormiss' ) . '</a></p></div>';
+	}
+
+	/**
+	 * The Test connection button.
+	 *
+	 * @return void
+	 */
+	private static function render_test_connection(): void {
 		echo '<h2>' . esc_html__( 'Test the connection', 'wormiss' ) . '</h2>';
 		echo '<p>'
 			. esc_html__( 'Signs in to iMIS with the saved settings and runs the first approved query.', 'wormiss' )
@@ -1178,7 +1335,14 @@ class Wormiss_Admin {
 		wp_nonce_field( 'wormiss_test_connection' );
 		submit_button( __( 'Test connection', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
+	}
 
+	/**
+	 * The Send events to iMIS now button.
+	 *
+	 * @return void
+	 */
+	private static function render_event_push(): void {
 		echo '<h2 id="wormiss-event-push">' . esc_html__( 'Send events to iMIS now', 'wormiss' ) . '</h2>';
 		echo '<p class="description">'
 			. esc_html__( 'Sends every published Event made here that iMIS does not have up to date (never sent, edited', 'wormiss' )
@@ -1191,11 +1355,23 @@ class Wormiss_Admin {
 		wp_nonce_field( 'wormiss_event_push_now' );
 		submit_button( __( 'Send events to iMIS now', 'wormiss' ), 'secondary', 'submit', false );
 		echo '</form>';
+	}
 
-		echo '<h2 id="wormiss-event-import">' . esc_html__( 'Import iMIS events now', 'wormiss' ) . '</h2>';
-		$summary = Wormiss_Event_Import::summary();
-		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The event import has not run yet.', 'wormiss' ) ) . '</p>';
-		$notes = Wormiss_Event_Import::notes();
+	/**
+	 * A "run now" block: the last run's summary and notes, and the button.
+	 *
+	 * @param string   $id      Heading id (the button comes back here).
+	 * @param string   $title   Heading.
+	 * @param string   $summary Last run's summary.
+	 * @param string   $not_run Shown when it has not run.
+	 * @param string[] $notes   Last run's notes.
+	 * @param string   $action  admin-post action (also the nonce action).
+	 * @param string   $button  Button text.
+	 * @return void
+	 */
+	private static function render_run_now( string $id, string $title, string $summary, string $not_run, array $notes, string $action, string $button ): void {
+		echo '<h2 id="' . esc_attr( $id ) . '">' . esc_html( $title ) . '</h2>';
+		echo '<p>' . esc_html( '' !== $summary ? $summary : $not_run ) . '</p>';
 		if ( $notes ) {
 			echo '<ul class="ul-disc">';
 			foreach ( $notes as $note ) {
@@ -1204,68 +1380,10 @@ class Wormiss_Admin {
 			echo '</ul>';
 		}
 		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
-		echo '<input type="hidden" name="action" value="wormiss_event_import_now" />';
-		wp_nonce_field( 'wormiss_event_import_now' );
-		submit_button( __( 'Import iMIS events now', 'wormiss' ), 'secondary', 'submit', false );
+		echo '<input type="hidden" name="action" value="' . esc_attr( $action ) . '" />';
+		wp_nonce_field( $action );
+		submit_button( $button, 'secondary', 'submit', false );
 		echo '</form>';
-
-		echo '<h2 id="wormiss-news-import">' . esc_html__( 'Import iMIS news now', 'wormiss' ) . '</h2>';
-		$summary = Wormiss_News_Import::summary();
-		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The news import has not run yet.', 'wormiss' ) ) . '</p>';
-		$notes = Wormiss_News_Import::notes();
-		if ( $notes ) {
-			echo '<ul class="ul-disc">';
-			foreach ( $notes as $note ) {
-				echo '<li>' . esc_html( $note ) . '</li>';
-			}
-			echo '</ul>';
-		}
-		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
-		echo '<input type="hidden" name="action" value="wormiss_news_import_now" />';
-		wp_nonce_field( 'wormiss_news_import_now' );
-		submit_button( __( 'Import iMIS news now', 'wormiss' ), 'secondary', 'submit', false );
-		echo '</form>';
-
-		echo '<h2 id="wormiss-blog-import">' . esc_html__( 'Import the iMIS blog now', 'wormiss' ) . '</h2>';
-		$summary = Wormiss_Blog_Import::summary();
-		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The blog import has not run yet.', 'wormiss' ) ) . '</p>';
-		$notes = Wormiss_Blog_Import::notes();
-		if ( $notes ) {
-			echo '<ul class="ul-disc">';
-			foreach ( $notes as $note ) {
-				echo '<li>' . esc_html( $note ) . '</li>';
-			}
-			echo '</ul>';
-		}
-		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
-		echo '<input type="hidden" name="action" value="wormiss_blog_import_now" />';
-		wp_nonce_field( 'wormiss_blog_import_now' );
-		submit_button( __( 'Import the iMIS blog now', 'wormiss' ), 'secondary', 'submit', false );
-		echo '</form>';
-
-		echo '<h2 id="wormiss-user-sync">' . esc_html__( 'Sync members now', 'wormiss' ) . '</h2>';
-		$summary = Wormiss_User_Sync::summary();
-		echo '<p>' . esc_html( '' !== $summary ? $summary : __( 'The member sync has not run yet.', 'wormiss' ) ) . '</p>';
-		$notes = Wormiss_User_Sync::notes();
-		if ( $notes ) {
-			echo '<ul class="ul-disc">';
-			foreach ( $notes as $note ) {
-				echo '<li>' . esc_html( $note ) . '</li>';
-			}
-			echo '</ul>';
-		}
-		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
-		echo '<input type="hidden" name="action" value="wormiss_user_sync_now" />';
-		wp_nonce_field( 'wormiss_user_sync_now' );
-		submit_button( __( 'Run the member sync now', 'wormiss' ), 'secondary', 'submit', false );
-		echo '</form>';
-
-		Wormiss_Content_Check::render();
-		Wormiss_Blog_Check::render();
-		Wormiss_Sign_In_Check::render();
-
-		$log = self::log_url();
-		echo '<p><a href="' . esc_url( $log ) . '">' . esc_html__( 'Open the audit log', 'wormiss' ) . '</a></p></div>';
 	}
 
 	/**

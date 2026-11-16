@@ -115,6 +115,12 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		$this->assertContains( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event&wormiss_add=1', $slugs, 'Add New Event Category.' );
 		$this->assertContains( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event', $slugs );
 		$this->assertLessThan( array_search( Wormiss_Admin::SETTINGS_PAGE, $slugs, true ), array_search( Wormiss_Admin::ADD_PAGE, $slugs, true ) );
+		// Each list, then its Add New: Events, Add New Event, Event categories, Add New Event Category.
+		$events = array_search( 'edit.php?post_type=wormiss_event', $slugs, true );
+		$add    = array_search( Wormiss_Admin::ADD_PAGE, $slugs, true );
+		$list   = array_search( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event', $slugs, true );
+		$add_c  = array_search( 'edit-tags.php?taxonomy=wormiss_event_type&post_type=wormiss_event&wormiss_add=1', $slugs, true );
+		$this->assertSame( [ $events + 1, $add + 1, $list + 1 ], [ $add, $list, $add_c ] );
 		$this->assertContains( Wormiss_Admin::SETTINGS_PAGE, $slugs );
 		$this->assertContains( Wormiss_Admin::LOG_PAGE, $slugs );
 		$this->assertSame( 'wormiss', get_post_type_object( Wormiss_Event_Sync::POST_TYPE )->show_in_menu );
@@ -190,6 +196,60 @@ class Test_Wormiss_Admin extends Wormiss_Test_Case {
 		ob_start();
 		Wormiss_Admin::render_settings();
 		$this->assertStringContainsString( 'Settings saved.', (string) ob_get_clean() );
+	}
+
+	/**
+	 * Settings are in tabs: each shows only its own sections and run-now buttons, and saving
+	 * one tab leaves the others' settings (ticked boxes included) as they were.
+	 *
+	 * @return void
+	 */
+	public function test_settings_tabs(): void {
+		require_once ABSPATH . 'wp-admin/includes/template.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+		Wormiss_Admin::register_settings();
+
+		ob_start();
+		Wormiss_Admin::render_settings();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'nav-tab-active" aria-current="page">Connection<', $html, 'First tab by default.' );
+		$this->assertStringContainsString( 'Test connection', $html );
+		$this->assertStringNotContainsString( 'Import iMIS events now', $html );
+		$this->assertStringContainsString( 'page=wormiss-settings&#038;tab=events', $html );
+
+		$_GET['tab'] = 'events';
+		ob_start();
+		Wormiss_Admin::render_settings();
+		$html = (string) ob_get_clean();
+		unset( $_GET['tab'] );
+		$this->assertStringContainsString( 'Import iMIS events now', $html );
+		$this->assertStringContainsString( 'name="wormiss_settings[event_sync_enabled]"', $html );
+		$this->assertStringNotContainsString( 'name="wormiss_settings[base_url]"', $html );
+		$this->assertStringNotContainsString( 'Test connection', $html );
+
+		$this->assertSame( admin_url( 'admin.php?page=wormiss-settings&tab=blog' ), Wormiss_Admin::settings_url( 'blog' ) );
+		$this->assertSame( admin_url( 'admin.php?page=wormiss-settings' ), Wormiss_Admin::settings_url( 'nope' ) );
+		foreach ( array_keys( Wormiss_Admin::TABS ) as $tab ) {
+			$this->assertArrayHasKey( $tab, Wormiss_Admin::tab_names() );
+		}
+
+		// Saving the Events tab (no logging boxes in the form) keeps logging and activity on.
+		$saved = Wormiss_Settings::sanitize(
+			array_merge(
+				Wormiss_Settings::all(),
+				[
+					'log_enabled'      => true,
+					'activity_enabled' => true,
+				]
+			)
+		);
+		update_option( Wormiss_Settings::OPTION, $saved );
+		$clean = Wormiss_Settings::sanitize( [ 'events_section' => '1' ] );
+		$this->assertTrue( $clean['log_enabled'] );
+		$this->assertTrue( $clean['activity_enabled'] );
+		$this->assertFalse( $clean['event_cpd'], 'The Events tab\'s own unticked box is saved.' );
+		$this->assertFalse( Wormiss_Settings::sanitize( [ 'log_section' => '1' ] )['log_enabled'] );
 	}
 
 	/**

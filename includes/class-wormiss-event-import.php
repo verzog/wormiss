@@ -153,7 +153,7 @@ class Wormiss_Event_Import {
 		}
 		check_admin_referer( 'wormiss_event_import_now' );
 		self::run();
-		wp_safe_redirect( Wormiss_Admin::settings_url() . '#wormiss-event-import' );
+		wp_safe_redirect( Wormiss_Admin::settings_url( 'events' ) . '#wormiss-event-import' );
 		exit;
 	}
 

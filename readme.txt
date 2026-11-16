@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.48.0
+Stable tag: 0.49.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -205,6 +205,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.49.0 =
+* Wormiss menu: each list now comes before its Add New (Events, Add New Event, Event categories, Add New Event Category).
+* Settings are now in tabs: Connection, Members, Sign-in, Events, News, Members' blog, and Activity & logs. Each tab has its own Save button and its own "run now" buttons and checks, and saving one tab leaves the other tabs' settings as they were. The "run now" buttons come back to their own tab.
 
 = 0.48.0 =
 * "Event types" are now called "Event categories" everywhere in the admin (menu, screens, bulk actions, the Open events block and messages), as iMIS calls them; levels such as Essential are sub-categories. Their web addresses (/event-type/…) and settings are unchanged.
