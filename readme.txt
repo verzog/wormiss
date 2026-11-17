@@ -50,13 +50,15 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
   statuses (e.g. Active). Others see the **title and excerpt**, then a
   "Sign in to read it" message (or "your membership doesn't include it").
 * The **Members only** block hides any blocks inside it from non-members.
-* The **My membership** block shows a signed-in member their membership type, status, join date and paid-until date, as copied from iMIS by the daily member sync.
 * A member's type and status come from an approved membership query (their iMIS
   ID as the first prompt), cached per member. Without one, any signed-in member
   with an iMIS ID counts. Access fails closed: if iMIS cannot be read and there is
   no earlier copy, the content stays hidden.
 * The full text never reaches non-members: the page, feeds, the REST API and
   excerpts all get the teaser. Anyone who can edit the post always sees it.
+* The **My membership** block shows a signed-in member their membership type,
+  status, join date and paid-until date, as copied from iMIS by the daily member
+  sync (Settings > Members).
 
 **Recording activity in iMIS**
 
