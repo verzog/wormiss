@@ -113,7 +113,7 @@ jobs:
           php-version: ${{ matrix.php }}
           coverage: none
           extensions: mysqli
-          tools: composer:v2, wp-cli
+          tools: composer:v2
 
       - name: Install dev tools and the WordPress test library
         run: |
@@ -126,7 +126,12 @@ jobs:
           echo "Testing against WordPress $version"
 
       - name: Download WordPress ${{ env.WP_VERSION }}
-        run: wp core download --path="$RUNNER_TEMP/wordpress" --version="$WP_VERSION" --skip-content
+        # Straight from wordpress.org (into $RUNNER_TEMP/wordpress): WP-CLI from setup-php was
+        # sometimes missing ("wp: command not found"), failing every run before the tests.
+        run: |
+          curl -sSfL --retry 3 --retry-delay 5 "https://wordpress.org/wordpress-$WP_VERSION.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          test -f "$RUNNER_TEMP/wordpress/wp-settings.php"
 
       - name: Write the test configuration
         run: |
