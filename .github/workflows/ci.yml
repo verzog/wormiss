@@ -74,7 +74,7 @@ jobs:
           if [ -n "$stray" ]; then echo "$stray"; echo "::error::Images outside assets/ would ship in the plugin zip."; exit 1; fi
 
   phpunit:
-    name: WP ${{ matrix.wp }} / PHP ${{ matrix.php }}
+    name: WP ${{ matrix.wp }} / PHP ${{ matrix.php }} / ${{ matrix.db }}
     needs: static
     runs-on: ubuntu-24.04
     strategy:
@@ -82,23 +82,25 @@ jobs:
       matrix:
         include:
           # Lowest supported: the plugin header's "Requires at least" and "Requires PHP".
-          - {wp: '6.6', php: '8.1'}
-          - {wp: 'latest', php: '8.2'}
-          - {wp: 'latest', php: '8.3'}
-          - {wp: 'latest', php: '8.4'}
+          - {wp: '6.6', php: '8.1', db: 'mysql:8.4'}
+          - {wp: 'latest', php: '8.2', db: 'mysql:8.4'}
+          - {wp: 'latest', php: '8.3', db: 'mysql:8.4'}
+          - {wp: 'latest', php: '8.4', db: 'mysql:8.4'}
           # The live site runs PHP 8.5.
-          - {wp: 'latest', php: '8.5'}
+          - {wp: 'latest', php: '8.5', db: 'mysql:8.4'}
+          # YunoHost runs WordPress on MariaDB (10.11 on Debian 12), as the live site does.
+          - {wp: 'latest', php: '8.5', db: 'mariadb:10.11'}
 
     services:
       mysql:
-        image: mysql:8.4
+        image: ${{ matrix.db }}
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: wordpress_tests
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-cmd="${{ startsWith(matrix.db, 'mariadb') && 'healthcheck.sh --connect --innodb_initialized' || 'mysqladmin ping -h 127.0.0.1 -proot' }}"
           --health-interval=10s --health-timeout=5s --health-retries=10
 
     steps:
