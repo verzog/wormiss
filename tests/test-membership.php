@@ -163,6 +163,7 @@ class Test_Wormiss_Membership extends Wormiss_Test_Case {
 	 */
 	public function test_block(): void {
 		$this->assertSame( '', Wormiss_Membership::block_html() );
+		$this->assertTrue( defined( 'DONOTCACHEPAGE' ), 'Never cached: it differs per member.' );
 
 		$user_id = self::factory()->user->create();
 		wp_set_current_user( $user_id );

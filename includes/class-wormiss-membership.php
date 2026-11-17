@@ -212,6 +212,8 @@ class Wormiss_Membership {
 	 * @return string
 	 */
 	public static function block_html(): string {
+		// The page differs per member (and signed out): never cached for everyone.
+		Wormiss_Members_Only::no_page_cache();
 		if ( ! is_user_logged_in() ) {
 			return '';
 		}
