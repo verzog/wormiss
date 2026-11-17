@@ -18,7 +18,7 @@
  * Plugin Name:       Wormiss – iMIS bridge
  * Plugin URI:        https://github.com/verzog/wormiss
  * Description:       Connects WordPress to iMIS: iMIS data on pages, members' data, members-only content and activity records.
- * Version:           0.49.0
+ * Version:           0.50.0
  * Requires at least: 6.6
  * Requires PHP:      8.1
  * Author:            Vernon Spain
@@ -33,7 +33,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WORMISS_VERSION', '0.49.0' );
+define( 'WORMISS_VERSION', '0.50.0' );
 define( 'WORMISS_FILE', __FILE__ );
 define( 'WORMISS_DIR', __DIR__ );
 
@@ -67,6 +67,7 @@ require_once __DIR__ . '/includes/class-wormiss-mail-divert.php';
 require_once __DIR__ . '/includes/class-wormiss-user-sync.php';
 require_once __DIR__ . '/includes/class-wormiss-member-push.php';
 require_once __DIR__ . '/includes/class-wormiss-member.php';
+require_once __DIR__ . '/includes/class-wormiss-membership.php';
 require_once __DIR__ . '/includes/class-wormiss-member-display.php';
 require_once __DIR__ . '/includes/class-wormiss-access.php';
 require_once __DIR__ . '/includes/class-wormiss-members-only.php';

@@ -53,6 +53,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Types::init();
 		Wormiss_Event_Registration::init();
 		Wormiss_User_Sync::init();
+		Wormiss_Membership::init();
 		Wormiss_Member_Push::init();
 		Wormiss_Event_Sync::init();
 		Wormiss_Event_Editor::init();
@@ -86,6 +87,7 @@ class Wormiss_Plugin {
 		add_filter( 'block_type_metadata', [ __CLASS__, 'iqa_block_admins_only' ] );
 		register_block_type( WORMISS_DIR . '/blocks/iqa' );
 		register_block_type( WORMISS_DIR . '/blocks/member' );
+		register_block_type( WORMISS_DIR . '/blocks/my-membership' );
 		register_block_type( WORMISS_DIR . '/blocks/members-only' );
 		register_block_type( WORMISS_DIR . '/blocks/complete' );
 		wp_register_style( 'wormiss-blog-filters', plugins_url( 'assets/blog-filters.css', WORMISS_FILE ), [], WORMISS_VERSION );
@@ -243,7 +245,7 @@ class Wormiss_Plugin {
 	 */
 	public static function register_exporter( array $exporters ): array {
 		$exporters['wormiss'] = [
-			'exporter_friendly_name' => __( 'Wormiss audit log', 'wormiss' ),
+			'exporter_friendly_name' => __( 'Wormiss (iMIS membership and audit log)', 'wormiss' ),
 			'callback'               => [ __CLASS__, 'export_personal_data' ],
 		];
 		return $exporters;
@@ -280,7 +282,8 @@ class Wormiss_Plugin {
 		}
 		$per_page = 100;
 		$rows     = Wormiss_Logger::for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ), $per_page, ( $page - 1 ) * $per_page );
-		$data     = [];
+		// The membership details copied from iMIS, with the first page.
+		$data = 1 === $page ? Wormiss_Membership::export_items( $user->ID ) : [];
 		foreach ( $rows as $row ) {
 			$data[] = [
 				'group_id'    => 'wormiss-log',
@@ -326,6 +329,9 @@ class Wormiss_Plugin {
 			$removed += Wormiss_Activity::unschedule_for_person( $user->ID, Wormiss_Member::imis_id( $user->ID ) );
 			// Blog likes and saved posts.
 			$removed += Wormiss_Blog_Actions::delete_for_user( $user->ID );
+			// The membership details copied from iMIS (the next member sync copies them again
+			// while the person is in the members query: iMIS is their record).
+			$removed += Wormiss_Membership::delete_for_user( $user->ID );
 		}
 		return [
 			'items_removed'  => $removed > 0,
@@ -354,7 +360,7 @@ class Wormiss_Plugin {
 				. ' ' . esc_html__( 'reading members-only pages, downloading files, completing activities and submitting forms.', 'wormiss' )
 				. ' ' . esc_html__( 'If you buy from our online shop, the order number, items and total may be recorded too.', 'wormiss' )
 				. ' ' . esc_html__( 'If you register for an event here, the registration is made in iMIS under your record.', 'wormiss' )
-				. ' ' . esc_html__( 'Members\' website accounts may be created and updated from iMIS (name, email, iMIS ID).', 'wormiss' )
+				. ' ' . esc_html__( 'Members\' website accounts may be created and updated from iMIS (name, email, iMIS ID, and membership type, status, join and expiry dates).', 'wormiss' )
 				. ' ' . esc_html__( 'A log of each request to iMIS (when, what, and whether it worked) is kept for a while.', 'wormiss' )
 				. '</p>'
 		);

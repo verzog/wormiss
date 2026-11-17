@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.49.0
+Stable tag: 0.50.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -56,6 +56,9 @@ Wormiss talks to iMIS directly through its REST API (no middleware).
   no earlier copy, the content stays hidden.
 * The full text never reaches non-members: the page, feeds, the REST API and
   excerpts all get the teaser. Anyone who can edit the post always sees it.
+* The **My membership** block shows a signed-in member their membership type,
+  status, join date and paid-until date, as copied from iMIS by the daily member
+  sync (Settings > Members).
 
 **Recording activity in iMIS**
 
@@ -205,6 +208,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.50.0 =
+* Membership details on members' accounts: the daily member sync now also copies each member's type, status, join date and expiry ("paid until") date from the members query. The column names are settings on Settings > Members (MemberType, JoinDate and PaidThrough by default; blank to not copy one). iMIS stays the record: the copy is replaced by each sync.
+* New My membership block: shows the signed-in member their membership details (an expired date is marked). The details also show, read only, on each member's profile in the admin.
+* The details are included in Tools > Export Personal Data and removed by Erase Personal Data, and the suggested privacy policy text mentions them.
 
 = 0.49.0 =
 * Wormiss menu: each list now comes before its Add New (Events, Add New Event, Event categories, Add New Event Category).

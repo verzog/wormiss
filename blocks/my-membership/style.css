@@ -1,0 +1,15 @@
+/* My membership block: the member's details as a two-column list. */
+.wp-block-wormiss-my-membership .wormiss-membership {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.5em 1.5em;
+	margin: 0;
+}
+
+.wp-block-wormiss-my-membership .wormiss-membership dt {
+	font-weight: 600;
+}
+
+.wp-block-wormiss-my-membership .wormiss-membership dd {
+	margin: 0;
+}

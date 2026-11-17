@@ -1,0 +1,26 @@
+{
+	"$schema": "https://schemas.wp.org/wp/6.6/block.json",
+	"apiVersion": 3,
+	"name": "wormiss/my-membership",
+	"version": "0.50.0",
+	"title": "My membership",
+	"category": "widgets",
+	"icon": "id",
+	"description": "The signed-in member's iMIS membership: type, status, member since and paid until, as copied by the daily member sync. Shows nothing to visitors who are not signed in.",
+	"keywords": [ "member", "membership", "imis", "expiry" ],
+	"textdomain": "wormiss",
+	"supports": {
+		"html": false,
+		"align": [ "wide" ],
+		"spacing": {
+			"margin": true,
+			"padding": true
+		},
+		"typography": {
+			"fontSize": true
+		}
+	},
+	"editorScript": "file:./index.js",
+	"style": "file:./style.css",
+	"render": "file:./render.php"
+}
