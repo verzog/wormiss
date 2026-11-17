@@ -329,7 +329,7 @@ class Wormiss_User_Sync {
 	 * A row's member details, by column name ignoring case, spaces and underscores.
 	 *
 	 * @param array $row IQA row.
-	 * @return array{id: string, email: string, first: string, last: string, status: string}
+	 * @return array{id: string, email: string, first: string, last: string, status: string, type: string, joined: string, expires: string}
 	 */
 	public static function member( array $row ): array {
 		$by = [];
@@ -344,12 +344,20 @@ class Wormiss_User_Sync {
 			}
 			return '';
 		};
+		// A membership column set to blank is not copied.
+		$column = static function ( string $key, array $guesses ) use ( $pick ): string {
+			$name = str_replace( [ ' ', '_' ], '', strtolower( (string) Wormiss_Settings::get( $key ) ) );
+			return '' === $name ? '' : $pick( array_unique( array_merge( [ $name ], $guesses ) ) );
+		};
 		return [
-			'id'     => Wormiss_Member::clean_id( $pick( [ 'id', 'imisid', 'contactid', 'partyid' ] ) ),
-			'email'  => sanitize_email( $pick( [ 'email', 'emailaddress' ] ) ),
-			'first'  => sanitize_text_field( $pick( [ 'firstname' ] ) ),
-			'last'   => sanitize_text_field( $pick( [ 'lastname' ] ) ),
-			'status' => sanitize_text_field( $pick( [ 'status', 'memberstatus' ] ) ),
+			'id'      => Wormiss_Member::clean_id( $pick( [ 'id', 'imisid', 'contactid', 'partyid' ] ) ),
+			'email'   => sanitize_email( $pick( [ 'email', 'emailaddress' ] ) ),
+			'first'   => sanitize_text_field( $pick( [ 'firstname' ] ) ),
+			'last'    => sanitize_text_field( $pick( [ 'lastname' ] ) ),
+			'status'  => sanitize_text_field( $pick( [ 'status', 'memberstatus' ] ) ),
+			'type'    => sanitize_text_field( $column( 'member_type_column', [ 'membertype', 'customertype' ] ) ),
+			'joined'  => Wormiss_Membership::date( $column( 'member_join_column', [ 'joindate', 'membersince' ] ) ),
+			'expires' => Wormiss_Membership::date( $column( 'member_expiry_column', [ 'paidthrough', 'paidthru', 'expirydate' ] ) ),
 		];
 	}
 
@@ -420,16 +428,22 @@ class Wormiss_User_Sync {
 				++$report['skipped']; // Lapsed (or unknown) members are not given new accounts.
 				return false;
 			}
-			$created = $dry ? true : self::create( $member, $report );
+			$created = $dry || self::create( $member, $report );
 			if ( $created ) {
 				++$report['created'];
 			}
 			return ! $dry;
 		}
-		$wrote = false;
-		if ( self::changes( $user_id, $member ) ) {
+		$wrote   = false;
+		$names   = self::changes( $user_id, $member );
+		$details = Wormiss_Membership::differs( $user_id, Wormiss_Membership::from_member( $member ) );
+		if ( $names || $details ) {
 			$wrote = ! $dry;
-			if ( $dry || self::update( $user_id, $member, $report ) ) {
+			$saved = $dry || ! $names || self::update( $user_id, $member, $report );
+			if ( ! $dry && $details ) {
+				Wormiss_Membership::save( $user_id, Wormiss_Membership::from_member( $member ) );
+			}
+			if ( $saved ) {
 				++$report['updated'];
 			}
 		}
@@ -550,6 +564,7 @@ class Wormiss_User_Sync {
 		if ( 'login' !== Wormiss_Settings::get( 'member_id_source' ) ) {
 			update_user_meta( $user_id, (string) Wormiss_Settings::get( 'member_id_meta' ), $member['id'] );
 		}
+		Wormiss_Membership::save( $user_id, Wormiss_Membership::from_member( $member ) );
 		return true;
 	}
 

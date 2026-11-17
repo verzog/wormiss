@@ -91,6 +91,10 @@ class Wormiss_Settings {
 			'user_sync_dry_run'          => true,
 			'user_sync_query'            => '',
 			'user_sync_role'             => 'subscriber',
+			// The members query's columns copied onto each account ('' to not copy that one).
+			'member_type_column'         => 'MemberType',
+			'member_join_column'         => 'JoinDate',
+			'member_expiry_column'       => 'PaidThrough',
 			// Members' WordPress name and email changes sent to their iMIS record: off, and a dry run.
 			'member_push_enabled'        => false,
 			'member_push_dry_run'        => true,
@@ -464,6 +468,18 @@ class Wormiss_Settings {
 				$name = trim( (string) $input[ $column ] );
 				if ( preg_match( '/^[A-Za-z0-9_]{1,128}$/', $name ) ) {
 					$clean[ $column ] = $name;
+				}
+			}
+		}
+		// The membership columns may be blank (not copied); spaces are allowed, as IQA column
+		// names can have them.
+		foreach ( [ 'member_type_column', 'member_join_column', 'member_expiry_column' ] as $column ) {
+			if ( isset( $input[ $column ] ) ) {
+				$name = trim( (string) $input[ $column ] );
+				if ( '' === $name || preg_match( '/^[A-Za-z0-9_ ]{1,128}$/', $name ) ) {
+					$clean[ $column ] = $name;
+				} else {
+					add_settings_error( self::OPTION, $column, __( 'Membership column names can only use letters, digits, spaces and _.', 'wormiss' ) );
 				}
 			}
 		}

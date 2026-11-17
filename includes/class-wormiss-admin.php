@@ -450,6 +450,9 @@ class Wormiss_Admin {
 		self::field( 'user_sync_dry_run', __( 'Member sync dry run (report only)', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_query', __( 'Members query', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'user_sync_role', __( 'Role for new members', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'member_type_column', __( 'Member type column', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'member_join_column', __( 'Join date column', 'wormiss' ), 'wormiss_user_sync' );
+		self::field( 'member_expiry_column', __( 'Expiry date column', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'member_push_enabled', __( 'Send member changes to iMIS', 'wormiss' ), 'wormiss_user_sync' );
 		self::field( 'member_push_dry_run', __( 'Member changes dry run (log only)', 'wormiss' ), 'wormiss_user_sync' );
 
@@ -1030,6 +1033,22 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'An IQA path, e.g. $/_SCCA/Membership/WebsiteMembers. Never shown on pages.', 'wormiss' ) . '</p>';
+				return;
+			case 'member_type_column':
+			case 'member_join_column':
+			case 'member_expiry_column':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				if ( 'member_expiry_column' === $key ) {
+					echo '<p class="description">'
+						. esc_html__( 'Columns in the members query. Each member\'s type, status (the Status column), join date and', 'wormiss' )
+						. ' ' . esc_html__( 'expiry date are copied onto their account, for the My membership block and their profile.', 'wormiss' )
+						. ' ' . esc_html__( 'Leave one blank to not copy it.', 'wormiss' ) . '</p>';
+				}
 				return;
 			case 'user_sync_role':
 				printf( '<select id="%1$s" name="%2$s">', esc_attr( $id ), esc_attr( $name ) );
