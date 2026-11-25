@@ -61,6 +61,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Import::init();
 		Wormiss_News_Import::init();
 		Wormiss_Images::init();
+		Wormiss_Media_Categories::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
 		Wormiss_Blog_Actions::init();
@@ -194,6 +195,8 @@ class Wormiss_Plugin {
 	 */
 	public static function activate(): void {
 		Wormiss_Logger::install();
+		// The reserved "End-user images" media category (not deletable).
+		Wormiss_Media_Categories::ensure_reserved_term();
 		if ( ! wp_next_scheduled( self::CLEANUP_HOOK ) ) {
 			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::CLEANUP_HOOK );
 		}

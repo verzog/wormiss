@@ -132,6 +132,10 @@ class Wormiss_Settings {
 			'news_import_category'       => 'News',
 			// Who imported posts are by (user ID; 0 for the first administrator).
 			'news_import_author'         => 0,
+			// Media categories: the roles that count as staff, whose uploads are not auto-filed into
+			// the reserved "End-user images" category (empty: every role that can edit others' posts).
+			// The role x category matrix and its settings UI come in a later phase.
+			'media_staff_roles'          => [],
 			// The members' blog: roles that may read full posts (staff always can), and the import.
 			'blog_reader_roles'          => [],
 			'blog_import_enabled'        => false,

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.50.0
+Stable tag: 0.51.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,13 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.51.0 =
+* Media categories: a new hierarchical "Media categories" taxonomy on images and other media, so the library can be organised into curated buckets (Logos, Headshots, Event photos, ...) with sub-categories. Manage them under Media > Media categories.
+* A reserved "End-user images" category is created automatically and cannot be deleted.
+* Images and other media can be put into categories from the Attachment details panel in the media modal, and the media modal and the Media grid gain a category dropdown to filter the library by category.
+* Uploads by non-staff users (by default, anyone who cannot edit others' posts) are filed into "End-user images" automatically, so end-user uploads can be managed as a group. System imports are left alone.
+* This is the first step of the media-access feature: it organises media only. Controlling who may see or use which images is a later release.
 
 = 0.50.0 =
 * Membership details on members' accounts: the daily member sync now also copies each member's type, status, join date and expiry ("paid until") date from the members query. The column names are settings on Settings > Members (MemberType, JoinDate and PaidThrough by default; blank to not copy one). iMIS stays the record: the copy is replaced by each sync.
