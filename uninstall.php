@@ -30,6 +30,7 @@ delete_option( 'wormiss_settings' );
 delete_option( 'wormiss_password' );
 delete_option( 'wormiss_db_version' );
 delete_option( 'wormiss_rewrite_version' );
+delete_option( 'wormiss_media_enduser_term' );
 delete_option( 'wormiss_user_sync_report' );
 delete_metadata( 'user', 0, '_wormiss_member_push_tries', '', true );
 delete_metadata( 'user', 0, '_wormiss_membership', '', true );
