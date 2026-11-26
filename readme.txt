@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.53.0
+Stable tag: 0.54.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,10 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.54.0 =
+* Media admin: a new "Media" tab in Wormiss Settings with the department-by-category access matrix (tick which categories each department may see and use; administrators only), plus two settings — the roles that count as staff, and the departments that may also see uncategorised images.
+* Uncategorised images (ones with no media category) are visible to their uploader and administrators by default; a department can now be granted visibility of them via the new setting.
 
 = 0.53.0 =
 * Media access control: who can see and use which images in the editor and Media Library is now governed by a department-by-category rule. A top-level media category is created for each department (Marketing, Membership, Education, Management, Events, Operations), and by default each department is allowed its own category.

@@ -311,4 +311,101 @@ class Test_Wormiss_Media_Access extends Wormiss_Test_Case {
 		$args = Wormiss_Media_Access::gate_rest_args( [ 'post_type' => 'attachment' ], $request );
 		$this->assertArrayNotHasKey( Wormiss_Media_Access::QUERY_FLAG, $args );
 	}
+
+	/**
+	 * The matrix sanitiser keeps known departments and real category terms, and drops the rest.
+	 *
+	 * @return void
+	 */
+	public function test_sanitize_matrix(): void {
+		$marketing = $this->department_term( 'marketing' );
+		$logos     = (int) self::factory()->term->create(
+			[
+				'taxonomy' => Wormiss_Media_Categories::TAXONOMY,
+				'name'     => 'Logos',
+			]
+		);
+		$clean     = Wormiss_Media_Access::sanitize_matrix(
+			[
+				'marketing'  => [ (string) $marketing, (string) $logos, '999999' ],
+				'bogus_dept' => [ (string) $logos ],
+				'education'  => 'not-an-array',
+			]
+		);
+		sort( $clean['marketing'] );
+		$expected = [ $marketing, $logos ];
+		sort( $expected );
+		$this->assertSame( $expected, $clean['marketing'], 'Real terms kept, unknown term dropped.' );
+		$this->assertArrayNotHasKey( 'bogus_dept', $clean, 'Unknown department dropped.' );
+		$this->assertArrayNotHasKey( 'education', $clean, 'Non-array entry dropped.' );
+	}
+
+	/**
+	 * Saving the matrix stores it and refreshes the allowed-terms cache.
+	 *
+	 * @return void
+	 */
+	public function test_save_matrix(): void {
+		$logos = (int) self::factory()->term->create(
+			[
+				'taxonomy' => Wormiss_Media_Categories::TAXONOMY,
+				'name'     => 'Logos',
+			]
+		);
+		$user  = $this->staff( [ 'marketing' ] );
+		// Prime the cache with the default (marketing's own category).
+		$this->assertNotContains( $logos, Wormiss_Media_Access::allowed_term_ids( $user ) );
+
+		Wormiss_Media_Access::save_matrix( [ 'marketing' => [ $logos ] ] );
+		$this->assertSame( [ 'marketing' => [ $logos ] ], Wormiss_Media_Access::matrix() );
+		$this->assertContains( $logos, Wormiss_Media_Access::allowed_term_ids( $user ), 'Cache refreshed after save.' );
+	}
+
+	/**
+	 * With the uncategorised-visibility setting, members of the listed departments also see images
+	 * that have no category; others still do not.
+	 *
+	 * @return void
+	 */
+	public function test_uncategorised_visibility(): void {
+		update_option(
+			Wormiss_Settings::OPTION,
+			array_merge( Wormiss_Settings::all(), [ 'media_uncategorised_departments' => [ 'marketing' ] ] )
+		);
+		$admin    = (int) self::factory()->user->create( [ 'role' => 'administrator' ] );
+		$mk_staff = $this->staff( [ 'marketing' ] );
+		$ed_staff = $this->staff( [ 'education' ] );
+		$loose    = $this->attachment( $admin ); // Uncategorised, someone else's.
+
+		$this->assertTrue( Wormiss_Media_Access::sees_uncategorised( $mk_staff ) );
+		$this->assertFalse( Wormiss_Media_Access::sees_uncategorised( $ed_staff ) );
+		$this->assertTrue( Wormiss_Media_Access::user_can_see( $mk_staff, $loose ), 'Marketing sees uncategorised.' );
+		$this->assertFalse( Wormiss_Media_Access::user_can_see( $ed_staff, $loose ), 'Education does not.' );
+		$this->assertContains( $loose, $this->visible_to( $mk_staff ), 'Uncategorised image in the gated query for Marketing.' );
+		$this->assertNotContains( $loose, $this->visible_to( $ed_staff ) );
+	}
+
+	/**
+	 * The settings saniter keeps known roles and departments and drops the rest; the section marker
+	 * clears an empty tick-list.
+	 *
+	 * @return void
+	 */
+	public function test_settings_sanitise(): void {
+		$clean = Wormiss_Settings::sanitize(
+			[
+				'media_section'                   => '1',
+				'media_staff_roles'               => [ Wormiss_Roles::ROLE_MANAGER, 'editor', 'nope' ],
+				'media_uncategorised_departments' => [ 'marketing', 'bogus' ],
+			]
+		);
+		$this->assertContains( Wormiss_Roles::ROLE_MANAGER, $clean['media_staff_roles'] );
+		$this->assertContains( 'editor', $clean['media_staff_roles'] );
+		$this->assertNotContains( 'nope', $clean['media_staff_roles'] );
+		$this->assertSame( [ 'marketing' ], $clean['media_uncategorised_departments'] );
+
+		$cleared = Wormiss_Settings::sanitize( [ 'media_section' => '1' ] );
+		$this->assertSame( [], $cleared['media_staff_roles'], 'Empty tick-list clears.' );
+		$this->assertSame( [], $cleared['media_uncategorised_departments'] );
+	}
 }

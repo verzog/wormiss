@@ -216,13 +216,75 @@ class Wormiss_Media_Access {
 		if ( (int) $post->post_author === $user_id && $user_id > 0 ) {
 			return true;
 		}
-		$allowed = self::allowed_term_ids( $user_id );
+		$terms = wp_get_object_terms( $attachment, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] );
+		$terms = is_wp_error( $terms ) ? [] : array_map( 'intval', $terms );
+		if ( ! $terms ) {
+			// Uncategorised: visible only if the user's department allows uncategorised images.
+			return self::sees_uncategorised( $user_id );
+		}
+		return (bool) array_intersect( self::allowed_term_ids( $user_id ), $terms );
+	}
+
+	/**
+	 * Whether a user may see uncategorised images (ones with no media category), per the
+	 * uncategorised-visibility setting. Their department must be listed; the uploader and admins can
+	 * always see their own/all regardless (handled in user_can_see() and the gate).
+	 *
+	 * @param int $user_id User ID.
+	 * @return bool
+	 */
+	public static function sees_uncategorised( int $user_id ): bool {
+		$allowed = self::uncategorised_departments();
 		if ( ! $allowed ) {
 			return false;
 		}
-		$terms = wp_get_object_terms( $attachment, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] );
-		$terms = is_wp_error( $terms ) ? [] : array_map( 'intval', $terms );
-		return (bool) array_intersect( $allowed, $terms );
+		return (bool) array_intersect( $allowed, Wormiss_Roles::user_departments( $user_id ) );
+	}
+
+	/**
+	 * The departments whose members may also see uncategorised images.
+	 *
+	 * @return string[]
+	 */
+	public static function uncategorised_departments(): array {
+		$chosen = (array) Wormiss_Settings::get( 'media_uncategorised_departments' );
+		return array_values( array_intersect( array_map( 'strval', $chosen ), array_keys( Wormiss_Roles::departments() ) ) );
+	}
+
+	/**
+	 * Clean a submitted matrix (department slug => allowed category term IDs): keep known
+	 * departments and term IDs that exist in the media taxonomy.
+	 *
+	 * @param mixed $raw Submitted matrix.
+	 * @return array<string, int[]>
+	 */
+	public static function sanitize_matrix( $raw ): array {
+		$raw   = is_array( $raw ) ? $raw : [];
+		$clean = [];
+		foreach ( Wormiss_Roles::departments() as $slug => $label ) {
+			$ids  = isset( $raw[ $slug ] ) && is_array( $raw[ $slug ] ) ? array_map( 'intval', $raw[ $slug ] ) : [];
+			$kept = [];
+			foreach ( array_unique( $ids ) as $id ) {
+				if ( $id > 0 && get_term( $id, Wormiss_Media_Categories::TAXONOMY ) instanceof WP_Term ) {
+					$kept[] = $id;
+				}
+			}
+			if ( $kept ) {
+				$clean[ $slug ] = $kept;
+			}
+		}
+		return $clean;
+	}
+
+	/**
+	 * Save the department x category matrix.
+	 *
+	 * @param mixed $raw Submitted matrix.
+	 * @return void
+	 */
+	public static function save_matrix( $raw ): void {
+		update_option( self::MATRIX_OPTION, self::sanitize_matrix( $raw ), false );
+		self::$allowed_cache = [];
 	}
 
 	/**
@@ -292,26 +354,40 @@ class Wormiss_Media_Access {
 		if ( $user < 1 || self::is_exempt( $user ) ) {
 			return $where;
 		}
+		// Always: the user's own uploads.
+		$parts = [ $wpdb->prepare( "{$wpdb->posts}.post_author = %d", $user ) ];
+
 		$allowed = self::allowed_term_ids( $user );
-		if ( ! $allowed ) {
-			// No allowed categories: the user sees only their own uploads.
-			return $where . ' AND ' . $wpdb->prepare( "( {$wpdb->posts}.post_author = %d )", $user );
+		if ( $allowed ) {
+			$placeholders = implode( ', ', array_fill( 0, count( $allowed ), '%d' ) );
+			$params       = array_merge( [ Wormiss_Media_Categories::TAXONOMY ], $allowed );
+			// A variable-length IN list of %d placeholders; the taxonomy and every ID are passed to
+			// prepare(), so the interpolated $placeholders holds no data, only markers.
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+			$parts[] = $wpdb->prepare(
+				"{$wpdb->posts}.ID IN (
+					SELECT tr.object_id FROM {$wpdb->term_relationships} tr
+					INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+					WHERE tt.taxonomy = %s AND tt.term_id IN ( {$placeholders} )
+				)",
+				$params
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 		}
-		$placeholders = implode( ', ', array_fill( 0, count( $allowed ), '%d' ) );
-		$params       = array_merge( [ $user, Wormiss_Media_Categories::TAXONOMY ], $allowed );
-		// A variable-length IN list of %d placeholders; the taxonomy and every ID are passed to
-		// prepare() below, so the interpolated $placeholders holds no data, only markers.
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
-		$clause = $wpdb->prepare(
-			"( {$wpdb->posts}.post_author = %d OR {$wpdb->posts}.ID IN (
-				SELECT tr.object_id FROM {$wpdb->term_relationships} tr
-				INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
-				WHERE tt.taxonomy = %s AND tt.term_id IN ( {$placeholders} )
-			) )",
-			$params
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
-		return $where . ' AND ' . $clause;
+
+		if ( self::sees_uncategorised( $user ) ) {
+			// Images with no media category at all.
+			$parts[] = $wpdb->prepare(
+				"{$wpdb->posts}.ID NOT IN (
+					SELECT tr.object_id FROM {$wpdb->term_relationships} tr
+					INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+					WHERE tt.taxonomy = %s
+				)",
+				Wormiss_Media_Categories::TAXONOMY
+			);
+		}
+
+		return $where . ' AND ( ' . implode( ' OR ', $parts ) . ' )';
 	}
 
 	/**

@@ -56,6 +56,7 @@ class Wormiss_Admin {
 		'events'     => [ 'wormiss_events', 'wormiss_event_sync', 'wormiss_event_import' ],
 		'news'       => [ 'wormiss_news_import' ],
 		'blog'       => [ 'wormiss_blog' ],
+		'media'      => [ 'wormiss_media' ],
 		'activity'   => [ 'wormiss_activity', 'wormiss_mail_divert', 'wormiss_log' ],
 	];
 
@@ -74,6 +75,7 @@ class Wormiss_Admin {
 		add_action( 'admin_post_wormiss_test_connection', [ __CLASS__, 'test_connection' ] );
 		add_action( 'load-post-new.php', [ __CLASS__, 'choose_first' ] );
 		add_action( 'admin_post_wormiss_log_export', [ __CLASS__, 'export_log' ] );
+		add_action( 'admin_post_wormiss_save_media_matrix', [ __CLASS__, 'save_media_matrix' ] );
 		Wormiss_Content_Check::init();
 		Wormiss_Blog_Check::init();
 		Wormiss_Sign_In_Check::init();
@@ -431,6 +433,11 @@ class Wormiss_Admin {
 		self::field( 'blog_batch_minutes', __( 'Minutes between blog batches', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_seconds', __( 'Seconds per blog batch', 'wormiss' ), 'wormiss_blog' );
 
+		$title = __( 'Media categories', 'wormiss' );
+		self::section( 'wormiss_media', $title, [ __CLASS__, 'media_intro' ] );
+		self::field( 'media_staff_roles', __( 'Staff roles', 'wormiss' ), 'wormiss_media' );
+		self::field( 'media_uncategorised_departments', __( 'Who also sees uncategorised images', 'wormiss' ), 'wormiss_media' );
+
 		$title = __( 'Sign-in page', 'wormiss' );
 		self::section( 'wormiss_sign_in', $title, [ __CLASS__, 'sign_in_intro' ] );
 		self::field( 'signin_page', __( 'Sign-in page', 'wormiss' ), 'wormiss_sign_in' );
@@ -503,6 +510,7 @@ class Wormiss_Admin {
 			'events'     => __( 'Events', 'wormiss' ),
 			'news'       => __( 'News', 'wormiss' ),
 			'blog'       => __( 'Members\' blog', 'wormiss' ),
+			'media'      => __( 'Media', 'wormiss' ),
 			'activity'   => __( 'Activity & logs', 'wormiss' ),
 		];
 	}
@@ -680,7 +688,21 @@ class Wormiss_Admin {
 	}
 
 	/**
-	 * Intro text for the members' blog section (and the marker that its fields were shown).
+	 * Intro text for the media categories section (and the marker that its fields were shown).
+	 *
+	 * @return void
+	 */
+	public static function media_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[media_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Media categories organise the Media Library, and who may see and use which images is controlled', 'wormiss' )
+			. ' ' . esc_html__( 'by the department-by-category matrix below. A non-administrator sees images they uploaded plus', 'wormiss' )
+			. ' ' . esc_html__( 'images in categories allowed to their departments; administrators see everything.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the members' blog section (and the marker that its checkboxes were shown).
 	 *
 	 * @return void
 	 */
@@ -988,6 +1010,38 @@ class Wormiss_Admin {
 				echo '<p class="description">'
 					. esc_html__( 'Tick the roles (e.g. a paid membership role) that may read full blog posts and comment.', 'wormiss' )
 					. ' ' . esc_html__( 'None ticked: only staff can read; everyone else sees intros.', 'wormiss' ) . '</p>';
+				return;
+			case 'media_staff_roles':
+				$chosen = array_map( 'strval', (array) $value );
+				foreach ( wp_roles()->get_names() as $role => $label ) {
+					printf(
+						'<label style="display:block"><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label>',
+						esc_attr( $name ),
+						esc_attr( (string) $role ),
+						checked( in_array( (string) $role, $chosen, true ), true, false ),
+						esc_html( translate_user_role( $label ) )
+					);
+				}
+				echo '<p class="description">'
+					. esc_html__( 'Roles that count as staff: their uploads are not auto-filed into "End-user images".', 'wormiss' )
+					. ' ' . esc_html__( 'None ticked: administrators and the Wormiss Staff and Manager roles. Administrators are always staff.', 'wormiss' )
+					. '</p>';
+				return;
+			case 'media_uncategorised_departments':
+				$chosen = array_map( 'strval', (array) $value );
+				foreach ( Wormiss_Roles::departments() as $slug => $label ) {
+					printf(
+						'<label style="display:block"><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label>',
+						esc_attr( $name ),
+						esc_attr( (string) $slug ),
+						checked( in_array( (string) $slug, $chosen, true ), true, false ),
+						esc_html( $label )
+					);
+				}
+				echo '<p class="description">'
+					. esc_html__( 'Departments whose members also see images with no category.', 'wormiss' )
+					. ' ' . esc_html__( 'None ticked: uncategorised images are visible to their uploader and administrators only.', 'wormiss' )
+					. '</p>';
 				return;
 			case 'news_import_author':
 				wp_dropdown_users(
@@ -1333,10 +1387,75 @@ class Wormiss_Admin {
 				);
 				Wormiss_Blog_Check::render();
 				break;
+			case 'media':
+				self::render_media_matrix();
+				break;
 		}
 
 		$log = self::log_url();
 		echo '<p><a href="' . esc_url( $log ) . '">' . esc_html__( 'Open the audit log', 'wormiss' ) . '</a></p></div>';
+	}
+
+	/**
+	 * The department x category access matrix editor (its own form, below the media settings).
+	 *
+	 * @return void
+	 */
+	public static function render_media_matrix(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only shows a "saved" notice.
+		if ( isset( $_GET['wormiss_matrix_saved'] ) ) {
+			echo '<div class="notice notice-success is-dismissible"><p>'
+				. esc_html__( 'Access matrix saved.', 'wormiss' ) . '</p></div>';
+		}
+		$departments = Wormiss_Roles::departments();
+		$categories  = Wormiss_Media_Categories::term_choices();
+		$matrix      = Wormiss_Media_Access::matrix();
+		echo '<hr /><h2>' . esc_html__( 'Department access to categories', 'wormiss' ) . '</h2>';
+		echo '<p class="description">'
+			. esc_html__( 'Tick the media categories each department may see and use. Administrators always see everything.', 'wormiss' )
+			. '</p>';
+		if ( ! $categories ) {
+			echo '<p>' . esc_html__( 'No media categories yet. Add some under Media > Media categories.', 'wormiss' ) . '</p>';
+			return;
+		}
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		wp_nonce_field( 'wormiss_save_media_matrix', 'wormiss_media_matrix_nonce' );
+		echo '<input type="hidden" name="action" value="wormiss_save_media_matrix" />';
+		foreach ( $departments as $slug => $label ) {
+			$allowed = isset( $matrix[ $slug ] ) ? array_map( 'intval', $matrix[ $slug ] ) : [];
+			echo '<fieldset style="margin:1em 0;border:1px solid #c3c4c7;padding:.5em 1em;">';
+			echo '<legend style="font-weight:600;">' . esc_html( $label ) . '</legend>';
+			foreach ( $categories as $choice ) {
+				$term = (int) $choice['id'];
+				printf(
+					'<label style="display:inline-block;min-width:16em;margin:2px 1em 2px 0;"><input type="checkbox" name="matrix[%1$s][]" value="%2$d" %3$s /> %4$s</label>',
+					esc_attr( (string) $slug ),
+					absint( $term ),
+					checked( in_array( $term, $allowed, true ), true, false ),
+					esc_html( (string) $choice['name'] )
+				);
+			}
+			echo '</fieldset>';
+		}
+		submit_button( __( 'Save access matrix', 'wormiss' ) );
+		echo '</form>';
+	}
+
+	/**
+	 * Save the department x category access matrix (its own admin-post handler).
+	 *
+	 * @return void
+	 */
+	public static function save_media_matrix(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change the media access matrix.', 'wormiss' ) );
+		}
+		check_admin_referer( 'wormiss_save_media_matrix', 'wormiss_media_matrix_nonce' );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing -- Nonce checked above; each value is cast to int and validated against the taxonomy in Wormiss_Media_Access::sanitize_matrix().
+		$raw = isset( $_POST['matrix'] ) && is_array( $_POST['matrix'] ) ? wp_unslash( $_POST['matrix'] ) : [];
+		Wormiss_Media_Access::save_matrix( $raw );
+		wp_safe_redirect( add_query_arg( 'wormiss_matrix_saved', '1', self::settings_url( 'media' ) ) );
+		exit;
 	}
 
 	/**
