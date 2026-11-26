@@ -52,6 +52,13 @@ class Wormiss_Media_Categories {
 	const RESERVED_OPTION = 'wormiss_media_enduser_term';
 
 	/**
+	 * The attachment-details field name for the category picker. Deliberately NOT the taxonomy name:
+	 * core's compat save (wp_ajax_save_attachment_compat) runs preg_split() on a field named after an
+	 * attachment taxonomy, which would fatal on the posted array, so the picker uses its own key.
+	 */
+	const PICKER_FIELD = 'wormiss_media_categories';
+
+	/**
 	 * Hook in.
 	 *
 	 * @return void
@@ -306,21 +313,24 @@ class Wormiss_Media_Categories {
 		$post_id  = (int) ( $post->ID ?? 0 );
 		$selected = wp_get_object_terms( $post_id, self::TAXONOMY, [ 'fields' => 'ids' ] );
 		$selected = is_wp_error( $selected ) ? [] : array_map( 'intval', $selected );
-		$name     = 'attachments[' . $post_id . '][' . self::TAXONOMY . '][]';
+		$base     = 'attachments[' . $post_id . '][' . self::PICKER_FIELD . ']';
 		// A hidden marker so a save with every box unticked still clears the categories.
-		$html = '<input type="hidden" name="attachments[' . $post_id . '][' . self::TAXONOMY . '_present]" value="1" />';
+		$html = '<input type="hidden" name="attachments[' . $post_id . '][' . self::PICKER_FIELD . '_present]" value="1" />';
 		$rows = self::nested_terms();
 		if ( ! $rows ) {
 			$html .= '<span class="description">' . esc_html__( 'No media categories yet.', 'wormiss' ) . '</span>';
 		}
 		foreach ( $rows as $row ) {
-			$id    = (int) $row['id'];
+			$id = (int) $row['id'];
+			// Each checkbox has its own indexed name so the media modal's serializeArray() (which
+			// collapses duplicate names) keeps every ticked category, not just the last.
+			$name  = $base . '[' . $id . ']';
 			$html .= '<label style="display:block;margin:2px 0 2px ' . ( (int) $row['depth'] * 16 ) . 'px;">';
 			$html .= '<input type="checkbox" name="' . esc_attr( $name ) . '" value="' . $id . '"'
 				. checked( in_array( $id, $selected, true ), true, false ) . ' /> ';
 			$html .= esc_html( (string) $row['name'] ) . '</label>';
 		}
-		$fields[ self::TAXONOMY ] = [
+		$fields[ self::PICKER_FIELD ] = [
 			'label' => __( 'Media categories', 'wormiss' ),
 			'input' => 'html',
 			'html'  => $html,
@@ -336,7 +346,7 @@ class Wormiss_Media_Categories {
 	 * @return array
 	 */
 	public static function save_picker( $post, $attachment ) {
-		if ( ! is_array( $attachment ) || ! isset( $attachment[ self::TAXONOMY . '_present' ] ) ) {
+		if ( ! is_array( $attachment ) || ! isset( $attachment[ self::PICKER_FIELD . '_present' ] ) ) {
 			return $post;
 		}
 		$post_id  = (int) ( $post['ID'] ?? 0 );
@@ -345,8 +355,8 @@ class Wormiss_Media_Categories {
 		if ( ! $taxonomy instanceof WP_Taxonomy || ! current_user_can( $taxonomy->cap->assign_terms ) || ! current_user_can( 'edit_post', $post_id ) ) {
 			return $post;
 		}
-		$submitted = isset( $attachment[ self::TAXONOMY ] ) && is_array( $attachment[ self::TAXONOMY ] )
-			? array_map( 'intval', $attachment[ self::TAXONOMY ] )
+		$submitted = isset( $attachment[ self::PICKER_FIELD ] ) && is_array( $attachment[ self::PICKER_FIELD ] )
+			? array_map( 'intval', array_values( $attachment[ self::PICKER_FIELD ] ) )
 			: [];
 		$valid     = [];
 		foreach ( $submitted as $id ) {

@@ -261,29 +261,40 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The picker saves the ticked categories; a save with the marker but no ticks clears them; an
-	 * unknown term is dropped; without the marker nothing changes.
+	 * The picker saves every ticked category (keyed by term ID, as the modal posts them); a save with
+	 * the marker but no ticks clears them; an unknown term is dropped; without the marker nothing
+	 * changes.
 	 *
 	 * @return void
 	 */
 	public function test_save_picker(): void {
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
-		$logos = $this->category( 'Logos' );
-		$file  = $this->attachment();
+		$logos  = $this->category( 'Logos' );
+		$badges = $this->category( 'Badges' );
+		$file   = $this->attachment();
 
+		// The media modal posts one entry per ticked box, keyed by term ID.
 		$saved = Wormiss_Media_Categories::save_picker(
 			[ 'ID' => $file ],
 			[
-				Wormiss_Media_Categories::TAXONOMY . '_present' => '1',
-				Wormiss_Media_Categories::TAXONOMY => [ $logos, 999999 ],
+				Wormiss_Media_Categories::PICKER_FIELD . '_present' => '1',
+				Wormiss_Media_Categories::PICKER_FIELD => [
+					$logos  => (string) $logos,
+					$badges => (string) $badges,
+					999999  => '999999',
+				],
 			]
 		);
 		$this->assertSame( [ 'ID' => $file ], $saved );
-		$this->assertSame( [ $logos ], wp_get_object_terms( $file, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] ) );
+		$this->assertSame(
+			[ $badges, $logos ],
+			wp_get_object_terms( $file, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] ),
+			'Both categories kept, unknown dropped.'
+		);
 
 		Wormiss_Media_Categories::save_picker(
 			[ 'ID' => $file ],
-			[ Wormiss_Media_Categories::TAXONOMY . '_present' => '1' ]
+			[ Wormiss_Media_Categories::PICKER_FIELD . '_present' => '1' ]
 		);
 		$this->assertSame( [], wp_get_object_terms( $file, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] ), 'Cleared.' );
 
@@ -293,22 +304,28 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The picker field is offered to someone who may assign categories, and lists them.
+	 * The picker field is offered to someone who may assign categories, under its own field key (not
+	 * the taxonomy name, which core would preg_split), with a unique indexed name per checkbox.
 	 *
 	 * @return void
 	 */
 	public function test_picker_field(): void {
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
-		$this->category( 'Logos' );
+		$logos  = $this->category( 'Logos' );
 		$file   = $this->attachment();
 		$fields = Wormiss_Media_Categories::picker_field( [], get_post( $file ) );
-		$this->assertArrayHasKey( Wormiss_Media_Categories::TAXONOMY, $fields );
-		$this->assertStringContainsString( 'Logos', $fields[ Wormiss_Media_Categories::TAXONOMY ]['html'] );
-		$this->assertStringContainsString( '_present', $fields[ Wormiss_Media_Categories::TAXONOMY ]['html'] );
+		$this->assertArrayHasKey( Wormiss_Media_Categories::PICKER_FIELD, $fields );
+		$this->assertArrayNotHasKey( Wormiss_Media_Categories::TAXONOMY, $fields, 'Not keyed by the taxonomy name (core would preg_split it).' );
+		$html = $fields[ Wormiss_Media_Categories::PICKER_FIELD ]['html'];
+		$this->assertStringContainsString( 'Logos', $html );
+		$this->assertStringContainsString( '_present', $html );
+		// Unique indexed name per checkbox, so the modal's serializeArray() keeps all ticked boxes.
+		$this->assertStringContainsString( '[' . Wormiss_Media_Categories::PICKER_FIELD . '][' . $logos . ']', $html );
+		$this->assertStringNotContainsString( '[' . Wormiss_Media_Categories::TAXONOMY . '][]', $html );
 
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
 		$this->assertArrayNotHasKey(
-			Wormiss_Media_Categories::TAXONOMY,
+			Wormiss_Media_Categories::PICKER_FIELD,
 			Wormiss_Media_Categories::picker_field( [], get_post( $file ) ),
 			'Not offered to someone who cannot assign categories.'
 		);

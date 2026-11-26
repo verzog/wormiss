@@ -36,7 +36,9 @@
 				};
 			} );
 			const allProps = {};
-			allProps[ key ] = '';
+			// null (not '') clears the query property: the media Query omits null props but keeps
+			// empty strings, and a lingering empty key stops new uploads appearing live in the grid.
+			allProps[ key ] = null;
 			filters.all = {
 				text: data.all,
 				props: allProps,
