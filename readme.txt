@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.59.0
+Stable tag: 0.60.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.60.0 =
+* Pictures imported from the iMIS blog are now attributed to the blog post's author (the member who wrote it), rather than to the account that happened to run the import. The media library's "your uploads" view, the author column and the access gate's "own uploads" rule now line up with who the picture belongs to.
 
 = 0.59.0 =
 * Members-only rules: a new table (Settings > Members) makes a whole category (with its sub-categories), a tag, a post type, or a page and its child pages members-only at once, instead of ticking each post. Each rule can require particular iMIS membership types and statuses, just like a single post. A post's own "Members only" switch always overrides the rules, and the most specific rule wins (a page tree over a category or tag, over a whole post type). The teaser, the Members only block, read tracking and protected media all honour these rules automatically, because they share the same access check.

@@ -1627,13 +1627,22 @@ class Wormiss_Blog_Import {
 		$name = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
 		// Only the sizes the blog shows: each size is another resize, the slow part of a copy.
 		add_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
+		// Attribute the picture to the blog post's author (the member), not the account that ran the
+		// import. The gate's "own uploads" rule and the media list's author column then line up with
+		// who the picture belongs to.
+		$post_data = [];
+		$author    = (int) get_post_field( 'post_author', $post_id );
+		if ( $author > 0 ) {
+			$post_data['post_author'] = $author;
+		}
 		$attachment = media_handle_sideload(
 			[
 				'name'     => '' !== $name ? $name : 'blog-image.jpg',
 				'tmp_name' => $tmp,
 			],
 			$post_id,
-			$title
+			$title,
+			$post_data
 		);
 		remove_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
 		if ( is_wp_error( $attachment ) ) {

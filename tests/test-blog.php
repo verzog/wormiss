@@ -331,6 +331,60 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An imported picture is attributed to the blog post's author, not the account running the import.
+	 *
+	 * @return void
+	 */
+	public function test_imported_picture_gets_post_author(): void {
+		if ( ! function_exists( 'imagejpeg' ) ) {
+			$this->markTestSkipped( 'GD is not available.' );
+		}
+		$author  = (int) self::factory()->user->create( [ 'role' => 'author' ] );
+		$post_id = (int) self::factory()->post->create(
+			[
+				'post_type'   => Wormiss_Blog::POST_TYPE,
+				'post_author' => $author,
+			]
+		);
+
+		// Serve a real JPEG into download_url()'s stream target for the picture request.
+		$serve = static function ( $pre, $args, $url ) {
+			if ( false !== strpos( $url, 'case.jpg' ) && ! empty( $args['filename'] ) ) {
+				$image = imagecreatetruecolor( 4, 4 );
+				imagejpeg( $image, $args['filename'] );
+				return [
+					'headers'  => [],
+					'body'     => '',
+					'response' => [
+						'code'    => 200,
+						'message' => 'OK',
+					],
+					'cookies'  => [],
+					'filename' => $args['filename'],
+				];
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $serve, 20, 3 );
+
+		// Reset the per-run image counter so copy() does not short-circuit. Reflection reaches private
+		// members without setAccessible() on PHP 8.1+, where that method is a deprecated no-op.
+		$counter = new ReflectionProperty( Wormiss_Blog_Import::class, 'images' );
+		$counter->setValue( null, 0 );
+
+		$copy       = new ReflectionMethod( Wormiss_Blog_Import::class, 'copy' );
+		$report     = [ 'notes' => [] ];
+		$complete   = true;
+		$attachment = (int) $copy->invokeArgs( null, [ $post_id, 'https://imis.example.org/images/x/case.jpg', 'Title', &$report, &$complete ] );
+
+		remove_filter( 'pre_http_request', $serve, 20 );
+
+		$this->assertGreaterThan( 0, $attachment, 'The picture was imported. Notes: ' . implode( ' | ', $report['notes'] ) );
+		$this->assertSame( $author, (int) get_post_field( 'post_author', $attachment ), 'Attributed to the post author.' );
+		$this->assertSame( $post_id, (int) wp_get_post_parent_id( $attachment ), 'Attached to the post.' );
+	}
+
+	/**
 	 * A post whose blocks are only in its preview data (BlogPostData left empty) is read from there.
 	 */
 	public function test_post_data_preview(): void {
