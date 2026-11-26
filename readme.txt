@@ -213,7 +213,7 @@ the Media Library can still be opened directly by anyone with their address.
 * Media categories: a new hierarchical "Media categories" taxonomy on images and other media, so the library can be organised into curated buckets (Logos, Headshots, Event photos, ...) with sub-categories. Manage them under Media > Media categories.
 * A reserved "End-user images" category is created automatically and cannot be deleted.
 * Images and other media can be put into categories from the Attachment details panel in the media modal, and the media modal and the Media grid gain a category dropdown to filter the library by category.
-* Uploads by non-staff users (by default, anyone who cannot edit others' posts) are filed into "End-user images" automatically, so end-user uploads can be managed as a group. System imports are left alone.
+* Uploads by non-staff users are filed into "End-user images" automatically, so end-user uploads can be managed as a group. By default staff means administrators and a "staff" role; the roles that count as staff are a setting. System imports are left alone.
 * This is the first step of the media-access feature: it organises media only. Controlling who may see or use which images is a later release.
 
 = 0.50.0 =

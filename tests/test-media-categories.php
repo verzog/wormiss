@@ -125,14 +125,15 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * Staff by default is every role that can edit others' posts; the setting and filter override it.
+	 * Staff by default is administrators and a "staff" role; the setting and filter override it.
 	 *
 	 * @return void
 	 */
 	public function test_staff_roles(): void {
 		$default = Wormiss_Media_Categories::staff_roles();
-		$this->assertContains( 'editor', $default );
 		$this->assertContains( 'administrator', $default );
+		$this->assertContains( 'staff', $default );
+		$this->assertNotContains( 'editor', $default );
 		$this->assertNotContains( 'subscriber', $default );
 
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'media_staff_roles' => [ 'author' ] ] ) );
@@ -145,22 +146,26 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * Administrators and editors are staff; subscribers and no-one are not.
+	 * Administrators and users in the "staff" role are staff; editors (not in that role), subscribers
+	 * and no-one are not.
 	 *
 	 * @return void
 	 */
 	public function test_is_staff(): void {
+		add_role( 'staff', 'Staff', [ 'read' => true ] );
 		$admin      = self::factory()->user->create( [ 'role' => 'administrator' ] );
+		$staff      = self::factory()->user->create( [ 'role' => 'staff' ] );
 		$editor     = self::factory()->user->create( [ 'role' => 'editor' ] );
 		$subscriber = self::factory()->user->create( [ 'role' => 'subscriber' ] );
 		$this->assertTrue( Wormiss_Media_Categories::is_staff( $admin ) );
-		$this->assertTrue( Wormiss_Media_Categories::is_staff( $editor ) );
+		$this->assertTrue( Wormiss_Media_Categories::is_staff( $staff ) );
+		$this->assertFalse( Wormiss_Media_Categories::is_staff( $editor ), 'An editor not in the staff role is not staff.' );
 		$this->assertFalse( Wormiss_Media_Categories::is_staff( $subscriber ) );
 		$this->assertFalse( Wormiss_Media_Categories::is_staff( 0 ) );
 
 		wp_set_current_user( $subscriber );
 		$this->assertFalse( Wormiss_Media_Categories::is_staff() );
-		wp_set_current_user( $editor );
+		wp_set_current_user( $staff );
 		$this->assertTrue( Wormiss_Media_Categories::is_staff() );
 	}
 
@@ -171,9 +176,10 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_auto_file(): void {
+		add_role( 'staff', 'Staff', [ 'read' => true ] );
 		$reserved   = Wormiss_Media_Categories::reserved_term_id();
 		$subscriber = self::factory()->user->create( [ 'role' => 'subscriber' ] );
-		$editor     = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$staffer    = self::factory()->user->create( [ 'role' => 'staff' ] );
 
 		wp_set_current_user( $subscriber );
 		$theirs = $this->attachment( $subscriber );
@@ -184,8 +190,8 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 			'Non-staff upload filed.'
 		);
 
-		wp_set_current_user( $editor );
-		$staff = $this->attachment( $editor );
+		wp_set_current_user( $staffer );
+		$staff = $this->attachment( $staffer );
 		Wormiss_Media_Categories::auto_file( $staff );
 		$this->assertSame( [], wp_get_object_terms( $staff, Wormiss_Media_Categories::TAXONOMY, [ 'fields' => 'ids' ] ), 'Staff upload left alone.' );
 

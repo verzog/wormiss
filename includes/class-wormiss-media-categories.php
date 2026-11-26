@@ -180,19 +180,17 @@ class Wormiss_Media_Categories {
 	}
 
 	/**
-	 * The roles that count as staff: the ones chosen in Settings, or (by default, until that setting
-	 * is added) every role that can edit others' posts (editors, administrators, ...).
+	 * The roles that count as staff: the ones chosen in Settings, or (by default) administrators and
+	 * a dedicated "staff" role. Internal team roles (e.g. Marketing, Membership, Education,
+	 * Management) can be added to the setting once they exist. Administrators are always staff
+	 * whether or not they are in the list (see is_staff()).
 	 *
 	 * @return string[] Role slugs.
 	 */
 	public static function staff_roles(): array {
 		$roles = array_values( array_filter( array_map( 'strval', (array) Wormiss_Settings::get( 'media_staff_roles' ) ) ) );
 		if ( ! $roles ) {
-			foreach ( wp_roles()->role_objects as $slug => $role ) {
-				if ( $role instanceof WP_Role && $role->has_cap( 'edit_others_posts' ) ) {
-					$roles[] = (string) $slug;
-				}
-			}
+			$roles = [ 'administrator', 'staff' ];
 		}
 		/**
 		 * The roles that count as staff for media categories (whose uploads are not auto-filed).
