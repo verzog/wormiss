@@ -69,6 +69,9 @@ class Wormiss_Media_Delivery {
 		add_filter( 'query_vars', [ __CLASS__, 'query_vars' ] );
 		add_action( 'template_redirect', [ __CLASS__, 'maybe_serve' ] );
 		add_filter( 'wp_get_attachment_url', [ __CLASS__, 'filter_url' ], 10, 2 );
+		// Sized images and srcset must not point at per-size file URLs the endpoint can't serve.
+		add_filter( 'image_downsize', [ __CLASS__, 'filter_downsize' ], 10, 3 );
+		add_filter( 'wp_calculate_image_srcset', [ __CLASS__, 'filter_srcset' ], 10, 5 );
 		add_action( 'admin_init', [ __CLASS__, 'maybe_flush' ] );
 		add_action( 'admin_notices', [ __CLASS__, 'fallback_notice' ] );
 	}
@@ -209,42 +212,38 @@ class Wormiss_Media_Delivery {
 		if ( self::is_stored( $attachment ) ) {
 			return true;
 		}
-		$file = get_attached_file( $attachment );
-		if ( ! $file || ! is_file( $file ) || ! self::ensure_store() ) {
+		if ( ! self::ensure_store() ) {
 			return false;
 		}
-		$relative = $attachment . '/' . wp_basename( $file );
+		// Store the true original (the big-image original where WordPress scaled the upload down).
+		$original = function_exists( 'wp_get_original_image_path' ) ? wp_get_original_image_path( $attachment ) : '';
+		$source   = $original && is_file( $original ) ? $original : get_attached_file( $attachment );
+		if ( ! $source || ! is_file( $source ) ) {
+			return false;
+		}
+		$relative = $attachment . '/' . wp_basename( $source );
 		$target   = self::protected_dir() . $relative;
 		if ( ! wp_mkdir_p( dirname( $target ) ) ) {
 			return false;
 		}
-		if ( ! @copy( $file, $target ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_copy -- Moving into the private store; failure is handled.
+		if ( ! @copy( $source, $target ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_copy -- Moving into the private store; failure is handled.
 			return false;
 		}
 		update_post_meta( $attachment, self::META_FILE, $relative );
-		// Remove the public original and any generated sizes so no public URL serves the bytes.
-		self::remove_public_files( $attachment, $file );
-		return true;
-	}
-
-	/**
-	 * Delete the public original and its generated size files from the uploads directory.
-	 *
-	 * @param int    $attachment Attachment ID.
-	 * @param string $file       Absolute path to the original.
-	 * @return void
-	 */
-	private static function remove_public_files( int $attachment, string $file ): void {
-		$dir  = trailingslashit( dirname( $file ) );
-		$meta = wp_get_attachment_metadata( $attachment );
-		if ( is_array( $meta ) && ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
-			foreach ( $meta['sizes'] as $size ) {
-				if ( ! empty( $size['file'] ) ) {
-					wp_delete_file( $dir . wp_basename( (string) $size['file'] ) );
-				}
-			}
+		// Remove every public copy — the attached (possibly scaled) file, the big-image original,
+		// every generated size and every edit backup — so no public URL serves the bytes. Core's
+		// own routine covers all of these.
+		$attached = (string) get_attached_file( $attachment );
+		$meta     = wp_get_attachment_metadata( $attachment );
+		$meta     = is_array( $meta ) ? $meta : [];
+		if ( empty( $meta['file'] ) && '' !== $attached ) {
+			// wp_delete_attachment_files() reads $meta['file']; supply it for attachments that have
+			// no generated metadata.
+			$meta['file'] = _wp_relative_upload_path( $attached );
 		}
-		wp_delete_file( $file );
+		$backup = get_post_meta( $attachment, '_wp_attachment_backup_sizes', true );
+		wp_delete_attachment_files( $attachment, $meta, is_array( $backup ) ? $backup : [], $attached );
+		return true;
 	}
 
 	/**
@@ -260,6 +259,44 @@ class Wormiss_Media_Delivery {
 			return self::endpoint_url( $attachment_id );
 		}
 		return $url;
+	}
+
+	/**
+	 * Serve any requested size of a protected image as the full image through the gated endpoint.
+	 * Core's image_downsize() would otherwise rewrite the endpoint URL's basename to a per-size
+	 * filename (e.g. /wormiss-media/photo-150x150.jpg), which the endpoint cannot serve.
+	 *
+	 * @param array|false  $out  Short-circuit value (false to let core handle it).
+	 * @param int          $id   Attachment ID.
+	 * @param string|int[] $size Requested size.
+	 * @return array|false
+	 */
+	public static function filter_downsize( $out, $id, $size ) {
+		unset( $size );
+		$id = (int) $id;
+		if ( $id < 1 || ! Wormiss_Media_Protected::attachment_is_protected( $id ) ) {
+			return $out;
+		}
+		$meta   = wp_get_attachment_metadata( $id );
+		$width  = is_array( $meta ) && isset( $meta['width'] ) ? (int) $meta['width'] : 0;
+		$height = is_array( $meta ) && isset( $meta['height'] ) ? (int) $meta['height'] : 0;
+		return [ self::endpoint_url( $id ), $width, $height, false ];
+	}
+
+	/**
+	 * Drop the responsive srcset for a protected image: its per-size file URLs are not served by
+	 * the endpoint. The single gated src (from filter_downsize) is used instead.
+	 *
+	 * @param array  $sources       Srcset sources.
+	 * @param array  $size_array    Size.
+	 * @param string $image_src    Image src.
+	 * @param array  $image_meta    Image meta.
+	 * @param int    $attachment_id Attachment ID.
+	 * @return array
+	 */
+	public static function filter_srcset( $sources, $size_array, $image_src, $image_meta, $attachment_id ) {
+		unset( $size_array, $image_src, $image_meta );
+		return Wormiss_Media_Protected::attachment_is_protected( (int) $attachment_id ) ? [] : $sources;
 	}
 
 	/**
@@ -302,10 +339,9 @@ class Wormiss_Media_Delivery {
 		}
 		$relative = self::stored_relative( $attachment );
 		if ( '' !== $relative && is_file( self::protected_dir() . $relative ) ) {
-			$no_accel = defined( 'WORMISS_MEDIA_NO_XACCEL' ) && WORMISS_MEDIA_NO_XACCEL;
 			return [
 				'status'   => 200,
-				'mode'     => $no_accel ? 'readfile' : 'x-accel',
+				'mode'     => self::serve_mode(),
 				'path'     => self::protected_dir() . $relative,
 				'relative' => $relative,
 			];
@@ -322,6 +358,29 @@ class Wormiss_Media_Delivery {
 			];
 		}
 		return $none;
+	}
+
+	/**
+	 * How a stored file is streamed: X-Sendfile (Apache, when configured) takes precedence, then the
+	 * PHP readfile fallback (when X-Accel is disabled), else nginx X-Accel-Redirect.
+	 *
+	 * @return string One of 'x-sendfile', 'readfile', 'x-accel'.
+	 */
+	public static function serve_mode(): string {
+		if ( defined( 'WORMISS_MEDIA_XSENDFILE' ) && WORMISS_MEDIA_XSENDFILE ) {
+			$mode = 'x-sendfile';
+		} elseif ( defined( 'WORMISS_MEDIA_NO_XACCEL' ) && WORMISS_MEDIA_NO_XACCEL ) {
+			$mode = 'readfile';
+		} else {
+			$mode = 'x-accel';
+		}
+		/**
+		 * How stored protected files are streamed ('x-accel', 'x-sendfile' or 'readfile').
+		 *
+		 * @param string $mode Mode.
+		 */
+		$mode = (string) apply_filters( 'wormiss_media_serve_mode', $mode );
+		return in_array( $mode, [ 'x-accel', 'x-sendfile', 'readfile' ], true ) ? $mode : 'x-accel';
 	}
 
 	/**
@@ -361,7 +420,7 @@ class Wormiss_Media_Delivery {
 			header( 'X-Accel-Redirect: ' . self::INTERNAL_LOCATION . implode( '/', $segments ) );
 			exit;
 		}
-		if ( defined( 'WORMISS_MEDIA_XSENDFILE' ) && WORMISS_MEDIA_XSENDFILE ) {
+		if ( 'x-sendfile' === $decision['mode'] ) {
 			header( 'X-Sendfile: ' . $path );
 			exit;
 		}

@@ -201,4 +201,87 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 		$this->assertTrue( Wormiss_Media_Delivery::using_fallback() );
 		$this->assertStringEndsWith( '/', Wormiss_Media_Delivery::protected_dir() );
 	}
+
+	/**
+	 * Any requested size of a protected image resolves to the gated endpoint (not a per-size file
+	 * URL), and responsive srcset is dropped.
+	 *
+	 * @return void
+	 */
+	public function test_sized_images_use_endpoint(): void {
+		$id = $this->attachment( [ $this->protected_category() ] );
+		wp_update_attachment_metadata(
+			$id,
+			[
+				'width'  => 800,
+				'height' => 600,
+				'sizes'  => [
+					'thumbnail' => [
+						'file'   => 't-150x150.jpg',
+						'width'  => 150,
+						'height' => 150,
+					],
+				],
+			]
+		);
+		$src = wp_get_attachment_image_src( $id, 'thumbnail' );
+		$this->assertSame( home_url( '/wormiss-media/' . $id ), $src[0], 'Sized src is the endpoint.' );
+		$this->assertFalse( (bool) $src[3], 'Not treated as an intermediate file.' );
+
+		$this->assertSame( [], Wormiss_Media_Delivery::filter_srcset( [ 'a' => 1 ], [ 1, 1 ], 'u', [], $id ), 'Protected: no srcset.' );
+		$this->assertSame( [ 'a' => 1 ], Wormiss_Media_Delivery::filter_srcset( [ 'a' => 1 ], [ 1, 1 ], 'u', [], 999999 ), 'Others unchanged.' );
+	}
+
+	/**
+	 * Storing removes every public copy, including generated sizes, from the uploads directory.
+	 *
+	 * @return void
+	 */
+	public function test_store_removes_sizes(): void {
+		$id       = $this->attachment( [ $this->protected_category() ] );
+		$original = get_attached_file( $id );
+		$sizefile = dirname( $original ) . '/t-150x150.jpg';
+		copy( $original, $sizefile ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy -- Test fixture.
+		wp_update_attachment_metadata(
+			$id,
+			[
+				'width'  => 10,
+				'height' => 10,
+				'file'   => _wp_relative_upload_path( $original ),
+				'sizes'  => [
+					'thumbnail' => [
+						'file'      => 't-150x150.jpg',
+						'width'     => 150,
+						'height'    => 150,
+						'mime-type' => 'image/jpeg',
+					],
+				],
+			]
+		);
+		$this->assertFileExists( $sizefile );
+
+		Wormiss_Media_Delivery::store( $id );
+		$this->assertFileDoesNotExist( $sizefile, 'Generated size removed from uploads.' );
+		$this->assertFileDoesNotExist( $original, 'Original removed from uploads.' );
+	}
+
+	/**
+	 * Serve mode: X-Accel by default, X-Sendfile when configured (takes precedence), and decide()
+	 * carries the chosen mode for a stored file.
+	 *
+	 * @return void
+	 */
+	public function test_serve_mode(): void {
+		$this->assertSame( 'x-accel', Wormiss_Media_Delivery::serve_mode() );
+
+		$xsendfile = static fn() => 'x-sendfile';
+		add_filter( 'wormiss_media_serve_mode', $xsendfile );
+		$this->assertSame( 'x-sendfile', Wormiss_Media_Delivery::serve_mode() );
+
+		$admin = (int) self::factory()->user->create( [ 'role' => 'administrator' ] );
+		$id    = $this->attachment( [ $this->protected_category() ] );
+		Wormiss_Media_Delivery::store( $id );
+		$this->assertSame( 'x-sendfile', Wormiss_Media_Delivery::decide( $id, $admin )['mode'], 'Stored file uses the configured mode.' );
+		remove_filter( 'wormiss_media_serve_mode', $xsendfile );
+	}
 }
