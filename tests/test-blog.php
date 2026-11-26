@@ -368,13 +368,12 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		};
 		add_filter( 'pre_http_request', $serve, 20, 3 );
 
-		// Reset the per-run image counter so copy() does not short-circuit.
+		// Reset the per-run image counter so copy() does not short-circuit. Reflection reaches private
+		// members without setAccessible() on PHP 8.1+, where that method is a deprecated no-op.
 		$counter = new ReflectionProperty( Wormiss_Blog_Import::class, 'images' );
-		$counter->setAccessible( true );
 		$counter->setValue( null, 0 );
 
-		$copy = new ReflectionMethod( Wormiss_Blog_Import::class, 'copy' );
-		$copy->setAccessible( true );
+		$copy       = new ReflectionMethod( Wormiss_Blog_Import::class, 'copy' );
 		$report     = [ 'notes' => [] ];
 		$complete   = true;
 		$attachment = (int) $copy->invokeArgs( null, [ $post_id, 'https://imis.example.org/images/x/case.jpg', 'Title', &$report, &$complete ] );
