@@ -31,6 +31,8 @@ delete_option( 'wormiss_password' );
 delete_option( 'wormiss_db_version' );
 delete_option( 'wormiss_rewrite_version' );
 delete_option( 'wormiss_media_enduser_term' );
+delete_option( 'wormiss_media_matrix' );
+delete_option( 'wormiss_media_department_terms' );
 // Remove the internal Staff and Manager roles and the per-user departments.
 if ( file_exists( __DIR__ . '/includes/class-wormiss-roles.php' ) ) {
 	require_once __DIR__ . '/includes/class-wormiss-roles.php';
