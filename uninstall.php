@@ -30,6 +30,7 @@ delete_option( 'wormiss_settings' );
 delete_option( 'wormiss_password' );
 delete_option( 'wormiss_db_version' );
 delete_option( 'wormiss_rewrite_version' );
+delete_option( 'wormiss_access_rules' );
 delete_option( 'wormiss_media_enduser_term' );
 delete_option( 'wormiss_media_matrix' );
 delete_option( 'wormiss_media_department_terms' );
