@@ -284,4 +284,65 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 		$this->assertSame( 'x-sendfile', Wormiss_Media_Delivery::decide( $id, $admin )['mode'], 'Stored file uses the configured mode.' );
 		remove_filter( 'wormiss_media_serve_mode', $xsendfile );
 	}
+
+	/**
+	 * An imported picture is filed into the configured category; when that category is protected it is
+	 * moved into the private store, and when it is not it stays public.
+	 *
+	 * @return void
+	 */
+	public function test_protect_imported(): void {
+		$protected = $this->protected_category();
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_media_category' => $protected ] ) );
+		$id = $this->attachment();
+		Wormiss_Media_Delivery::protect_imported( $id );
+		$this->assertTrue( has_term( $protected, Wormiss_Media_Categories::TAXONOMY, $id ), 'Filed into the category.' );
+		$this->assertTrue( Wormiss_Media_Delivery::is_stored( $id ), 'Protected category -> stored.' );
+
+		$open = (int) self::factory()->term->create( [ 'taxonomy' => Wormiss_Media_Categories::TAXONOMY ] );
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_media_category' => $open ] ) );
+		$id2 = $this->attachment();
+		Wormiss_Media_Delivery::protect_imported( $id2 );
+		$this->assertTrue( has_term( $open, Wormiss_Media_Categories::TAXONOMY, $id2 ), 'Filed into the open category.' );
+		$this->assertFalse( Wormiss_Media_Delivery::is_stored( $id2 ), 'Open category -> not stored.' );
+	}
+
+	/**
+	 * Post content is rewritten so a protected picture's hardcoded URL points at the gated endpoint
+	 * and its srcset is dropped, while an unprotected picture's URL is left alone.
+	 *
+	 * @return void
+	 */
+	public function test_rewrite_content(): void {
+		// Capture the plain file URLs before the attachments become protected (the URL filter would
+		// otherwise return the endpoint).
+		$protected_id  = $this->attachment();
+		$open_id       = $this->attachment();
+		$protected_url = wp_get_attachment_url( $protected_id );
+		$open_url      = wp_get_attachment_url( $open_id );
+		$this->assertStringContainsString( '/uploads/', $protected_url, 'Starts as a public URL.' );
+
+		wp_set_object_terms( $protected_id, [ $this->protected_category() ], Wormiss_Media_Categories::TAXONOMY );
+		$this->assertSame( $protected_id, attachment_url_to_postid( $protected_url ), 'URL resolves to the attachment.' );
+
+		$content = '<p><img src="' . esc_url( $protected_url ) . '" srcset="' . esc_url( $protected_url ) . ' 800w" sizes="100vw" alt="a" />'
+			. '<img src="' . esc_url( $open_url ) . '" alt="b" /></p>';
+		$out     = Wormiss_Media_Delivery::rewrite_content( $content );
+
+		$this->assertStringContainsString( 'src="' . home_url( '/wormiss-media/' . $protected_id ) . '"', $out, 'Protected src -> endpoint.' );
+		$this->assertStringNotContainsString( 'srcset', $out, 'srcset dropped.' );
+		$this->assertStringContainsString( 'src="' . esc_url( $open_url ) . '"', $out, 'Unprotected src unchanged.' );
+	}
+
+	/**
+	 * The content rewrite is a no-op when no category is protected.
+	 *
+	 * @return void
+	 */
+	public function test_rewrite_content_noop_without_protected(): void {
+		$id      = $this->attachment();
+		$url     = wp_get_attachment_url( $id );
+		$content = '<img src="' . esc_url( $url ) . '" alt="x" />';
+		$this->assertSame( $content, Wormiss_Media_Delivery::rewrite_content( $content ), 'No protected categories: unchanged.' );
+	}
 }

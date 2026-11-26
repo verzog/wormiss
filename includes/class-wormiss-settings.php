@@ -141,6 +141,9 @@ class Wormiss_Settings {
 			'media_uncategorised_departments' => [],
 			// The members' blog: roles that may read full posts (staff always can), and the import.
 			'blog_reader_roles'               => [],
+			// The media category imported blog pictures are filed into (0: none). Flag that category
+			// for protected delivery to serve members' blog pictures from the private store.
+			'blog_media_category'             => 0,
 			'blog_import_enabled'             => false,
 			'blog_import_dry_run'             => true,
 			'blog_batch_posts'                => 10,
@@ -563,6 +566,11 @@ class Wormiss_Settings {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $roles ), $known ) );
 		} elseif ( isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ) {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $input['blog_reader_roles'] ), array_keys( wp_roles()->get_names() ) ) );
+		}
+		if ( isset( $input['blog_media_category'] ) ) {
+			$term                         = absint( $input['blog_media_category'] );
+			$valid                        = get_term( $term, Wormiss_Media_Categories::TAXONOMY ) instanceof WP_Term;
+			$clean['blog_media_category'] = $valid ? $term : 0;
 		}
 		// Media categories: staff roles (any known role) and the departments that also see
 		// uncategorised images. The section marker means an empty tick-list clears the value.

@@ -1523,6 +1523,9 @@ class Wormiss_Blog_Import {
 			$url        = html_entity_decode( $attr, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			$attachment = self::copy( $post_id, $url, $title, $report, $complete );
 			if ( $attachment ) {
+				// File (and, if the category is protected, privately store) the picture before its URL
+				// is read, so a protected picture maps to the gated endpoint in the post content.
+				Wormiss_Media_Delivery::protect_imported( $attachment );
 				$map[ '"' . $attr . '"' ] = '"' . esc_url( (string) wp_get_attachment_url( $attachment ) ) . '"';
 			}
 		}
@@ -1542,6 +1545,7 @@ class Wormiss_Blog_Import {
 		if ( '' !== $feature && 0 === strpos( $feature, $base . '/' ) && get_post_meta( $post_id, self::META_FEATURE, true ) !== $feature ) {
 			$attachment = self::copy( $post_id, $feature, $title, $report, $complete );
 			if ( $attachment ) {
+				Wormiss_Media_Delivery::protect_imported( $attachment );
 				set_post_thumbnail( $post_id, $attachment );
 				update_post_meta( $post_id, self::META_FEATURE, $feature );
 			}
