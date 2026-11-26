@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.54.0
+Stable tag: 0.55.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.55.0 =
+* Bulk categorise: a new tool (Settings > Media) adds one media category to many existing images at once — either images with no category yet, or all media. It runs in the background in small, resumable batches, asks for confirmation before starting, shows progress and can be cancelled, and the start control is hidden while a run is in progress. It can be turned off site-wide (the wormiss_media_bulk_enabled filter or the WORMISS_MEDIA_BULK_DISABLED constant).
 
 = 0.54.0 =
 * Media admin: a new "Media" tab in Wormiss Settings with the department-by-category access matrix (tick which categories each department may see and use; administrators only), plus two settings — the roles that count as staff, and the departments that may also see uncategorised images.
