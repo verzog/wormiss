@@ -265,6 +265,11 @@ class Wormiss_Media_Delivery {
 		if ( $post_id < 1 || $expiry < time() ) {
 			return false;
 		}
+		// The token's post must be the image's own post (its post_parent), so a token can only serve
+		// the image in the post it is attached to, never bound to some other page.
+		if ( (int) get_post_field( 'post_parent', $attachment ) !== $post_id ) {
+			return false;
+		}
 		$expected = self::lock_signature( $attachment, $post_id, $user_id, $expiry );
 		return hash_equals( $expected, $given );
 	}
@@ -281,9 +286,17 @@ class Wormiss_Media_Delivery {
 		if ( ! Wormiss_Media_Protected::attachment_is_locked( $attachment ) ) {
 			return '';
 		}
-		$post_id = (int) get_the_ID();
 		$user_id = get_current_user_id();
-		if ( $post_id < 1 || $user_id < 1 || Wormiss_Media_Access::is_exempt( $user_id ) ) {
+		// Mint only while actually rendering a post in the loop, for a signed-in member (admins need
+		// no token). This stops bare wp_get_attachment_url() calls outside a post render — the
+		// download handler, REST, the admin — from minting a token.
+		if ( $user_id < 1 || Wormiss_Media_Access::is_exempt( $user_id ) || ! in_the_loop() ) {
+			return '';
+		}
+		// The image must be the one attached to the post being rendered: lock-to-post binds an image
+		// to its own post (its post_parent), which imported blog pictures are set to.
+		$post_id = (int) get_the_ID();
+		if ( $post_id < 1 || (int) get_post_field( 'post_parent', $attachment ) !== $post_id ) {
 			return '';
 		}
 		return self::mint_lock_token( $attachment, $post_id, $user_id );
@@ -437,9 +450,25 @@ class Wormiss_Media_Delivery {
 	}
 
 	/**
+	 * The attachment ID an image src refers to: a gated endpoint URL (/wormiss-media/<id>, as the
+	 * blog import stores) by its ID, or an uploads-file URL via core's resolver. 0 when neither.
+	 *
+	 * @param string $src Image src.
+	 * @return int
+	 */
+	private static function attachment_from_src( string $src ): int {
+		if ( preg_match( '#/wormiss-media/(\d+)\b#', $src, $matches ) ) {
+			return (int) $matches[1];
+		}
+		return (int) attachment_url_to_postid( $src );
+	}
+
+	/**
 	 * Rewrite hardcoded image URLs in post content so a protected picture's src points at the gated
-	 * endpoint and its responsive attributes are dropped. New imports already emit the endpoint URL;
-	 * this covers posts stored before their category was protected. A no-op when nothing is protected.
+	 * endpoint and its responsive attributes are dropped, minting a fresh lock token each render for
+	 * a locked image. Resolves both uploads-file URLs (posts stored before their category was
+	 * protected) and already-gated endpoint URLs (stored by the blog import, whose token must be
+	 * refreshed per render). A no-op when nothing is protected.
 	 *
 	 * @param string $content Post content HTML.
 	 * @return string
@@ -460,7 +489,7 @@ class Wormiss_Media_Delivery {
 				continue;
 			}
 			if ( ! array_key_exists( $src, $cache ) ) {
-				$cache[ $src ] = (int) attachment_url_to_postid( $src );
+				$cache[ $src ] = self::attachment_from_src( $src );
 			}
 			$attachment = $cache[ $src ];
 			if ( $attachment < 1 || ! Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
@@ -626,8 +655,8 @@ class Wormiss_Media_Delivery {
 		if ( ! current_user_can( 'manage_options' ) || ! self::using_fallback() ) {
 			return;
 		}
-		if ( ! Wormiss_Media_Protected::protected_term_ids() ) {
-			// Nothing is flagged for protection yet, so the store is not needed.
+		if ( ! Wormiss_Media_Protected::flagged_term_ids() ) {
+			// Nothing is flagged for protection or lock-to-post yet, so the store is not needed.
 			return;
 		}
 		echo '<div class="notice notice-warning"><p>'

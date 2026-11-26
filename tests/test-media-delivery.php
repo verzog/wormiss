@@ -91,13 +91,14 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 	 *
 	 * @param int[] $term_ids Category term IDs.
 	 * @param int   $author   Author user ID.
+	 * @param int   $parent_id Parent post ID (post_parent).
 	 * @return int
 	 */
-	private function attachment( array $term_ids = [], int $author = 0 ): int {
+	private function attachment( array $term_ids = [], int $author = 0, int $parent_id = 0 ): int {
 		$upload = wp_upload_bits( 'wormiss-' . wp_rand() . '.jpg', null, 'test-bytes' );
 		$id     = (int) self::factory()->attachment->create_object(
 			$upload['file'],
-			0,
+			$parent_id,
 			[
 				'post_mime_type' => 'image/jpeg',
 				'post_author'    => $author,
@@ -317,8 +318,8 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_lock_token_validity(): void {
-		$att  = $this->attachment( [ $this->locked_category() ] );
 		$post = (int) self::factory()->post->create();
+		$att  = $this->attachment( [ $this->locked_category() ], 0, $post );
 		$user = (int) self::factory()->user->create( [ 'role' => 'subscriber' ] );
 
 		$token = Wormiss_Media_Delivery::mint_lock_token( $att, $post, $user );
@@ -344,8 +345,8 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 	 */
 	public function test_locked_endpoint_requires_token(): void {
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_reader_roles' => [ 'subscriber' ] ] ) );
-		$att    = $this->attachment( [ $this->locked_category() ] );
 		$post   = (int) self::factory()->post->create();
+		$att    = $this->attachment( [ $this->locked_category() ], 0, $post );
 		$member = (int) self::factory()->user->create( [ 'role' => 'subscriber' ] );
 		$admin  = (int) self::factory()->user->create( [ 'role' => 'administrator' ] );
 
@@ -363,23 +364,45 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * In a post for a member, a locked image's URL carries a token that validates; an administrator's
-	 * URL is tokenless (they do not need one).
+	 * Start a loop over a single post, so in_the_loop() is true and get_the_ID() is that post.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
+	 */
+	private function enter_loop( int $post_id ): void {
+		$GLOBALS['post'] = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Loop context for the test.
+		setup_postdata( $GLOBALS['post'] );
+		$GLOBALS['wp_query']->in_the_loop = true;
+	}
+
+	/**
+	 * End the loop set up by enter_loop().
+	 *
+	 * @return void
+	 */
+	private function leave_loop(): void {
+		$GLOBALS['wp_query']->in_the_loop = false;
+		wp_reset_postdata();
+		unset( $GLOBALS['post'] );
+	}
+
+	/**
+	 * While a member renders the post a locked image is attached to, its URL carries a token that
+	 * validates; an administrator's URL is tokenless (they do not need one).
 	 *
 	 * @return void
 	 */
 	public function test_locked_url_carries_token_in_post(): void {
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_reader_roles' => [ 'subscriber' ] ] ) );
-		$att     = $this->attachment( [ $this->locked_category() ] );
 		$post_id = (int) self::factory()->post->create();
+		$att     = $this->attachment( [ $this->locked_category() ], 0, $post_id );
 		$member  = (int) self::factory()->user->create( [ 'role' => 'subscriber' ] );
 
-		$GLOBALS['post'] = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Set up the loop context.
 		wp_set_current_user( $member );
+		$this->enter_loop( $post_id );
 		$url = (string) wp_get_attachment_url( $att );
 		$this->assertStringContainsString( '/wormiss-media/' . $att, $url, 'Points at the endpoint.' );
-		$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
-		parse_str( $query, $args );
+		parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $args );
 		$this->assertArrayHasKey( Wormiss_Media_Delivery::LOCK_ARG, $args, 'Carries a token.' );
 		$this->assertTrue(
 			Wormiss_Media_Delivery::valid_lock_token( $att, $member, (string) $args[ Wormiss_Media_Delivery::LOCK_ARG ] ),
@@ -387,10 +410,47 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 		);
 
 		wp_set_current_user( (int) self::factory()->user->create( [ 'role' => 'administrator' ] ) );
-		$admin_url = (string) wp_get_attachment_url( $att );
-		$this->assertStringNotContainsString( '?', $admin_url, 'Administrator URL has no token.' );
+		$this->assertStringNotContainsString( '?', (string) wp_get_attachment_url( $att ), 'Administrator URL has no token.' );
+		$this->leave_loop();
+	}
 
-		unset( $GLOBALS['post'] );
+	/**
+	 * A bare wp_get_attachment_url() outside a post render (e.g. the download handler or REST) mints
+	 * no token, so the URL is Forbidden at the endpoint — tokens come only from rendering the post.
+	 *
+	 * @return void
+	 */
+	public function test_locked_url_has_no_token_outside_loop(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_reader_roles' => [ 'subscriber' ] ] ) );
+		$post_id = (int) self::factory()->post->create();
+		$att     = $this->attachment( [ $this->locked_category() ], 0, $post_id );
+		wp_set_current_user( (int) self::factory()->user->create( [ 'role' => 'subscriber' ] ) );
+
+		$url = (string) wp_get_attachment_url( $att );
+		$this->assertStringContainsString( '/wormiss-media/' . $att, $url );
+		$this->assertStringNotContainsString( '?', $url, 'No token minted outside a post render.' );
+	}
+
+	/**
+	 * Content rewriting resolves a stored gated URL (as the blog import saves) for a locked image and
+	 * mints a fresh token while the member renders that image's post.
+	 *
+	 * @return void
+	 */
+	public function test_rewrite_content_retokenises_locked_endpoint(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_reader_roles' => [ 'subscriber' ] ] ) );
+		$post_id = (int) self::factory()->post->create();
+		$att     = $this->attachment( [ $this->locked_category() ], 0, $post_id );
+		$member  = (int) self::factory()->user->create( [ 'role' => 'subscriber' ] );
+
+		$content = '<p><img src="' . home_url( '/wormiss-media/' . $att ) . '" alt="x" /></p>';
+
+		wp_set_current_user( $member );
+		$this->enter_loop( $post_id );
+		$out = Wormiss_Media_Delivery::rewrite_content( $content );
+		$this->leave_loop();
+
+		$this->assertMatchesRegularExpression( '#/wormiss-media/' . $att . '\?' . Wormiss_Media_Delivery::LOCK_ARG . '=#', $out, 'A fresh token was inserted onto the stored gated URL.' );
 	}
 
 	/**
