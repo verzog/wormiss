@@ -317,6 +317,53 @@ class Test_Wormiss_Access_Rules extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A page-tree rule whose page is later unpublished must stay selected in the rules form, so
+	 * saving the form cannot silently drop an active restriction (a draft page is still listed; a
+	 * trashed one is carried as a "current selection" option).
+	 *
+	 * @return void
+	 */
+	public function test_unpublished_page_rule_survives_render(): void {
+		$page = (int) self::factory()->post->create(
+			[
+				'post_type'  => 'page',
+				'post_title' => 'Gated area',
+			]
+		);
+		$this->set_rules(
+			[
+				[
+					'kind'     => 'page_tree',
+					'ref'      => $page,
+					'types'    => '',
+					'statuses' => '',
+				],
+			]
+		);
+
+		// Draft: get_pages() would omit it by default, but the dropdown now includes draft pages.
+		wp_update_post(
+			[
+				'ID'          => $page,
+				'post_status' => 'draft',
+			]
+		);
+		ob_start();
+		Wormiss_Admin::render_access_rules();
+		$html = (string) ob_get_clean();
+		$this->assertMatchesRegularExpression( '/value="page_tree:' . $page . '"[^>]*selected/', $html, 'Draft page stays selected.' );
+
+		// Trashed: not in any list, so it is carried as its own selected option.
+		wp_trash_post( $page );
+		Wormiss_Access_Rules::reset();
+		ob_start();
+		Wormiss_Admin::render_access_rules();
+		$html = (string) ob_get_clean();
+		$this->assertMatchesRegularExpression( '/value="page_tree:' . $page . '"[^>]*selected/', $html, 'Trashed page carried as current selection.' );
+		$this->assertStringContainsString( 'Current selection', $html );
+	}
+
+	/**
 	 * The token round-trips through parse_token(); a malformed token is rejected.
 	 *
 	 * @return void

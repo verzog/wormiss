@@ -1704,18 +1704,29 @@ class Wormiss_Admin {
 		$groups[ __( 'All of a post type', 'wormiss' ) ] = $type_opts;
 
 		$page_opts = [];
-		foreach ( get_pages( [ 'sort_column' => 'post_title' ] ) as $page ) {
+		foreach ( get_pages(
+			[
+				'sort_column' => 'post_title',
+				// Draft/private/future pages too, so a rule can target them and an existing rule's
+				// page stays selectable if it is later unpublished.
+				'post_status' => [ 'publish', 'pending', 'draft', 'future', 'private' ],
+			]
+		) as $page ) {
 			$page_opts[ Wormiss_Access_Rules::token( 'page_tree', $page->ID ) ] = get_the_title( $page );
 		}
 		$groups[ __( 'Page and its child pages', 'wormiss' ) ] = $page_opts;
 
-		$html = '';
+		$html    = '';
+		$present = ( '' === $selected );
 		foreach ( $groups as $label => $options ) {
 			if ( ! $options ) {
 				continue;
 			}
 			$html .= '<optgroup label="' . esc_attr( $label ) . '">';
 			foreach ( $options as $value => $text ) {
+				if ( $value === $selected ) {
+					$present = true;
+				}
 				$html .= sprintf(
 					'<option value="%1$s" %2$s>%3$s</option>',
 					esc_attr( $value ),
@@ -1724,6 +1735,25 @@ class Wormiss_Admin {
 				);
 			}
 			$html .= '</optgroup>';
+		}
+		// A saved rule whose target is not in the lists above (e.g. a trashed page, or content hidden
+		// from the current query) must still appear selected, or saving the form would silently drop
+		// the rule and remove an active restriction. Carry it as its own option.
+		if ( ! $present ) {
+			$token = Wormiss_Access_Rules::parse_token( $selected );
+			$label = null === $token ? '' : Wormiss_Access_Rules::label(
+				[
+					'kind' => $token['kind'],
+					'ref'  => $token['ref'],
+				]
+			);
+			$html  = '<optgroup label="' . esc_attr__( 'Current selection', 'wormiss' ) . '">'
+				. sprintf(
+					'<option value="%1$s" selected>%2$s</option>',
+					esc_attr( $selected ),
+					esc_html( '' !== $label ? $label : $selected )
+				)
+				. '</optgroup>' . $html;
 		}
 		return $html;
 	}
