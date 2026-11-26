@@ -272,7 +272,8 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
 		$logos  = $this->category( 'Logos' );
 		$badges = $this->category( 'Badges' );
-		$file   = $this->attachment();
+		// Owned by the editor, so they may edit it (the media-access gate also guards edit_post).
+		$file = $this->attachment( get_current_user_id() );
 
 		// The media modal posts one entry per ticked box, keyed by term ID.
 		$saved = Wormiss_Media_Categories::save_picker(

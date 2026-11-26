@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.52.0
+Stable tag: 0.53.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.53.0 =
+* Media access control: who can see and use which images in the editor and Media Library is now governed by a department-by-category rule. A top-level media category is created for each department (Marketing, Membership, Education, Management, Events, Operations), and by default each department is allowed its own category.
+* A non-administrator sees only images they uploaded themselves plus images in categories allowed to their departments; everything else is hidden in the "Add media" modal, the Media grid, the Media Library list and the REST media endpoint, and cannot be opened, edited or deleted by ID. Administrators see everything.
+* This controls visibility and use in the editor/library. It does not change whether a file's public URL is reachable; that (byte-level protected delivery) is a later release. The admin screen for editing the department-by-category matrix and a bulk-categorise tool are also still to come.
 
 = 0.52.0 =
 * Internal roles: two new roles, Wormiss Staff (use and data entry) and Wormiss Manager (reporting and configuration, plus oversight of others' posts). Managers are a superset of Staff; neither has full site administration.
