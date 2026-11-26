@@ -352,7 +352,6 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 			if ( false !== strpos( $url, 'case.jpg' ) && ! empty( $args['filename'] ) ) {
 				$image = imagecreatetruecolor( 4, 4 );
 				imagejpeg( $image, $args['filename'] );
-				imagedestroy( $image );
 				return [
 					'headers'  => [],
 					'body'     => '',
