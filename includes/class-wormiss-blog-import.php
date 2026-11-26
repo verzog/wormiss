@@ -1523,7 +1523,18 @@ class Wormiss_Blog_Import {
 			$url        = html_entity_decode( $attr, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			$attachment = self::copy( $post_id, $url, $title, $report, $complete );
 			if ( $attachment ) {
-				$map[ '"' . $attr . '"' ] = '"' . esc_url( (string) wp_get_attachment_url( $attachment ) ) . '"';
+				// File (and, if the category is protected, privately store) the picture before its URL
+				// is read, so a protected picture maps to the gated endpoint in the post content. When
+				// the private store fails, leave the original URL in place (so this run stays
+				// incomplete and the next retries it) rather than present a protected picture whose
+				// public file is still reachable.
+				if ( Wormiss_Media_Delivery::protect_imported( $attachment ) ) {
+					$map[ '"' . $attr . '"' ] = '"' . esc_url( (string) wp_get_attachment_url( $attachment ) ) . '"';
+				} else {
+					$complete = false;
+					/* translators: %s: post title. */
+					self::note( $report, sprintf( __( '%s: a protected picture could not be moved into the private store; it will be retried.', 'wormiss' ), $title ) );
+				}
 			}
 		}
 		if ( $map ) {
@@ -1542,8 +1553,15 @@ class Wormiss_Blog_Import {
 		if ( '' !== $feature && 0 === strpos( $feature, $base . '/' ) && get_post_meta( $post_id, self::META_FEATURE, true ) !== $feature ) {
 			$attachment = self::copy( $post_id, $feature, $title, $report, $complete );
 			if ( $attachment ) {
-				set_post_thumbnail( $post_id, $attachment );
-				update_post_meta( $post_id, self::META_FEATURE, $feature );
+				if ( Wormiss_Media_Delivery::protect_imported( $attachment ) ) {
+					set_post_thumbnail( $post_id, $attachment );
+					update_post_meta( $post_id, self::META_FEATURE, $feature );
+				} else {
+					// Leave META_FEATURE unset so the next run retries the private store.
+					$complete = false;
+					/* translators: %s: post title. */
+					self::note( $report, sprintf( __( '%s: the featured picture could not be moved into the private store; it will be retried.', 'wormiss' ), $title ) );
+				}
 			}
 		}
 		return $complete;

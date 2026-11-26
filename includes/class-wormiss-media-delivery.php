@@ -72,6 +72,9 @@ class Wormiss_Media_Delivery {
 		// Sized images and srcset must not point at per-size file URLs the endpoint can't serve.
 		add_filter( 'image_downsize', [ __CLASS__, 'filter_downsize' ], 10, 3 );
 		add_filter( 'wp_calculate_image_srcset', [ __CLASS__, 'filter_srcset' ], 10, 5 );
+		// Rewrite hardcoded protected-image URLs in post content (e.g. blog posts imported before the
+		// category was protected) to the gated endpoint. Runs after Wormiss_Blog's content filter.
+		add_filter( 'the_content', [ __CLASS__, 'rewrite_content' ], 20 );
 		add_action( 'admin_init', [ __CLASS__, 'maybe_flush' ] );
 		add_action( 'admin_notices', [ __CLASS__, 'fallback_notice' ] );
 	}
@@ -247,6 +250,29 @@ class Wormiss_Media_Delivery {
 	}
 
 	/**
+	 * File an imported blog picture into the configured media category and, when that category is
+	 * protected, move its bytes into the private store. Called at import time before the post's
+	 * image URLs are resolved, so a protected picture's content URL is emitted as the gated endpoint.
+	 *
+	 * @param int $attachment Attachment ID.
+	 * @return bool False when the picture should have been stored privately but could not be (so the
+	 *              caller can leave the import incomplete and retry); true otherwise.
+	 */
+	public static function protect_imported( int $attachment ): bool {
+		if ( $attachment < 1 ) {
+			return false;
+		}
+		$term = (int) Wormiss_Settings::get( 'blog_media_category' );
+		if ( $term > 0 && get_term( $term, Wormiss_Media_Categories::TAXONOMY ) instanceof WP_Term ) {
+			wp_set_object_terms( $attachment, [ $term ], Wormiss_Media_Categories::TAXONOMY, true );
+		}
+		if ( Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
+			return self::store( $attachment );
+		}
+		return true;
+	}
+
+	/**
 	 * Point a protected attachment's URL at the gated endpoint instead of its (now private) file.
 	 *
 	 * @param string $url           The attachment URL.
@@ -297,6 +323,43 @@ class Wormiss_Media_Delivery {
 	public static function filter_srcset( $sources, $size_array, $image_src, $image_meta, $attachment_id ) {
 		unset( $size_array, $image_src, $image_meta );
 		return Wormiss_Media_Protected::attachment_is_protected( (int) $attachment_id ) ? [] : $sources;
+	}
+
+	/**
+	 * Rewrite hardcoded image URLs in post content so a protected picture's src points at the gated
+	 * endpoint and its responsive attributes are dropped. New imports already emit the endpoint URL;
+	 * this covers posts stored before their category was protected. A no-op when nothing is protected.
+	 *
+	 * @param string $content Post content HTML.
+	 * @return string
+	 */
+	public static function rewrite_content( $content ) {
+		$content = (string) $content;
+		if ( '' === $content || ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
+			return $content;
+		}
+		if ( ! Wormiss_Media_Protected::protected_term_ids() || false === stripos( $content, '<img' ) ) {
+			return $content;
+		}
+		$processor = new \WP_HTML_Tag_Processor( $content );
+		$cache     = [];
+		while ( $processor->next_tag( 'img' ) ) {
+			$src = $processor->get_attribute( 'src' );
+			if ( ! is_string( $src ) || '' === $src ) {
+				continue;
+			}
+			if ( ! array_key_exists( $src, $cache ) ) {
+				$cache[ $src ] = (int) attachment_url_to_postid( $src );
+			}
+			$attachment = $cache[ $src ];
+			if ( $attachment < 1 || ! Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
+				continue;
+			}
+			$processor->set_attribute( 'src', self::endpoint_url( $attachment ) );
+			$processor->remove_attribute( 'srcset' );
+			$processor->remove_attribute( 'sizes' );
+		}
+		return $processor->get_updated_html();
 	}
 
 	/**

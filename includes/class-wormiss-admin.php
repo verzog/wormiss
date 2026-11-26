@@ -427,6 +427,7 @@ class Wormiss_Admin {
 		$title = __( 'Members\' blog', 'wormiss' );
 		self::section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ] );
 		self::field( 'blog_reader_roles', __( 'Who can read the members\' blog', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_media_category', __( 'Media category for imported pictures', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_enabled', __( 'Import the iMIS blog daily', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_posts', __( 'Blog posts per batch', 'wormiss' ), 'wormiss_blog' );
@@ -1010,6 +1011,28 @@ class Wormiss_Admin {
 				echo '<p class="description">'
 					. esc_html__( 'Tick the roles (e.g. a paid membership role) that may read full blog posts and comment.', 'wormiss' )
 					. ' ' . esc_html__( 'None ticked: only staff can read; everyone else sees intros.', 'wormiss' ) . '</p>';
+				return;
+			case 'blog_media_category':
+				$current = (int) $value;
+				printf( '<select name="%1$s" id="%1$s">', esc_attr( $name ) );
+				printf(
+					'<option value="0" %1$s>%2$s</option>',
+					selected( 0, $current, false ),
+					esc_html__( '— None (leave imported pictures uncategorised) —', 'wormiss' )
+				);
+				foreach ( Wormiss_Media_Categories::term_choices() as $choice ) {
+					printf(
+						'<option value="%1$d" %2$s>%3$s</option>',
+						(int) $choice['id'],
+						selected( (int) $choice['id'], $current, false ),
+						esc_html( $choice['name'] )
+					);
+				}
+				echo '</select>';
+				echo '<p class="description">'
+					. esc_html__( 'Imported blog pictures are filed into this media category.', 'wormiss' )
+					. ' ' . esc_html__( 'Flag that category as protected (in the media library) to serve members\' blog pictures from the private store.', 'wormiss' )
+					. '</p>';
 				return;
 			case 'media_staff_roles':
 				$chosen = array_map( 'strval', (array) $value );
