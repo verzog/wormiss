@@ -197,4 +197,87 @@ class Test_Wormiss_Media_Bulk extends Wormiss_Test_Case {
 		Wormiss_Media_Bulk::run();
 		$this->assertFalse( Wormiss_Media_Bulk::is_running() );
 	}
+
+	/**
+	 * The "uncategorised" scope is images only; "all" includes other attachment types.
+	 *
+	 * @return void
+	 */
+	public function test_uncategorised_scope_is_images_only(): void {
+		$image = $this->attachment();
+		$pdf   = (int) self::factory()->post->create(
+			[
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'application/pdf',
+				'post_status'    => 'inherit',
+			]
+		);
+		$this->assertSame( [ $image ], Wormiss_Media_Bulk::matching_ids( 'uncategorised' ), 'PDF excluded from images.' );
+		$this->assertContains( $pdf, Wormiss_Media_Bulk::matching_ids( 'all' ), 'PDF included in all media.' );
+	}
+
+	/**
+	 * Turning the tool off mid-job stops the worker and clears the job instead of carrying on.
+	 *
+	 * @return void
+	 */
+	public function test_kill_switch_stops_run(): void {
+		$logos = $this->category( 'Logos' );
+		$img   = $this->attachment();
+		$this->assertTrue( Wormiss_Media_Bulk::start( $logos, 'uncategorised' ) );
+
+		$off = static fn() => false;
+		add_filter( 'wormiss_media_bulk_enabled', $off );
+		Wormiss_Media_Bulk::run();
+		remove_filter( 'wormiss_media_bulk_enabled', $off );
+
+		$this->assertFalse( Wormiss_Media_Bulk::is_running(), 'Job cleared.' );
+		$this->assertSame( [], $this->terms_on( $img ), 'Nothing categorised after the kill-switch.' );
+	}
+
+	/**
+	 * A pending job whose cron continuation was lost is rescheduled by maybe_resume().
+	 *
+	 * @return void
+	 */
+	public function test_maybe_resume(): void {
+		$logos = $this->category( 'Logos' );
+		$this->attachment();
+		$this->assertTrue( Wormiss_Media_Bulk::start( $logos, 'uncategorised' ) );
+		wp_clear_scheduled_hook( Wormiss_Media_Bulk::HOOK );
+		$this->assertFalse( wp_next_scheduled( Wormiss_Media_Bulk::HOOK ) );
+
+		Wormiss_Media_Bulk::maybe_resume();
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Media_Bulk::HOOK ), 'Pending job rescheduled.' );
+		Wormiss_Media_Bulk::cancel();
+	}
+
+	/**
+	 * Work spans batches, and cancelling stops the remaining batches.
+	 *
+	 * @return void
+	 */
+	public function test_batches_and_cancel_stop(): void {
+		$one   = static fn() => 1;
+		add_filter( 'wormiss_media_bulk_batch', $one );
+		$logos = $this->category( 'Logos' );
+		$a     = $this->attachment();
+		$b     = $this->attachment();
+		$c     = $this->attachment();
+
+		$this->assertTrue( Wormiss_Media_Bulk::start( $logos, 'uncategorised' ) );
+		Wormiss_Media_Bulk::run(); // One done, two left.
+		$this->assertTrue( Wormiss_Media_Bulk::is_running() );
+		$this->assertSame( 1, Wormiss_Media_Bulk::job()['done'] );
+
+		Wormiss_Media_Bulk::cancel();
+		Wormiss_Media_Bulk::run(); // No job: no-op.
+		remove_filter( 'wormiss_media_bulk_batch', $one );
+
+		$categorised = array_filter(
+			[ $a, $b, $c ],
+			fn( $id ) => [ $logos ] === $this->terms_on( $id )
+		);
+		$this->assertCount( 1, $categorised, 'Only the first batch was categorised; cancel stopped the rest.' );
+	}
 }

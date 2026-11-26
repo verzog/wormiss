@@ -1462,7 +1462,7 @@ class Wormiss_Admin {
 					__( 'Last run: added %1$d images to "%2$s" on %3$s.', 'wormiss' ),
 					(int) $report['done'],
 					$term instanceof WP_Term ? $term->name : __( '(deleted category)', 'wormiss' ),
-					userdate( (int) $report['time'] )
+					wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $report['time'] )
 				)
 			) . '</p>';
 		}

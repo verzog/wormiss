@@ -59,6 +59,28 @@ class Wormiss_Media_Bulk {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
 		add_action( 'admin_post_wormiss_media_bulk_start', [ __CLASS__, 'handle_start' ] );
 		add_action( 'admin_post_wormiss_media_bulk_cancel', [ __CLASS__, 'handle_cancel' ] );
+		add_action( 'init', [ __CLASS__, 'maybe_resume' ] );
+	}
+
+	/**
+	 * Reschedule a pending job whose continuation was lost (e.g. the plugin was deactivated between
+	 * batches, which clears the cron event but keeps the job). Does nothing while the tool is off.
+	 *
+	 * @return void
+	 */
+	public static function maybe_resume(): void {
+		if ( self::enabled() && self::is_running() && ! wp_next_scheduled( self::HOOK ) ) {
+			wp_schedule_single_event( time() + MINUTE_IN_SECONDS, self::HOOK );
+		}
+	}
+
+	/**
+	 * Attachments processed per batch (filterable, chiefly for tests).
+	 *
+	 * @return int
+	 */
+	public static function batch(): int {
+		return max( 1, (int) apply_filters( 'wormiss_media_bulk_batch', self::BATCH ) );
 	}
 
 	/**
@@ -115,6 +137,9 @@ class Wormiss_Media_Bulk {
 			'update_post_term_cache' => false,
 		];
 		if ( 'all' !== $scope ) {
+			// The "uncategorised" scope is labelled "images with no category": restrict it to image
+			// files so non-image attachments (PDFs, audio, ...) are not swept in.
+			$args['post_mime_type'] = 'image';
 			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- One-off admin bulk tool.
 			$args['tax_query'] = [
 				[
@@ -192,12 +217,19 @@ class Wormiss_Media_Bulk {
 		if ( ! $job ) {
 			return;
 		}
+		// Kill-switch: if the tool was turned off mid-job, stop and clear it rather than carrying on.
+		if ( ! self::enabled() ) {
+			self::cancel();
+			return;
+		}
 		Wormiss_Batch::start( self::SECONDS );
 		$category  = (int) $job['category'];
+		$started   = (int) ( $job['started'] ?? 0 );
 		$queue     = array_map( 'intval', (array) ( $job['queue'] ?? [] ) );
+		$batch     = self::batch();
 		$valid     = get_term( $category, Wormiss_Media_Categories::TAXONOMY ) instanceof WP_Term;
 		$processed = 0;
-		while ( $queue && $processed < self::BATCH && ! Wormiss_Batch::out_of_time() ) {
+		while ( $queue && $processed < $batch && ! Wormiss_Batch::out_of_time() ) {
 			$id = (int) array_shift( $queue );
 			if ( $valid && 'attachment' === get_post_type( $id ) ) {
 				// Append, so existing categories are kept.
@@ -205,6 +237,11 @@ class Wormiss_Media_Bulk {
 			}
 			++$job['done'];
 			++$processed;
+		}
+		// Don't resurrect a job that was cancelled or replaced while this batch ran.
+		$current = self::job();
+		if ( ! $current || (int) ( $current['started'] ?? 0 ) !== $started ) {
+			return;
 		}
 		$job['queue'] = array_values( $queue );
 		if ( ! $queue ) {
