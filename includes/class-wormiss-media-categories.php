@@ -188,16 +188,16 @@ class Wormiss_Media_Categories {
 
 	/**
 	 * The roles that count as staff: the ones chosen in Settings, or (by default) administrators and
-	 * a dedicated "staff" role. Internal team roles (e.g. Marketing, Membership, Education,
-	 * Management) can be added to the setting once they exist. Administrators are always staff
-	 * whether or not they are in the list (see is_staff()).
+	 * the internal Wormiss Staff and Manager roles. Administrators are always staff whether or not
+	 * they are in the list (see is_staff()).
 	 *
 	 * @return string[] Role slugs.
 	 */
 	public static function staff_roles(): array {
 		$roles = array_values( array_filter( array_map( 'strval', (array) Wormiss_Settings::get( 'media_staff_roles' ) ) ) );
 		if ( ! $roles ) {
-			$roles = [ 'administrator', 'staff' ];
+			$internal = class_exists( 'Wormiss_Roles' ) ? Wormiss_Roles::role_slugs() : [];
+			$roles    = array_merge( [ 'administrator' ], $internal );
 		}
 		/**
 		 * The roles that count as staff for media categories (whose uploads are not auto-filed).

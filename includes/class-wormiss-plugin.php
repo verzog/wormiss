@@ -61,6 +61,7 @@ class Wormiss_Plugin {
 		Wormiss_Event_Import::init();
 		Wormiss_News_Import::init();
 		Wormiss_Images::init();
+		Wormiss_Roles::init();
 		Wormiss_Media_Categories::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
@@ -195,6 +196,8 @@ class Wormiss_Plugin {
 	 */
 	public static function activate(): void {
 		Wormiss_Logger::install();
+		// The internal Staff and Manager roles.
+		Wormiss_Roles::install();
 		// The reserved "End-user images" media category (not deletable).
 		Wormiss_Media_Categories::ensure_reserved_term();
 		if ( ! wp_next_scheduled( self::CLEANUP_HOOK ) ) {
@@ -238,6 +241,8 @@ class Wormiss_Plugin {
 		if ( get_option( 'wormiss_db_version' ) !== Wormiss_Logger::DB_VERSION ) {
 			Wormiss_Logger::install();
 		}
+		// Keep the internal roles' capabilities in step after an update.
+		Wormiss_Roles::maybe_install();
 	}
 
 	/**

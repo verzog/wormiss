@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.51.0
+Stable tag: 0.52.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,11 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.52.0 =
+* Internal roles: two new roles, Wormiss Staff (use and data entry) and Wormiss Manager (reporting and configuration, plus oversight of others' posts). Managers are a superset of Staff; neither has full site administration.
+* Departments: a new "Wormiss departments" field on each user's profile (Marketing, Membership, Education, Management, Events, Operations). A person has one level (Staff or Manager) and may belong to several departments; departments decide what they can see or touch (used by media categories now, and content later).
+* Wormiss manages these roles itself: they are created on activation, kept in step on update, and removed on uninstall. Both roles count as staff for media auto-filing.
 
 = 0.51.0 =
 * Media categories: a new hierarchical "Media categories" taxonomy on images and other media, so the library can be organised into curated buckets (Logos, Headshots, Event photos, ...) with sub-categories. Manage them under Media > Media categories.
