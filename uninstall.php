@@ -35,6 +35,8 @@ delete_option( 'wormiss_media_matrix' );
 delete_option( 'wormiss_media_department_terms' );
 delete_option( 'wormiss_media_bulk_job' );
 delete_option( 'wormiss_media_bulk_report' );
+delete_option( 'wormiss_media_rewrite' );
+delete_metadata( 'post', 0, '_wormiss_protected_file', '', true );
 wp_clear_scheduled_hook( 'wormiss_media_bulk' );
 // Remove the internal Staff and Manager roles and the per-user departments.
 if ( file_exists( __DIR__ . '/includes/class-wormiss-roles.php' ) ) {
