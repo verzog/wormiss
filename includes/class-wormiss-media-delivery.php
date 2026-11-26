@@ -59,6 +59,12 @@ class Wormiss_Media_Delivery {
 	/** Current rewrite version. */
 	const REWRITE_VERSION = 1;
 
+	/** Query arg carrying the lock-to-post access token. */
+	const LOCK_ARG = 't';
+
+	/** Seconds a lock-to-post token is valid for (filterable via wormiss_media_lock_ttl). */
+	const LOCK_TTL = 600;
+
 	/**
 	 * Hook in.
 	 *
@@ -169,13 +175,118 @@ class Wormiss_Media_Delivery {
 	}
 
 	/**
-	 * The gated endpoint URL for an attachment.
+	 * The gated endpoint URL for an attachment, optionally carrying a lock-to-post token.
+	 *
+	 * @param int    $attachment Attachment ID.
+	 * @param string $token      Lock token ('' for none).
+	 * @return string
+	 */
+	public static function endpoint_url( int $attachment, string $token = '' ): string {
+		$url = home_url( '/wormiss-media/' . $attachment );
+		return '' !== $token ? add_query_arg( self::LOCK_ARG, $token, $url ) : $url;
+	}
+
+	/**
+	 * The secret the lock tokens are signed with (per site; rotating the auth salt invalidates
+	 * outstanding tokens, which only shortens their already-brief life).
+	 *
+	 * @return string
+	 */
+	private static function lock_secret(): string {
+		return wp_salt( 'auth' );
+	}
+
+	/**
+	 * How long a lock token is valid for, in seconds.
+	 *
+	 * @return int
+	 */
+	private static function lock_ttl(): int {
+		/**
+		 * Seconds a lock-to-post media token is valid for.
+		 *
+		 * @param int $ttl Seconds (default LOCK_TTL).
+		 */
+		$ttl = (int) apply_filters( 'wormiss_media_lock_ttl', self::LOCK_TTL );
+		return max( 30, $ttl );
+	}
+
+	/**
+	 * Mint a lock-to-post token binding an attachment to a post, a viewer and a short expiry.
+	 *
+	 * @param int $attachment Attachment ID.
+	 * @param int $post_id    Post the image is embedded in.
+	 * @param int $user_id    Viewer's user ID.
+	 * @return string Token "post.expiry.signature".
+	 */
+	public static function mint_lock_token( int $attachment, int $post_id, int $user_id ): string {
+		if ( $attachment < 1 || $post_id < 1 || $user_id < 1 ) {
+			return '';
+		}
+		$expiry    = time() + self::lock_ttl();
+		$signature = self::lock_signature( $attachment, $post_id, $user_id, $expiry );
+		return $post_id . '.' . $expiry . '.' . $signature;
+	}
+
+	/**
+	 * The HMAC for a lock token's parts.
+	 *
+	 * @param int $attachment Attachment ID.
+	 * @param int $post_id    Post ID.
+	 * @param int $user_id    User ID.
+	 * @param int $expiry     Unix expiry.
+	 * @return string
+	 */
+	private static function lock_signature( int $attachment, int $post_id, int $user_id, int $expiry ): string {
+		$data = implode( '|', [ 'wormiss-media-lock', $attachment, $post_id, $user_id, $expiry ] );
+		return hash_hmac( 'sha256', $data, self::lock_secret() );
+	}
+
+	/**
+	 * Whether a lock token is valid for an attachment and the given viewer (right signature, not
+	 * expired). The post is carried in the token and bound into the signature.
+	 *
+	 * @param int    $attachment Attachment ID.
+	 * @param int    $user_id    Viewer's user ID.
+	 * @param string $token      Token from the request.
+	 * @return bool
+	 */
+	public static function valid_lock_token( int $attachment, int $user_id, string $token ): bool {
+		if ( $attachment < 1 || $user_id < 1 || '' === $token ) {
+			return false;
+		}
+		$parts = explode( '.', $token );
+		if ( 3 !== count( $parts ) ) {
+			return false;
+		}
+		$post_id = (int) $parts[0];
+		$expiry  = (int) $parts[1];
+		$given   = (string) $parts[2];
+		if ( $post_id < 1 || $expiry < time() ) {
+			return false;
+		}
+		$expected = self::lock_signature( $attachment, $post_id, $user_id, $expiry );
+		return hash_equals( $expected, $given );
+	}
+
+	/**
+	 * A lock token for the current render context (the post in the loop and the signed-in member),
+	 * or '' when the attachment is not locked, there is no post context, or the viewer is an
+	 * administrator (who does not need one).
 	 *
 	 * @param int $attachment Attachment ID.
 	 * @return string
 	 */
-	public static function endpoint_url( int $attachment ): string {
-		return home_url( '/wormiss-media/' . $attachment );
+	private static function current_lock_token( int $attachment ): string {
+		if ( ! Wormiss_Media_Protected::attachment_is_locked( $attachment ) ) {
+			return '';
+		}
+		$post_id = (int) get_the_ID();
+		$user_id = get_current_user_id();
+		if ( $post_id < 1 || $user_id < 1 || Wormiss_Media_Access::is_exempt( $user_id ) ) {
+			return '';
+		}
+		return self::mint_lock_token( $attachment, $post_id, $user_id );
 	}
 
 	/**
@@ -282,7 +393,7 @@ class Wormiss_Media_Delivery {
 	public static function filter_url( $url, $attachment_id ) {
 		$attachment_id = (int) $attachment_id;
 		if ( $attachment_id > 0 && Wormiss_Media_Protected::attachment_is_protected( $attachment_id ) ) {
-			return self::endpoint_url( $attachment_id );
+			return self::endpoint_url( $attachment_id, self::current_lock_token( $attachment_id ) );
 		}
 		return $url;
 	}
@@ -306,7 +417,7 @@ class Wormiss_Media_Delivery {
 		$meta   = wp_get_attachment_metadata( $id );
 		$width  = is_array( $meta ) && isset( $meta['width'] ) ? (int) $meta['width'] : 0;
 		$height = is_array( $meta ) && isset( $meta['height'] ) ? (int) $meta['height'] : 0;
-		return [ self::endpoint_url( $id ), $width, $height, false ];
+		return [ self::endpoint_url( $id, self::current_lock_token( $id ) ), $width, $height, false ];
 	}
 
 	/**
@@ -338,7 +449,7 @@ class Wormiss_Media_Delivery {
 		if ( '' === $content || ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
 			return $content;
 		}
-		if ( ! Wormiss_Media_Protected::protected_term_ids() || false === stripos( $content, '<img' ) ) {
+		if ( ! Wormiss_Media_Protected::flagged_term_ids() || false === stripos( $content, '<img' ) ) {
 			return $content;
 		}
 		$processor = new \WP_HTML_Tag_Processor( $content );
@@ -355,7 +466,7 @@ class Wormiss_Media_Delivery {
 			if ( $attachment < 1 || ! Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
 				continue;
 			}
-			$processor->set_attribute( 'src', self::endpoint_url( $attachment ) );
+			$processor->set_attribute( 'src', self::endpoint_url( $attachment, self::current_lock_token( $attachment ) ) );
 			$processor->remove_attribute( 'srcset' );
 			$processor->remove_attribute( 'sizes' );
 		}
@@ -382,11 +493,12 @@ class Wormiss_Media_Delivery {
 	/**
 	 * Decide how to serve an endpoint request: the outcome and, when serving, the file.
 	 *
-	 * @param int $attachment Attachment ID.
-	 * @param int $user_id    User ID (0 for the current user).
+	 * @param int    $attachment Attachment ID.
+	 * @param int    $user_id    User ID (0 for the current user).
+	 * @param string $token      Lock-to-post token from the request ('' when none).
 	 * @return array{status: int, mode: string, path: string, relative: string}
 	 */
-	public static function decide( int $attachment, int $user_id = 0 ): array {
+	public static function decide( int $attachment, int $user_id = 0, string $token = '' ): array {
 		$none = [
 			'status'   => 404,
 			'mode'     => 'none',
@@ -398,6 +510,14 @@ class Wormiss_Media_Delivery {
 			return $none;
 		}
 		if ( ! self::can_view( $attachment, $user_id ) ) {
+			return array_merge( $none, [ 'status' => 403 ] );
+		}
+		// A locked image also needs a valid post-scoped token for this viewer; administrators are
+		// exempt. Without it the URL is Forbidden out of the post it is embedded in.
+		$uid = $user_id > 0 ? $user_id : get_current_user_id();
+		if ( Wormiss_Media_Protected::attachment_is_locked( $attachment )
+			&& ! Wormiss_Media_Access::is_exempt( $uid )
+			&& ! self::valid_lock_token( $attachment, $uid, $token ) ) {
 			return array_merge( $none, [ 'status' => 403 ] );
 		}
 		$relative = self::stored_relative( $attachment );
@@ -456,7 +576,10 @@ class Wormiss_Media_Delivery {
 		if ( $id < 1 ) {
 			return;
 		}
-		$decision = self::decide( $id );
+		// The lock token authenticates the request itself (an HMAC, not a form), so there is no nonce.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Token is verified in decide(); value is sanitised here.
+		$token    = isset( $_GET[ self::LOCK_ARG ] ) ? sanitize_text_field( wp_unslash( $_GET[ self::LOCK_ARG ] ) ) : '';
+		$decision = self::decide( $id, 0, $token );
 		if ( 200 !== $decision['status'] ) {
 			status_header( $decision['status'] );
 			nocache_headers();

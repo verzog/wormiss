@@ -160,6 +160,8 @@ class Test_Wormiss_Media_Protected extends Wormiss_Test_Case {
 		$this->assertArrayHasKey( 'wormiss_media_protected', Wormiss_Media_Protected::columns( [] ) );
 		$this->assertSame( '—', Wormiss_Media_Protected::column( '', 'wormiss_media_protected', $term ) );
 		update_term_meta( $term, Wormiss_Media_Protected::META_PROTECTED, 1 );
-		$this->assertSame( 'Flagged (not active yet)', Wormiss_Media_Protected::column( '', 'wormiss_media_protected', $term ) );
+		$this->assertSame( 'Protected', Wormiss_Media_Protected::column( '', 'wormiss_media_protected', $term ) );
+		update_term_meta( $term, Wormiss_Media_Protected::META_LOCKED, 1 );
+		$this->assertSame( 'Protected · locked to post', Wormiss_Media_Protected::column( '', 'wormiss_media_protected', $term ) );
 	}
 }

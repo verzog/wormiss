@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.60.0
+Stable tag: 0.61.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.61.0 =
+* Media categories gain a stricter "Lock to post" flag (alongside "protected delivery"). An image in a locked category only loads while a member is viewing the specific post it is embedded in: its gated URL carries a short-lived token tied to that post and that member, and the endpoint returns Forbidden for a bare URL, an expired token, or another member's token. This stops members sharing image links or fetching images outside the post. Note: it cannot stop a viewer saving an image they can already see on the page — the browser must receive the image to display it.
 
 = 0.60.0 =
 * Pictures imported from the iMIS blog are now attributed to the blog post's author (the member who wrote it), rather than to the account that happened to run the import. The media library's "your uploads" view, the author column and the access gate's "own uploads" rule now line up with who the picture belongs to.
