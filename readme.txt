@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.56.0
+Stable tag: 0.57.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,12 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.57.0 =
+* Protected delivery (part one of the mechanism): images in a category flagged for protected delivery are now served through a gated endpoint, /wormiss-media/<id>, instead of a public file URL. The endpoint checks the same access as the editor/library gate (administrators and the department-by-category matrix) plus the members-only gate for front-end members, and otherwise returns 403. Files are kept in a private store (set WORMISS_PROTECTED_DIR in wp-config.php to a path outside the web root; a hardened wp-content folder is used otherwise, with an admin warning).
+* nginx: add one internal location so the endpoint can stream files with X-Accel-Redirect (Apache X-Sendfile and a PHP fallback are also supported). Adjust the path to match WORMISS_PROTECTED_DIR:
+      location /wormiss-media-internal/ { internal; alias /path/outside/webroot/wormiss-protected/; }
+* Populating the private store for members' blog images, and rewriting old image URLs in existing blog posts, follow in the next release.
 
 = 0.56.0 =
 * Media categories can be flagged for "protected delivery" (a checkbox on each category under Media > Media categories, and a column in the list). This marks a category whose images are meant to be served with byte-level protection; a protected parent protects its sub-categories too. The protected storage and the gated delivery endpoint that use this flag follow in the next release.
