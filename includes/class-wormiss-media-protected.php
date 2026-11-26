@@ -146,8 +146,8 @@ class Wormiss_Media_Protected {
 				. '<label><input type="checkbox" name="%2$s" value="1" /> %3$s</label><p>%4$s</p></div>',
 			esc_attr( self::FIELD_PRESENT ),
 			esc_attr( self::META_PROTECTED ),
-			esc_html__( 'Protected delivery', 'wormiss' ),
-			esc_html__( 'Serve this category\'s images with byte-level protection (stored privately, streamed through a gated endpoint). For sensitive images such as members\' blog pictures.', 'wormiss' )
+			esc_html__( 'Protected delivery (not active yet)', 'wormiss' ),
+			esc_html__( 'Marks this category for byte-level protected delivery, intended for sensitive images such as members\' blog pictures. Note: this release only records the flag — private storage and the gated endpoint are not in place yet, so do not rely on it to secure confidential images. It takes effect in the protected-delivery release.', 'wormiss' )
 		);
 	}
 
@@ -165,12 +165,12 @@ class Wormiss_Media_Protected {
 				. '<input type="hidden" name="%2$s" value="1" />'
 				. '<label><input type="checkbox" name="%3$s" value="1" %4$s /> %5$s</label>'
 				. '<p class="description">%6$s</p></td></tr>',
-			esc_html__( 'Protected delivery', 'wormiss' ),
+			esc_html__( 'Protected delivery (not active yet)', 'wormiss' ),
 			esc_attr( self::FIELD_PRESENT ),
 			esc_attr( self::META_PROTECTED ),
 			checked( self::is_protected( $term_id ), true, false ),
-			esc_html__( 'Serve this category\'s images with byte-level protection', 'wormiss' ),
-			esc_html__( 'Images here are stored privately and streamed through a gated endpoint, for sensitive images such as members\' blog pictures. Sub-categories are protected too.', 'wormiss' )
+			esc_html__( 'Flag this category for byte-level protected delivery', 'wormiss' ),
+			esc_html__( 'Intended for sensitive images such as members\' blog pictures; a flagged parent will flag its sub-categories too. This release only records the flag — private storage and the gated endpoint are not in place yet, so do not rely on it to secure confidential images until the protected-delivery release ships.', 'wormiss' )
 		);
 	}
 
@@ -217,6 +217,6 @@ class Wormiss_Media_Protected {
 		if ( 'wormiss_media_protected' !== $column ) {
 			return (string) $content;
 		}
-		return self::is_protected( (int) $term_id ) ? esc_html__( 'Protected', 'wormiss' ) : '—';
+		return self::is_protected( (int) $term_id ) ? esc_html__( 'Flagged (not active yet)', 'wormiss' ) : '—';
 	}
 }
