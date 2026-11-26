@@ -57,6 +57,9 @@ class Wormiss_Access {
 	 */
 	public static function reset(): void {
 		self::$profiles = [];
+		if ( class_exists( 'Wormiss_Access_Rules' ) ) {
+			Wormiss_Access_Rules::reset();
+		}
 	}
 
 	/**
@@ -66,13 +69,18 @@ class Wormiss_Access {
 	 * @return array|null {types: string[], statuses: string[]}
 	 */
 	public static function post_rules( int $post_id ): ?array {
-		if ( ! $post_id || ! get_post_meta( $post_id, self::META_ENABLED, true ) ) {
+		if ( ! $post_id ) {
 			return null;
 		}
-		return [
-			'types'    => Wormiss_Settings::parse_list( (string) get_post_meta( $post_id, self::META_TYPES, true ) ),
-			'statuses' => Wormiss_Settings::parse_list( (string) get_post_meta( $post_id, self::META_STATUSES, true ) ),
-		];
+		// A post's own members-only setting wins over any site-wide rule.
+		if ( get_post_meta( $post_id, self::META_ENABLED, true ) ) {
+			return [
+				'types'    => Wormiss_Settings::parse_list( (string) get_post_meta( $post_id, self::META_TYPES, true ) ),
+				'statuses' => Wormiss_Settings::parse_list( (string) get_post_meta( $post_id, self::META_STATUSES, true ) ),
+			];
+		}
+		// Otherwise, the strongest site-wide rule that covers the post (or null if none does).
+		return Wormiss_Access_Rules::rule_for_post( $post_id );
 	}
 
 	/**

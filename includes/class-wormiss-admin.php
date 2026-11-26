@@ -76,6 +76,7 @@ class Wormiss_Admin {
 		add_action( 'load-post-new.php', [ __CLASS__, 'choose_first' ] );
 		add_action( 'admin_post_wormiss_log_export', [ __CLASS__, 'export_log' ] );
 		add_action( 'admin_post_wormiss_save_media_matrix', [ __CLASS__, 'save_media_matrix' ] );
+		add_action( 'admin_post_wormiss_save_access_rules', [ __CLASS__, 'save_access_rules' ] );
 		Wormiss_Content_Check::init();
 		Wormiss_Blog_Check::init();
 		Wormiss_Sign_In_Check::init();
@@ -1370,6 +1371,7 @@ class Wormiss_Admin {
 					'wormiss_user_sync_now',
 					__( 'Run the member sync now', 'wormiss' )
 				);
+				self::render_access_rules();
 				break;
 			case 'sign-in':
 				Wormiss_Sign_In_Check::render();
@@ -1575,6 +1577,187 @@ class Wormiss_Admin {
 		$raw = isset( $_POST['matrix'] ) && is_array( $_POST['matrix'] ) ? wp_unslash( $_POST['matrix'] ) : [];
 		Wormiss_Media_Access::save_matrix( $raw );
 		wp_safe_redirect( add_query_arg( 'wormiss_matrix_saved', '1', self::settings_url( 'media' ) ) );
+		exit;
+	}
+
+	/**
+	 * The members-only rules editor: a table of site-wide rules (a category, tag, post type or page
+	 * tree made members-only at once), below the member settings. Its own admin-post form.
+	 *
+	 * @return void
+	 */
+	public static function render_access_rules(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only shows a "saved" notice.
+		if ( isset( $_GET['wormiss_rules_saved'] ) ) {
+			echo '<div class="notice notice-success is-dismissible"><p>'
+				. esc_html__( 'Members-only rules saved.', 'wormiss' ) . '</p></div>';
+		}
+		echo '<hr /><h2>' . esc_html__( 'Members-only rules', 'wormiss' ) . '</h2>';
+		echo '<p class="description">'
+			. esc_html__( 'Make a whole category, tag, post type or page (with its child pages) members-only at once, instead of ticking each post.', 'wormiss' )
+			. ' ' . esc_html__( 'Leave the membership types and statuses blank for "any current member"; otherwise enter a comma-separated list (as on a single post).', 'wormiss' )
+			. ' ' . esc_html__( 'A single post\'s own Members only switch always overrides these rules.', 'wormiss' )
+			. '</p>';
+
+		$rules = Wormiss_Access_Rules::all();
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		wp_nonce_field( 'wormiss_save_access_rules', 'wormiss_access_rules_nonce' );
+		echo '<input type="hidden" name="action" value="wormiss_save_access_rules" />';
+		echo '<table class="widefat striped" style="max-width:60em;margin:.5em 0;"><thead><tr>';
+		echo '<th>' . esc_html__( 'Content', 'wormiss' ) . '</th>';
+		echo '<th>' . esc_html__( 'Membership types', 'wormiss' ) . '</th>';
+		echo '<th>' . esc_html__( 'Statuses', 'wormiss' ) . '</th>';
+		echo '<th>' . esc_html__( 'Remove', 'wormiss' ) . '</th>';
+		echo '</tr></thead><tbody>';
+		$index = 0;
+		foreach ( $rules as $rule ) {
+			self::render_access_rule_row( (string) $index, Wormiss_Access_Rules::token( $rule['kind'], $rule['ref'] ), implode( ', ', $rule['types'] ), implode( ', ', $rule['statuses'] ), true );
+			++$index;
+		}
+		// One blank row to add a rule.
+		self::render_access_rule_row( 'new', '', '', '', false );
+		echo '</tbody></table>';
+		submit_button( __( 'Save members-only rules', 'wormiss' ) );
+		echo '</form>';
+	}
+
+	/**
+	 * One row of the members-only rules table.
+	 *
+	 * @param string $index    Row index (a number, or "new" for the blank add row).
+	 * @param string $selected Selected "kind:ref" token.
+	 * @param string $types    Comma-separated membership types.
+	 * @param string $statuses Comma-separated statuses.
+	 * @param bool   $removable Whether to show a remove checkbox.
+	 * @return void
+	 */
+	private static function render_access_rule_row( string $index, string $selected, string $types, string $statuses, bool $removable ): void {
+		$name = 'rules[' . $index . ']';
+		echo '<tr><td><select name="' . esc_attr( $name . '[target]' ) . '">';
+		printf(
+			'<option value="" %1$s>%2$s</option>',
+			selected( '', $selected, false ),
+			esc_html__( '— Choose content —', 'wormiss' )
+		);
+		echo self::access_target_options( $selected ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts in access_target_options().
+		echo '</select></td>';
+		printf(
+			'<td><input type="text" class="regular-text" name="%1$s" value="%2$s" placeholder="%3$s" /></td>',
+			esc_attr( $name . '[types]' ),
+			esc_attr( $types ),
+			esc_attr__( 'any', 'wormiss' )
+		);
+		printf(
+			'<td><input type="text" class="regular-text" name="%1$s" value="%2$s" placeholder="%3$s" /></td>',
+			esc_attr( $name . '[statuses]' ),
+			esc_attr( $statuses ),
+			esc_attr__( 'default', 'wormiss' )
+		);
+		echo '<td>';
+		if ( $removable ) {
+			printf( '<label><input type="checkbox" name="%1$s" value="1" /> %2$s</label>', esc_attr( $name . '[remove]' ), esc_html__( 'Remove', 'wormiss' ) );
+		}
+		echo '</td></tr>';
+	}
+
+	/**
+	 * The grouped <optgroup> options for the rule "content" dropdown: categories, tags, post types
+	 * and pages. Every part is escaped here.
+	 *
+	 * @param string $selected Selected "kind:ref" token.
+	 * @return string HTML.
+	 */
+	private static function access_target_options( string $selected ): string {
+		$groups = [];
+
+		$categories = get_terms(
+			[
+				'taxonomy'   => 'category',
+				'hide_empty' => false,
+			]
+		);
+		$cat_opts   = [];
+		foreach ( is_array( $categories ) ? $categories : [] as $term ) {
+			$cat_opts[ Wormiss_Access_Rules::token( 'category', $term->term_id ) ] = $term->name;
+		}
+		$groups[ __( 'Categories (with sub-categories)', 'wormiss' ) ] = $cat_opts;
+
+		$tags     = get_terms(
+			[
+				'taxonomy'   => 'post_tag',
+				'hide_empty' => false,
+			]
+		);
+		$tag_opts = [];
+		foreach ( is_array( $tags ) ? $tags : [] as $term ) {
+			$tag_opts[ Wormiss_Access_Rules::token( 'tag', $term->term_id ) ] = $term->name;
+		}
+		$groups[ __( 'Tags', 'wormiss' ) ] = $tag_opts;
+
+		$type_opts = [];
+		foreach ( get_post_types( [ 'show_ui' => true ], 'objects' ) as $type ) {
+			if ( in_array( $type->name, [ 'attachment', 'wp_block', 'wp_navigation' ], true ) ) {
+				continue;
+			}
+			$type_opts[ Wormiss_Access_Rules::token( 'post_type', $type->name ) ] = $type->labels->name;
+		}
+		$groups[ __( 'All of a post type', 'wormiss' ) ] = $type_opts;
+
+		$page_opts = [];
+		foreach ( get_pages( [ 'sort_column' => 'post_title' ] ) as $page ) {
+			$page_opts[ Wormiss_Access_Rules::token( 'page_tree', $page->ID ) ] = get_the_title( $page );
+		}
+		$groups[ __( 'Page and its child pages', 'wormiss' ) ] = $page_opts;
+
+		$html = '';
+		foreach ( $groups as $label => $options ) {
+			if ( ! $options ) {
+				continue;
+			}
+			$html .= '<optgroup label="' . esc_attr( $label ) . '">';
+			foreach ( $options as $value => $text ) {
+				$html .= sprintf(
+					'<option value="%1$s" %2$s>%3$s</option>',
+					esc_attr( $value ),
+					selected( $value, $selected, false ),
+					esc_html( $text )
+				);
+			}
+			$html .= '</optgroup>';
+		}
+		return $html;
+	}
+
+	/**
+	 * Save the members-only rules (its own admin-post handler).
+	 *
+	 * @return void
+	 */
+	public static function save_access_rules(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change the members-only rules.', 'wormiss' ) );
+		}
+		check_admin_referer( 'wormiss_save_access_rules', 'wormiss_access_rules_nonce' );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing -- Nonce checked above; each row is validated in Wormiss_Access_Rules::sanitize() (kind against a fixed list, ref against existing content).
+		$raw  = isset( $_POST['rules'] ) && is_array( $_POST['rules'] ) ? wp_unslash( $_POST['rules'] ) : [];
+		$rows = [];
+		foreach ( $raw as $row ) {
+			if ( ! is_array( $row ) || ! empty( $row['remove'] ) ) {
+				continue;
+			}
+			$token = isset( $row['target'] ) ? Wormiss_Access_Rules::parse_token( (string) $row['target'] ) : null;
+			if ( null === $token ) {
+				continue;
+			}
+			$rows[] = [
+				'kind'     => $token['kind'],
+				'ref'      => $token['ref'],
+				'types'    => (string) ( $row['types'] ?? '' ),
+				'statuses' => (string) ( $row['statuses'] ?? '' ),
+			];
+		}
+		Wormiss_Access_Rules::save( $rows );
+		wp_safe_redirect( add_query_arg( 'wormiss_rules_saved', '1', self::settings_url( 'members' ) ) );
 		exit;
 	}
 
