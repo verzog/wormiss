@@ -295,16 +295,40 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 		$protected = $this->protected_category();
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_media_category' => $protected ] ) );
 		$id = $this->attachment();
-		Wormiss_Media_Delivery::protect_imported( $id );
+		$this->assertTrue( Wormiss_Media_Delivery::protect_imported( $id ), 'Protected category stored -> true.' );
 		$this->assertTrue( has_term( $protected, Wormiss_Media_Categories::TAXONOMY, $id ), 'Filed into the category.' );
 		$this->assertTrue( Wormiss_Media_Delivery::is_stored( $id ), 'Protected category -> stored.' );
 
 		$open = (int) self::factory()->term->create( [ 'taxonomy' => Wormiss_Media_Categories::TAXONOMY ] );
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_media_category' => $open ] ) );
 		$id2 = $this->attachment();
-		Wormiss_Media_Delivery::protect_imported( $id2 );
+		$this->assertTrue( Wormiss_Media_Delivery::protect_imported( $id2 ), 'Nothing to store -> true.' );
 		$this->assertTrue( has_term( $open, Wormiss_Media_Categories::TAXONOMY, $id2 ), 'Filed into the open category.' );
 		$this->assertFalse( Wormiss_Media_Delivery::is_stored( $id2 ), 'Open category -> not stored.' );
+	}
+
+	/**
+	 * When the private store cannot be written, protect_imported() reports failure so the import can
+	 * stay incomplete and retry, instead of silently leaving the public file in place.
+	 *
+	 * @return void
+	 */
+	public function test_protect_imported_store_failure(): void {
+		$protected = $this->protected_category();
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_media_category' => $protected ] ) );
+		// Point the store at a path whose parent is a file, so the directory cannot be created.
+		$blocker = get_temp_dir() . 'wormiss-blocker-' . wp_rand();
+		file_put_contents( $blocker, 'x' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		$bad = static fn() => $blocker . '/store/';
+		add_filter( 'wormiss_protected_dir', $bad, 99 );
+
+		$id = $this->attachment();
+		$this->assertFalse( Wormiss_Media_Delivery::protect_imported( $id ), 'Store failure -> false.' );
+		$this->assertFalse( Wormiss_Media_Delivery::is_stored( $id ), 'Not stored.' );
+		$this->assertFileExists( (string) get_attached_file( $id ), 'Public file left intact for retry.' );
+
+		remove_filter( 'wormiss_protected_dir', $bad, 99 );
+		wp_delete_file( $blocker );
 	}
 
 	/**

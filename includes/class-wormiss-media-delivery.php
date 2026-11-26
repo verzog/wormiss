@@ -255,19 +255,21 @@ class Wormiss_Media_Delivery {
 	 * image URLs are resolved, so a protected picture's content URL is emitted as the gated endpoint.
 	 *
 	 * @param int $attachment Attachment ID.
-	 * @return void
+	 * @return bool False when the picture should have been stored privately but could not be (so the
+	 *              caller can leave the import incomplete and retry); true otherwise.
 	 */
-	public static function protect_imported( int $attachment ): void {
+	public static function protect_imported( int $attachment ): bool {
 		if ( $attachment < 1 ) {
-			return;
+			return false;
 		}
 		$term = (int) Wormiss_Settings::get( 'blog_media_category' );
 		if ( $term > 0 && get_term( $term, Wormiss_Media_Categories::TAXONOMY ) instanceof WP_Term ) {
 			wp_set_object_terms( $attachment, [ $term ], Wormiss_Media_Categories::TAXONOMY, true );
 		}
 		if ( Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
-			self::store( $attachment );
+			return self::store( $attachment );
 		}
+		return true;
 	}
 
 	/**

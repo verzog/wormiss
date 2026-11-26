@@ -67,7 +67,13 @@
 	 */
 	function zoomable( picture ) {
 		const link = picture.closest( 'a' );
-		return ! link || /\.(?:jpe?g|png|gif|webp|avif)(?:\?|#|$)/i.test( link.getAttribute( 'href' ) || '' );
+		if ( ! link ) {
+			return true;
+		}
+		const href = link.getAttribute( 'href' ) || '';
+		// A picture extension, or the gated protected-media endpoint (/wormiss-media/<id>), which
+		// has no extension but serves the full picture.
+		return /\.(?:jpe?g|png|gif|webp|avif)(?:\?|#|$)/i.test( href ) || /\/wormiss-media\/\d+(?:[/?#]|$)/.test( href );
 	}
 
 	if ( typeof HTMLDialogElement !== 'function' ) {
