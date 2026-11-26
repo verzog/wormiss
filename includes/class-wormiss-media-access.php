@@ -71,6 +71,11 @@ class Wormiss_Media_Access {
 		add_filter( 'posts_where', [ __CLASS__, 'where' ], 10, 2 );
 		// Per-image edit/read/delete.
 		add_filter( 'map_meta_cap', [ __CLASS__, 'map_cap' ], 10, 4 );
+		// Single-item reads bypass the collection filters and map_meta_cap: wp_ajax_get_attachment
+		// checks only upload_files, and the REST read-permission check treats an inherit attachment
+		// as public. Gate the individual AJAX and REST representations too.
+		add_filter( 'wp_prepare_attachment_for_js', [ __CLASS__, 'gate_js_item' ], 20, 2 );
+		add_filter( 'rest_pre_dispatch', [ __CLASS__, 'gate_rest_read' ], 10, 3 );
 	}
 
 	/**
@@ -334,5 +339,61 @@ class Wormiss_Media_Access {
 			return [ 'do_not_allow' ];
 		}
 		return $caps;
+	}
+
+	/**
+	 * Suppress an attachment's JavaScript representation (used by the single-item get-attachment AJAX
+	 * handler, which checks only upload_files) when the current user may not see it.
+	 *
+	 * @param array   $response   The prepared attachment data.
+	 * @param WP_Post $attachment The attachment.
+	 * @return array
+	 */
+	public static function gate_js_item( $response, $attachment ) {
+		$user = get_current_user_id();
+		if ( $user < 1 || self::is_exempt( $user ) ) {
+			return $response;
+		}
+		$id = $attachment instanceof WP_Post ? (int) $attachment->ID : 0;
+		if ( $id > 0 && ! self::user_can_see( $user, $id ) ) {
+			// Empty: wp_ajax_get_attachment then returns an error and the item is not shown.
+			return [];
+		}
+		return $response;
+	}
+
+	/**
+	 * Deny a REST read of a single media item the current user may not see, before the request is
+	 * dispatched (the read-permission check treats an inherit attachment as public, and denying in
+	 * the prepare filter would still let the controller append metadata). Reads only; writes go
+	 * through the edit/delete capabilities. Anonymous requests are not gated: public reachability of
+	 * the raw file is a separate (later) concern.
+	 *
+	 * @param mixed           $result  Dispatch result (non-null short-circuits).
+	 * @param WP_REST_Server  $server  The REST server.
+	 * @param WP_REST_Request $request The request.
+	 * @return mixed
+	 */
+	public static function gate_rest_read( $result, $server, $request ) {
+		unset( $server );
+		if ( null !== $result || ! $request instanceof WP_REST_Request || 'GET' !== $request->get_method() ) {
+			return $result;
+		}
+		if ( ! preg_match( '#^/wp/v2/media/(\d+)$#', $request->get_route(), $matches ) ) {
+			return $result;
+		}
+		$user = get_current_user_id();
+		if ( $user < 1 || self::is_exempt( $user ) ) {
+			return $result;
+		}
+		$id = (int) $matches[1];
+		if ( 'attachment' === get_post_type( $id ) && ! self::user_can_see( $user, $id ) ) {
+			return new WP_Error(
+				'wormiss_media_forbidden',
+				__( 'You are not allowed to view this media item.', 'wormiss' ),
+				[ 'status' => 403 ]
+			);
+		}
+		return $result;
 	}
 }

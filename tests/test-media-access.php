@@ -262,6 +262,38 @@ class Test_Wormiss_Media_Access extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Single-item reads are gated too: the REST media item endpoint returns 403 for an image the user
+	 * may not see, and 200 for their own or an allowed category; administrators always get 200.
+	 *
+	 * @return void
+	 */
+	public function test_single_item_reads(): void {
+		$admin    = (int) self::factory()->user->create( [ 'role' => 'administrator' ] );
+		$mk_staff = $this->staff( [ 'marketing' ] );
+		$mk_img   = $this->attachment( $admin, [ $this->department_term( 'marketing' ) ] );
+		$ed_img   = $this->attachment( $admin, [ $this->department_term( 'education' ) ] );
+		$own      = $this->attachment( $mk_staff );
+
+		$status = function ( int $user, int $id ): int {
+			wp_set_current_user( $user );
+			$response = rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/media/' . $id ) );
+			return $response->get_status();
+		};
+
+		$this->assertSame( 403, $status( $mk_staff, $ed_img ), 'Another department: forbidden.' );
+		$this->assertSame( 200, $status( $mk_staff, $mk_img ), 'Allowed category: visible.' );
+		$this->assertSame( 200, $status( $mk_staff, $own ), 'Own upload: visible.' );
+		$this->assertSame( 200, $status( $admin, $ed_img ), 'Administrator: visible.' );
+
+		// The single-item AJAX handler relies on this representation; it is emptied when forbidden.
+		wp_set_current_user( $mk_staff );
+		$this->assertSame( [], Wormiss_Media_Access::gate_js_item( [ 'id' => $ed_img ], get_post( $ed_img ) ) );
+		$this->assertNotSame( [], Wormiss_Media_Access::gate_js_item( [ 'id' => $mk_img ], get_post( $mk_img ) ) );
+		wp_set_current_user( $admin );
+		$this->assertNotSame( [], Wormiss_Media_Access::gate_js_item( [ 'id' => $ed_img ], get_post( $ed_img ) ), 'Admin not gated.' );
+	}
+
+	/**
 	 * The REST media query is gated for a non-admin and left alone for an administrator.
 	 *
 	 * @return void
