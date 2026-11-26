@@ -139,17 +139,32 @@ class Wormiss_Roles {
 	}
 
 	/**
-	 * Create (or re-sync) the roles. Safe to call repeatedly: a role is re-added with the current
-	 * capabilities, which keeps definitions in step without changing who holds each role.
+	 * Create or update the roles. Safe to call repeatedly: a missing role is created, and an existing
+	 * role's capabilities are reconciled in place. The role is not removed and re-added, because
+	 * WP_Roles::remove_role() would reset the site's default_role setting to "subscriber".
 	 *
 	 * @return void
 	 */
 	public static function install(): void {
 		foreach ( self::definitions() as $slug => $definition ) {
 			list( $label, $caps ) = $definition;
-			// Re-add so the capabilities always match the definition above; users keep the role.
-			remove_role( $slug );
-			add_role( $slug, $label, $caps );
+			$role                 = get_role( $slug );
+			if ( ! $role instanceof WP_Role ) {
+				add_role( $slug, $label, $caps );
+				continue;
+			}
+			// Grant any capability we now define and the role lacks.
+			foreach ( $caps as $cap => $grant ) {
+				if ( $grant && ! $role->has_cap( $cap ) ) {
+					$role->add_cap( $cap );
+				}
+			}
+			// Drop any capability the role has that we no longer define.
+			foreach ( array_keys( $role->capabilities ) as $cap ) {
+				if ( empty( $caps[ $cap ] ) ) {
+					$role->remove_cap( $cap );
+				}
+			}
 		}
 		update_option( self::VERSION_OPTION, self::CAPS_VERSION, false );
 	}
@@ -253,7 +268,9 @@ class Wormiss_Roles {
 	 * @return void
 	 */
 	public static function department_field( $user ): void {
-		if ( ! $user instanceof WP_User || ! current_user_can( 'edit_user', $user->ID ) ) {
+		// Departments are an organisational assignment, set by whoever manages accounts — not
+		// self-service (edit_user is granted on one's own profile, so edit_users is required).
+		if ( ! $user instanceof WP_User || ! current_user_can( 'edit_users' ) || ! current_user_can( 'edit_user', $user->ID ) ) {
 			return;
 		}
 		$selected = self::user_departments( $user->ID );
@@ -283,7 +300,8 @@ class Wormiss_Roles {
 	 */
 	public static function save_departments( $user_id ): void {
 		$user_id = (int) $user_id;
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		// Only account managers may set departments (edit_user alone is true for one's own profile).
+		if ( ! current_user_can( 'edit_users' ) || ! current_user_can( 'edit_user', $user_id ) ) {
 			return;
 		}
 		$nonce = isset( $_POST['wormiss_departments_nonce'] ) ? sanitize_key( wp_unslash( $_POST['wormiss_departments_nonce'] ) ) : '';

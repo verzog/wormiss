@@ -80,6 +80,19 @@ class Test_Wormiss_Roles extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Re-syncing the roles (reactivation or a caps-version upgrade) keeps the site's default role,
+	 * even when that default is one of the Wormiss roles.
+	 *
+	 * @return void
+	 */
+	public function test_install_preserves_default_role(): void {
+		update_option( 'default_role', Wormiss_Roles::ROLE_STAFF );
+		Wormiss_Roles::install();
+		$this->assertSame( Wormiss_Roles::ROLE_STAFF, get_option( 'default_role' ), 'Default role not reset to subscriber.' );
+		$this->assertInstanceOf( WP_Role::class, get_role( Wormiss_Roles::ROLE_STAFF ) );
+	}
+
+	/**
 	 * The six departments are defined.
 	 *
 	 * @return void
@@ -157,6 +170,15 @@ class Test_Wormiss_Roles extends Wormiss_Test_Case {
 		$_POST['wormiss_departments_nonce'] = wp_create_nonce( 'wormiss_departments_' . $target );
 		Wormiss_Roles::save_departments( $target );
 		$this->assertSame( [ 'marketing', 'events' ], Wormiss_Roles::user_departments( $target ), 'No capability, no change.' );
+
+		// A staff member cannot set their OWN departments through their profile (edit_user is granted
+		// for one's own account, but edit_users is required).
+		$self = self::factory()->user->create( [ 'role' => Wormiss_Roles::ROLE_STAFF ] );
+		wp_set_current_user( $self );
+		$_POST['wormiss_departments']       = [ 'management' ];
+		$_POST['wormiss_departments_nonce'] = wp_create_nonce( 'wormiss_departments_' . $self );
+		Wormiss_Roles::save_departments( $self );
+		$this->assertSame( [], Wormiss_Roles::user_departments( $self ), 'Cannot self-assign departments.' );
 
 		unset( $_POST['wormiss_departments'], $_POST['wormiss_departments_nonce'] );
 	}
