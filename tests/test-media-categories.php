@@ -38,6 +38,7 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	public function set_up(): void {
 		parent::set_up();
 		Wormiss_Media_Categories::register();
+		Wormiss_Roles::install();
 	}
 
 	/**
@@ -125,14 +126,16 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * Staff by default is administrators and a "staff" role; the setting and filter override it.
+	 * Staff by default is administrators and the Wormiss Staff and Manager roles; the setting and
+	 * filter override it.
 	 *
 	 * @return void
 	 */
 	public function test_staff_roles(): void {
 		$default = Wormiss_Media_Categories::staff_roles();
 		$this->assertContains( 'administrator', $default );
-		$this->assertContains( 'staff', $default );
+		$this->assertContains( Wormiss_Roles::ROLE_STAFF, $default );
+		$this->assertContains( Wormiss_Roles::ROLE_MANAGER, $default );
 		$this->assertNotContains( 'editor', $default );
 		$this->assertNotContains( 'subscriber', $default );
 
@@ -152,9 +155,8 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_is_staff(): void {
-		add_role( 'staff', 'Staff', [ 'read' => true ] );
 		$admin      = self::factory()->user->create( [ 'role' => 'administrator' ] );
-		$staff      = self::factory()->user->create( [ 'role' => 'staff' ] );
+		$staff      = self::factory()->user->create( [ 'role' => Wormiss_Roles::ROLE_STAFF ] );
 		$editor     = self::factory()->user->create( [ 'role' => 'editor' ] );
 		$subscriber = self::factory()->user->create( [ 'role' => 'subscriber' ] );
 		$this->assertTrue( Wormiss_Media_Categories::is_staff( $admin ) );
@@ -176,10 +178,9 @@ class Test_Wormiss_Media_Categories extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function test_auto_file(): void {
-		add_role( 'staff', 'Staff', [ 'read' => true ] );
 		$reserved   = Wormiss_Media_Categories::reserved_term_id();
 		$subscriber = self::factory()->user->create( [ 'role' => 'subscriber' ] );
-		$staffer    = self::factory()->user->create( [ 'role' => 'staff' ] );
+		$staffer    = self::factory()->user->create( [ 'role' => Wormiss_Roles::ROLE_STAFF ] );
 
 		wp_set_current_user( $subscriber );
 		$theirs = $this->attachment( $subscriber );
