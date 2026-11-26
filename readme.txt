@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.55.0
+Stable tag: 0.56.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.56.0 =
+* Media categories can be flagged for "protected delivery" (a checkbox on each category under Media > Media categories, and a column in the list). This marks a category whose images are meant to be served with byte-level protection; a protected parent protects its sub-categories too. The protected storage and the gated delivery endpoint that use this flag follow in the next release.
 
 = 0.55.0 =
 * Bulk categorise: a new tool (Settings > Media) adds one media category to many existing images at once — either images with no category yet, or all media. It runs in the background in small, resumable batches, asks for confirmation before starting, shows progress and can be cancelled, and the start control is hidden while a run is in progress. It can be turned off site-wide (the wormiss_media_bulk_enabled filter or the WORMISS_MEDIA_BULK_DISABLED constant).

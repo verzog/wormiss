@@ -65,6 +65,7 @@ class Wormiss_Plugin {
 		Wormiss_Media_Categories::init();
 		Wormiss_Media_Access::init();
 		Wormiss_Media_Bulk::init();
+		Wormiss_Media_Protected::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
 		Wormiss_Blog_Actions::init();
