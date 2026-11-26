@@ -52,108 +52,110 @@ class Wormiss_Settings {
 	 */
 	public static function defaults(): array {
 		return [
-			'base_url'                   => '',
-			'username'                   => '',
-			'timeout'                    => 15,
-			'cache_minutes'              => 15,
-			'allowed_queries'            => [],
+			'base_url'                        => '',
+			'username'                        => '',
+			'timeout'                         => 15,
+			'cache_minutes'                   => 15,
+			'allowed_queries'                 => [],
 			// For each approved query: who may see it, which of its columns may show, and whether
 			// it lists people (then it is never shown on the website). See query_rule().
-			'query_rules'                => [],
-			'log_enabled'                => true,
-			'log_capture'                => false,
-			'log_retention_days'         => 30,
+			'query_rules'                     => [],
+			'log_enabled'                     => true,
+			'log_capture'                     => false,
+			'log_retention_days'              => 30,
 			// Members' own data: where each WordPress user's iMIS ID is kept, and the queries
 			// that may be run for the signed-in member.
-			'member_id_source'           => 'meta',
-			'member_id_meta'             => 'imis_id',
-			'member_queries'             => [],
-			'member_cache_minutes'       => 5,
+			'member_id_source'                => 'meta',
+			'member_id_meta'                  => 'imis_id',
+			'member_queries'                  => [],
+			'member_cache_minutes'            => 5,
 			// Members-only content: the query that reads a member's own membership record
 			// (run with their iMIS ID as the first prompt), its type and status columns, and
 			// the statuses that count as current when a post or block names none.
-			'access_query'               => '',
-			'access_type_column'         => 'MemberType',
-			'access_status_column'       => 'Status',
-			'access_statuses'            => [],
+			'access_query'                    => '',
+			'access_type_column'              => 'MemberType',
+			'access_status_column'            => 'Status',
+			'access_statuses'                 => [],
 			// Recording activity in iMIS: off, and a dry run, until an administrator turns it on.
-			'activity_enabled'           => false,
-			'activity_dry_run'           => true,
-			'activity_type'              => '',
+			'activity_enabled'                => false,
+			'activity_dry_run'                => true,
+			'activity_type'                   => '',
 			// The iMIS CEU type given to activities that carry CPD points ('' to leave it empty).
-			'cpd_ceu_type'               => '',
-			'record_reads'               => true,
-			'record_downloads'           => true,
-			'record_forms'               => false,
-			'record_purchases'           => false,
+			'cpd_ceu_type'                    => '',
+			'record_reads'                    => true,
+			'record_downloads'                => true,
+			'record_forms'                    => false,
+			'record_purchases'                => false,
 			// Members synced into WordPress users from an IQA: off, and a dry run, until turned on.
-			'user_sync_enabled'          => false,
-			'user_sync_dry_run'          => true,
-			'user_sync_query'            => '',
-			'user_sync_role'             => 'subscriber',
+			'user_sync_enabled'               => false,
+			'user_sync_dry_run'               => true,
+			'user_sync_query'                 => '',
+			'user_sync_role'                  => 'subscriber',
 			// The members query's columns copied onto each account ('' to not copy that one).
-			'member_type_column'         => 'MemberType',
-			'member_join_column'         => 'JoinDate',
-			'member_expiry_column'       => 'PaidThrough',
+			'member_type_column'              => 'MemberType',
+			'member_join_column'              => 'JoinDate',
+			'member_expiry_column'            => 'PaidThrough',
 			// Members' WordPress name and email changes sent to their iMIS record: off, and a dry run.
-			'member_push_enabled'        => false,
-			'member_push_dry_run'        => true,
+			'member_push_enabled'             => false,
+			'member_push_dry_run'             => true,
 			// iMIS events on pages: the statuses that count as open, and each event's public page
 			// in iMIS ({EventId} or {EventCode}; a path starting with / is on the iMIS site).
-			'event_statuses'             => [ 'A' ],
-			'event_url'                  => self::DEFAULT_EVENT_URL,
+			'event_statuses'                  => [ 'A' ],
+			'event_url'                       => self::DEFAULT_EVENT_URL,
 			// The IQA that counts an event's places taken ('' shows no places), and iMIS publish dates.
-			'event_places_query'         => '',
-			'event_publish_dates'        => false,
+			'event_places_query'              => '',
+			'event_publish_dates'             => false,
 			// Show each event's CPD hours from its iMIS CPD Hours panel (EventCPD): off until turned on.
-			'event_cpd'                  => false,
+			'event_cpd'                       => false,
 			// Members registering for free events here: off, and a dry run, until turned on.
-			'event_registration_enabled' => false,
-			'event_registration_dry_run' => true,
+			'event_registration_enabled'      => false,
+			'event_registration_dry_run'      => true,
 			// Sending WordPress events to iMIS: off, and a dry run, until an administrator turns it on.
-			'event_sync_enabled'         => false,
-			'event_sync_dry_run'         => true,
-			'event_template_id'          => '',
-			'event_cancel_on_trash'      => false,
+			'event_sync_enabled'              => false,
+			'event_sync_dry_run'              => true,
+			'event_template_id'               => '',
+			'event_cancel_on_trash'           => false,
 			// Importing iMIS events as draft Event pages: off until an administrator turns it on.
-			'event_import_enabled'       => false,
+			'event_import_enabled'            => false,
 			// Publish imported pages (else they are drafts for an editor to publish).
-			'event_import_publish'       => false,
+			'event_import_publish'            => false,
 			// Also import finished events that started on or after this date (YYYY-MM-DD; '' for none).
-			'event_import_since'         => '',
+			'event_import_since'              => '',
 			// Importing iMIS news articles as posts: off, and a dry run, until turned on.
-			'news_import_enabled'        => false,
-			'news_import_dry_run'        => true,
+			'news_import_enabled'             => false,
+			'news_import_dry_run'             => true,
 			// Publish imported posts (else drafts for an editor to publish).
-			'news_import_publish'        => false,
+			'news_import_publish'             => false,
 			// The IQA that lists the articles (one row per article and tag).
-			'news_import_query'          => '',
+			'news_import_query'               => '',
 			// The category imported posts go in (made if missing).
-			'news_import_category'       => 'News',
+			'news_import_category'            => 'News',
 			// Who imported posts are by (user ID; 0 for the first administrator).
-			'news_import_author'         => 0,
+			'news_import_author'              => 0,
 			// Media categories: the roles that count as staff, whose uploads are not auto-filed into
 			// the reserved "End-user images" category (empty: administrators and the Wormiss Staff and
-			// Manager roles). Administrators always count as staff. The role x category matrix and its
-			// settings UI come in a later phase.
-			'media_staff_roles'          => [],
+			// Manager roles). Administrators always count as staff.
+			'media_staff_roles'               => [],
+			// Departments whose members may also see uncategorised images (ones with no media
+			// category). Empty: uncategorised images are visible to their uploader and admins only.
+			'media_uncategorised_departments' => [],
 			// The members' blog: roles that may read full posts (staff always can), and the import.
-			'blog_reader_roles'          => [],
-			'blog_import_enabled'        => false,
-			'blog_import_dry_run'        => true,
-			'blog_batch_posts'           => 10,
-			'blog_batch_minutes'         => 1,
-			'blog_batch_seconds'         => 40,
+			'blog_reader_roles'               => [],
+			'blog_import_enabled'             => false,
+			'blog_import_dry_run'             => true,
+			'blog_batch_posts'                => 10,
+			'blog_batch_minutes'              => 1,
+			'blog_batch_seconds'              => 40,
 			// The sign-in page (page ID; 0 for WordPress's own), and the iMIS forgot-password and join pages.
-			'signin_page'                => 0,
-			'signin_forgot_url'          => '',
-			'signin_join_url'            => '',
+			'signin_page'                     => 0,
+			'signin_forgot_url'               => '',
+			'signin_join_url'                 => '',
 			// Free website accounts on the sign-in page, and email confirmation for them: off until turned on.
-			'signin_free_accounts'       => false,
-			'signin_confirm_email'       => false,
+			'signin_free_accounts'            => false,
+			'signin_confirm_email'            => false,
 			// Email testing: divert every email to one address, except to these addresses and domains.
-			'mail_divert_to'             => '',
-			'mail_divert_except'         => '',
+			'mail_divert_to'                  => '',
+			'mail_divert_except'              => '',
 		];
 	}
 
@@ -561,6 +563,17 @@ class Wormiss_Settings {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $roles ), $known ) );
 		} elseif ( isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ) {
 			$clean['blog_reader_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $input['blog_reader_roles'] ), array_keys( wp_roles()->get_names() ) ) );
+		}
+		// Media categories: staff roles (any known role) and the departments that also see
+		// uncategorised images. The section marker means an empty tick-list clears the value.
+		$departments = array_keys( Wormiss_Roles::departments() );
+		if ( isset( $input['media_section'] ) || ( isset( $input['media_staff_roles'] ) && is_array( $input['media_staff_roles'] ) ) ) {
+			$roles                      = isset( $input['media_staff_roles'] ) && is_array( $input['media_staff_roles'] ) ? $input['media_staff_roles'] : [];
+			$clean['media_staff_roles'] = array_values( array_intersect( array_map( 'sanitize_key', $roles ), array_keys( wp_roles()->get_names() ) ) );
+		}
+		if ( isset( $input['media_section'] ) || ( isset( $input['media_uncategorised_departments'] ) && is_array( $input['media_uncategorised_departments'] ) ) ) {
+			$chosen                                   = isset( $input['media_uncategorised_departments'] ) && is_array( $input['media_uncategorised_departments'] ) ? $input['media_uncategorised_departments'] : [];
+			$clean['media_uncategorised_departments'] = array_values( array_intersect( array_map( 'sanitize_key', $chosen ), $departments ) );
 		}
 		if ( isset( $input['blog_batch_posts'] ) ) {
 			$clean['blog_batch_posts'] = min( Wormiss_Blog_Import::BATCH_MAX, max( 1, absint( $input['blog_batch_posts'] ) ) );
