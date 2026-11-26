@@ -1389,6 +1389,7 @@ class Wormiss_Admin {
 				break;
 			case 'media':
 				self::render_media_matrix();
+				self::render_media_bulk();
 				break;
 		}
 
@@ -1438,6 +1439,102 @@ class Wormiss_Admin {
 			echo '</fieldset>';
 		}
 		submit_button( __( 'Save access matrix', 'wormiss' ) );
+		echo '</form>';
+	}
+
+	/**
+	 * The bulk-categorise tool (add a category to many existing images at once).
+	 *
+	 * @return void
+	 */
+	public static function render_media_bulk(): void {
+		echo '<hr /><h2 id="wormiss-media-bulk">' . esc_html__( 'Bulk categorise existing media', 'wormiss' ) . '</h2>';
+		if ( ! Wormiss_Media_Bulk::enabled() ) {
+			echo '<p class="description">' . esc_html__( 'Bulk categorising is turned off on this site.', 'wormiss' ) . '</p>';
+			return;
+		}
+		$report = get_option( Wormiss_Media_Bulk::REPORT_OPTION );
+		if ( is_array( $report ) && ! Wormiss_Media_Bulk::is_running() ) {
+			$term = get_term( (int) $report['category'], Wormiss_Media_Categories::TAXONOMY );
+			echo '<p class="description">' . esc_html(
+				sprintf(
+					/* translators: 1: number of images, 2: category name, 3: date. */
+					__( 'Last run: added %1$d images to "%2$s" on %3$s.', 'wormiss' ),
+					(int) $report['done'],
+					$term instanceof WP_Term ? $term->name : __( '(deleted category)', 'wormiss' ),
+					userdate( (int) $report['time'] )
+				)
+			) . '</p>';
+		}
+
+		$job = Wormiss_Media_Bulk::job();
+		if ( $job ) {
+			$term = get_term( (int) $job['category'], Wormiss_Media_Categories::TAXONOMY );
+			echo '<p>' . esc_html(
+				sprintf(
+					/* translators: 1: processed, 2: total, 3: category name. */
+					__( 'Categorising in the background: %1$d of %2$d done, adding "%3$s". The rest continues automatically.', 'wormiss' ),
+					(int) $job['done'],
+					(int) $job['total'],
+					$term instanceof WP_Term ? $term->name : ''
+				)
+			) . '</p>';
+			echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+			wp_nonce_field( 'wormiss_media_bulk_cancel', 'wormiss_media_bulk_nonce' );
+			echo '<input type="hidden" name="action" value="wormiss_media_bulk_cancel" />';
+			submit_button( __( 'Cancel bulk categorise', 'wormiss' ), 'secondary' );
+			echo '</form>';
+			return;
+		}
+
+		$categories = Wormiss_Media_Categories::term_choices();
+		if ( ! $categories ) {
+			echo '<p>' . esc_html__( 'No media categories yet. Add some under Media > Media categories.', 'wormiss' ) . '</p>';
+			return;
+		}
+		$uncategorised = Wormiss_Media_Bulk::count( 'uncategorised' );
+		$all           = Wormiss_Media_Bulk::count( 'all' );
+		echo '<p class="description">'
+			. esc_html__( 'Add one category to many existing images at once. It runs in the background in small batches.', 'wormiss' )
+			. '</p>';
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		wp_nonce_field( 'wormiss_media_bulk_start', 'wormiss_media_bulk_nonce' );
+		echo '<input type="hidden" name="action" value="wormiss_media_bulk_start" />';
+		echo '<p><label>' . esc_html__( 'Category to add:', 'wormiss' ) . ' ';
+		echo '<select name="wormiss_bulk_category">';
+		foreach ( $categories as $choice ) {
+			printf(
+				'<option value="%1$d">%2$s</option>',
+				absint( $choice['id'] ),
+				esc_html( (string) $choice['name'] )
+			);
+		}
+		echo '</select></label></p>';
+		echo '<p>';
+		printf(
+			'<label style="display:block"><input type="radio" name="wormiss_bulk_scope" value="uncategorised" checked /> %s</label>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of images. */
+					_n( 'Images with no category (%d)', 'Images with no category (%d)', $uncategorised, 'wormiss' ),
+					$uncategorised
+				)
+			)
+		);
+		printf(
+			'<label style="display:block"><input type="radio" name="wormiss_bulk_scope" value="all" /> %s</label>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of images. */
+					_n( 'All media (%d)', 'All media (%d)', $all, 'wormiss' ),
+					$all
+				)
+			)
+		);
+		echo '</p>';
+		echo '<p><label><input type="checkbox" name="wormiss_bulk_confirm" value="1" required /> '
+			. esc_html__( 'Yes, add the chosen category to the matching images.', 'wormiss' ) . '</label></p>';
+		submit_button( __( 'Start bulk categorise', 'wormiss' ) );
 		echo '</form>';
 	}
 

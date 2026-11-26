@@ -64,6 +64,7 @@ class Wormiss_Plugin {
 		Wormiss_Roles::init();
 		Wormiss_Media_Categories::init();
 		Wormiss_Media_Access::init();
+		Wormiss_Media_Bulk::init();
 		Wormiss_Blog::init();
 		Wormiss_Blog_Lock::init();
 		Wormiss_Blog_Actions::init();
@@ -230,6 +231,7 @@ class Wormiss_Plugin {
 		wp_clear_scheduled_hook( Wormiss_News_Import::MORE_HOOK );
 		wp_clear_scheduled_hook( Wormiss_Blog_Import::HOOK );
 		wp_clear_scheduled_hook( Wormiss_Blog_Import::MORE_HOOK );
+		wp_clear_scheduled_hook( Wormiss_Media_Bulk::HOOK );
 		// The Events post type goes away with the plugin: rebuild permalinks next time.
 		delete_option( 'wormiss_rewrite_version' );
 		flush_rewrite_rules( false );
