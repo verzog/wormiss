@@ -67,21 +67,36 @@ wormiss has two separate category taxonomies that do different jobs:
 
 ## 3. Protected delivery ⚠️ needs one server step
 
+**Important — flagging a category vs. moving the file.** Flagging a media category
+"Protected delivery" makes wormiss point *references* to its images at the gated
+`/wormiss-media/<id>` endpoint. It does **not**, on its own, move an
+**already-uploaded** image's original file out of the public uploads folder — so a
+**manually uploaded** image's raw uploads URL stays directly reachable. The original
+is moved into the private store only when the image is brought in through the **blog
+import** (which calls the store step). So test protected delivery with a
+**blog-imported** image in an already-protected category, and treat manual uploads as
+"references gated, original file still public" until a migration path stores them.
+
 - [ ] If the Media tab shows the "stored under wp-content, not truly private" warning,
       set it up properly. In `wp-config.php`:
       `define('WORMISS_PROTECTED_DIR', '/path/outside/webroot/wormiss-protected');`
       and in nginx:
       `location /wormiss-media-internal/ { internal; alias /path/outside/webroot/wormiss-protected/; }`
-- [ ] Flag a media category **"Protected delivery"**, put an image in it. The image's
-      normal uploads URL should **not** load when logged out; it loads via
-      `/wormiss-media/<id>` only for someone allowed to see it.
+- [ ] With the import's picture category flagged **"Protected delivery"** (section 5),
+      import a blog post that has a picture. That picture's original is moved into the
+      private store: its **uploads URL should 404/not load**, and it loads only via
+      `/wormiss-media/<id>` for someone allowed to see it.
+- [ ] A **manually uploaded** image you merely *assign* to a protected category: its
+      `/wormiss-media/<id>` references are gated, but its original uploads URL is still
+      reachable (expected — it was never moved into the store).
 
 ## 4. Lock to post (strict image protection) 🔒
 
 - [ ] Media → Media categories → edit a category → tick **"Lock to post"** (it implies
-      protected delivery). Put an image in that category **and attach it to a specific
-      post** (imported blog pictures are attached automatically; for a manual test,
-      upload the image *to* the post).
+      protected delivery). Use a **blog-imported** picture in that category — imported
+      pictures are attached to their post *and* moved into the private store, which is
+      what lock-to-post needs. (Merely assigning the category to a manual upload gates
+      references but leaves the original file public, as in section 3.)
 - [ ] **Member**, viewing that post: the image displays normally.
 - [ ] In the member's browser, right-click the image → **Copy image address** — it
       looks like `…/wormiss-media/<id>?t=<token>`.
