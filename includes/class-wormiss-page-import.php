@@ -566,10 +566,31 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%1$s: an image could not be copied (%2$s).', 'wormiss' ), $label, $tmp->get_error_message() ) );
 			return 0;
 		}
-		$name       = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		// iMIS image URLs often have no usable extension (or an .aspx-style one), so WordPress refuses
+		// the upload ("not allowed to upload this file type"). Name the file from its real type,
+		// sniffed from the downloaded bytes, not from the URL.
+		$mime    = function_exists( 'wp_get_image_mime' ) ? (string) wp_get_image_mime( $tmp ) : '';
+		$ext_for = [
+			'image/jpeg' => 'jpg',
+			'image/png'  => 'png',
+			'image/gif'  => 'gif',
+			'image/webp' => 'webp',
+			'image/bmp'  => 'bmp',
+		];
+		if ( ! isset( $ext_for[ $mime ] ) ) {
+			// Not a raster image WordPress accepts (e.g. SVG): leave the page pointing at the iMIS
+			// image rather than failing the page and retrying it every import.
+			wp_delete_file( $tmp );
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: an image is not a supported type, so it was left on the iMIS site.', 'wormiss' ), $label ) );
+			return 0;
+		}
+		$base       = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		$base       = (string) preg_replace( '/\.[^.\/]+$/', '', $base );
+		$name       = ( '' !== $base ? $base : 'page-image' ) . '.' . $ext_for[ $mime ];
 		$attachment = media_handle_sideload(
 			[
-				'name'     => '' !== $name ? $name : 'page-image.jpg',
+				'name'     => $name,
 				'tmp_name' => $tmp,
 			],
 			$post_id,

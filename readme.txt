@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.67.1
+Stable tag: 0.67.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.67.2 =
+* Page import fix: page images hosted on iMIS now copy into the Media Library even when their address has no file extension. iMIS often serves images from an extension-less address (for example a "GetImage" handler), which WordPress refused with "you are not allowed to upload this file type", leaving the page pointing back at iMIS and re-tried on every import. The importer now detects each image's real type from its contents (JPEG, PNG, GIF, WebP or BMP) and names the file accordingly. An image that is not one of those types (for example an SVG) is left on the iMIS site and no longer blocks the page from finishing.
 
 = 0.67.1 =
 * Page import fix: imported pages were coming in empty because the importer looked for the navigation item's content link under the wrong field name. iMIS's REST API returns it as "RelatedDocumentVersionId" (the XML export uses "RelatedDocumentVersionKey"); the importer now reads either, so a nav item's content page is fetched and its body imported. No effect on sites that have not used the page import yet.
