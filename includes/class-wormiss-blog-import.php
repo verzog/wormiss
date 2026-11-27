@@ -1683,14 +1683,20 @@ class Wormiss_Blog_Import {
 		}
 		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
 		// name the file from its real type (see Wormiss_Media::sideload_name()).
-		$name = Wormiss_Media::sideload_name( $tmp, $url, 'blog-image' );
+		$name   = Wormiss_Media::sideload_name( $tmp, $url, 'blog-image' );
+		$is_svg = false;
 		if ( null === $name ) {
-			// Not an image type WordPress accepts (e.g. SVG): leave the post pointing at the iMIS
-			// picture rather than failing it and retrying every import.
-			wp_delete_file( $tmp );
-			/* translators: %s: title. */
-			self::note( $report, sprintf( __( '%s: a picture is not a supported type, so it was left on the iMIS site.', 'wormiss' ), $title ) );
-			return 0;
+			// An SVG (which WordPress blocks by default) is sanitised and imported if SVG import is on.
+			$name = Wormiss_Media::svg_name( $tmp, $url, 'blog-image' );
+			if ( null === $name ) {
+				// Not an image type WordPress accepts: leave the post pointing at the iMIS picture
+				// rather than failing it and retrying every import.
+				wp_delete_file( $tmp );
+				/* translators: %s: title. */
+				self::note( $report, sprintf( __( '%s: a picture is not a supported type, so it was left on the iMIS site.', 'wormiss' ), $title ) );
+				return 0;
+			}
+			$is_svg = true;
 		}
 		// Only the sizes the blog shows: each size is another resize, the slow part of a copy.
 		add_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
@@ -1702,13 +1708,14 @@ class Wormiss_Blog_Import {
 		if ( $author > 0 ) {
 			$post_data['post_author'] = $author;
 		}
-		$attachment = media_handle_sideload(
+		$attachment = Wormiss_Media::handle_sideload(
 			[
 				'name'     => $name,
 				'tmp_name' => $tmp,
 			],
 			$post_id,
 			$title,
+			$is_svg,
 			$post_data
 		);
 		remove_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );

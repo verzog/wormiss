@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.67.3
+Stable tag: 0.67.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.67.4 =
+* SVG icons now import. iMIS pages often use SVG icons (the membership benefit tiles, the About Us value icons), and WordPress blocks SVG uploads by default because an SVG is XML that can carry script. The importers (pages, blog, news and events) now bring each SVG across after sanitising it: only a safe allow-list of drawing elements and attributes is kept, and anything that could run script — a <script>, an on* handler, a javascript: or external reference, a DOCTYPE — is stripped. The sanitised file is stored in the Media Library like any other image. SVG import is on by default; a site can turn it off with the "wormiss_import_svg" filter.
 
 = 0.67.3 =
 * Internal: the same robust image-copying behaviour added for the page import in 0.67.2 (naming each downloaded image from its real type so extension-less and WebP/AVIF images are accepted, and skipping types WordPress does not allow) now applies to the blog, news and event imports as well. The logic lives in one shared helper instead of a copy in each importer, so all four behave the same. No settings or visible behaviour change unless one of those imports previously met an iMIS image with an unusable address, which will now copy correctly.

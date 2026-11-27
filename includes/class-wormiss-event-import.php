@@ -706,20 +706,26 @@ class Wormiss_Event_Import {
 		}
 		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
 		// name the file from its real type (see Wormiss_Media::sideload_name()).
-		$name = Wormiss_Media::sideload_name( $tmp, $url, 'event-image' );
+		$name   = Wormiss_Media::sideload_name( $tmp, $url, 'event-image' );
+		$is_svg = false;
 		if ( null === $name ) {
-			// Not an image type WordPress accepts (e.g. SVG). The address is already remembered above,
-			// so it is not downloaded again every day.
-			wp_delete_file( $tmp );
-			/* translators: %s: iMIS event ID. */
-			self::note( $report, sprintf( __( 'Event %s: its image is not a supported type, so it was not added.', 'wormiss' ), $event['id'] ) );
-			return false;
+			// An SVG (which WordPress blocks by default) is sanitised and imported if SVG import is on.
+			$name = Wormiss_Media::svg_name( $tmp, $url, 'event-image' );
+			if ( null === $name ) {
+				// Not an image type WordPress accepts. The address is already remembered above, so it
+				// is not downloaded again every day.
+				wp_delete_file( $tmp );
+				/* translators: %s: iMIS event ID. */
+				self::note( $report, sprintf( __( 'Event %s: its image is not a supported type, so it was not added.', 'wormiss' ), $event['id'] ) );
+				return false;
+			}
+			$is_svg = true;
 		}
 		$file       = [
 			'name'     => $name,
 			'tmp_name' => $tmp,
 		];
-		$attachment = media_handle_sideload( $file, $post_id, $event['name'] );
+		$attachment = Wormiss_Media::handle_sideload( $file, $post_id, $event['name'], $is_svg );
 		if ( is_wp_error( $attachment ) ) {
 			wp_delete_file( $tmp );
 			/* translators: 1: iMIS event ID, 2: reason. */

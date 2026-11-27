@@ -625,6 +625,63 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An SVG icon is sanitised and copied into the Media Library (WordPress blocks SVG by default),
+	 * and its address in the body is rewritten to the local copy.
+	 *
+	 * @return void
+	 */
+	public function test_copies_svg_icon(): void {
+		$source = 'https://imis.example.org/images/_SCCA/about-us/vision.svg';
+		$svg    = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><script>alert(1)</script><path d="M4 4h16v16H4z" fill="#512b7f"/></svg>';
+		$serve  = static function ( $pre, $args, $url ) use ( $svg ) {
+			if ( false !== strpos( $url, 'vision.svg' ) && ! empty( $args['filename'] ) ) {
+				file_put_contents( $args['filename'], $svg ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- The download's temporary file.
+				return [
+					'headers'  => [],
+					'body'     => '',
+					'response' => [
+						'code'    => 200,
+						'message' => 'OK',
+					],
+					'cookies'  => [],
+					'filename' => $args['filename'],
+				];
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $serve, 20, 3 );
+
+		$page = (int) self::factory()->post->create( [ 'post_type' => 'page' ] );
+		( new ReflectionProperty( Wormiss_Page_Import::class, 'images' ) )->setValue( null, 0 );
+		$method   = new ReflectionMethod( Wormiss_Page_Import::class, 'images' );
+		$report   = [ 'notes' => [] ];
+		$html     = '<p><img src="' . $source . '" alt="Vision"></p>';
+		$complete = (bool) $method->invokeArgs( null, [ $page, $html, 'About Us', &$report ] );
+
+		remove_filter( 'pre_http_request', $serve, 20 );
+
+		$this->assertTrue( $complete, 'The SVG was copied.' );
+		// phpcs:disable WordPress.DB.SlowDBQuery -- Test assertion.
+		$found = get_posts(
+			[
+				'post_type'        => 'attachment',
+				'post_status'      => 'inherit',
+				'meta_key'         => Wormiss_Page_Import::META_FROM,
+				'meta_value'       => $source,
+				'fields'           => 'ids',
+				'numberposts'      => -1,
+				'suppress_filters' => true,
+			]
+		);
+		// phpcs:enable
+		$this->assertCount( 1, $found, 'The SVG was copied once.' );
+		$this->assertSame( 'image/svg+xml', get_post_mime_type( (int) $found[0] ), 'It was stored as an SVG.' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test assertion.
+		$this->assertStringNotContainsString( 'script', (string) file_get_contents( (string) get_attached_file( (int) $found[0] ) ), 'The script was sanitised out.' );
+		$this->assertStringContainsString( (string) wp_get_attachment_url( (int) $found[0] ), get_post_field( 'post_content', $page ) );
+	}
+
+	/**
 	 * A dry run saves nothing.
 	 *
 	 * @return void
