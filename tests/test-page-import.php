@@ -119,7 +119,7 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 
 	/**
 	 * A navigation DocumentData reply: its Data is the Navigation blob, plus the document-level
-	 * RelatedDocumentVersionKey that names its content page.
+	 * RelatedDocumentVersionId (the REST field name) that names its content page.
 	 *
 	 * @param string $related    Content document version key ('' / zero-GUID for none).
 	 * @param string $parent_key Parent hierarchy key.
@@ -130,12 +130,12 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	private function nav_doc( string $related, string $parent_key, string $breadcrumb, string $path = '' ): array {
 		return [
 			'Result' => [
-				'$type'                     => 'Asi.Soa.Core.DataContracts.DocumentData, Asi.Contracts',
-				'Status'                    => 'Published',
-				'AlternateName'             => $breadcrumb,
-				'Path'                      => $path,
-				'RelatedDocumentVersionKey' => $related,
-				'Data'                      => [
+				'$type'                    => 'Asi.Soa.Core.DataContracts.DocumentData, Asi.Contracts',
+				'Status'                   => 'Published',
+				'AlternateName'            => $breadcrumb,
+				'Path'                     => $path,
+				'RelatedDocumentVersionId' => $related,
+				'Data'                     => [
 					'$type'  => 'System.Byte[], mscorlib',
 					// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
 					'$value' => base64_encode( $this->nav_xml( $parent_key, $breadcrumb ) ),
