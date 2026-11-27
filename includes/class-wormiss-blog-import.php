@@ -625,6 +625,11 @@ class Wormiss_Blog_Import {
 			$rows     = self::read_all( $client, '/api/Smart_Blogs_Blog_Post?BlogKey=' . rawurlencode( $post['key'] ), 1 );
 			$comments = self::read_all( $client, '/api/Smart_Blogs_Comment?BlogKey=' . rawurlencode( $post['key'] ), self::MAX_COMMENTS );
 		} catch ( Wormiss_Exception $e ) {
+			// A read that failed must be retried on the next import, not fast-skipped for a week: drop
+			// the update marker so the "changed only" check reads this post again next time.
+			if ( $post_id ) {
+				delete_post_meta( $post_id, self::META_UPDATED );
+			}
 			/* translators: 1: blog title, 2: reason. */
 			self::note( $report, sprintf( __( '%1$s: not read from iMIS (%2$s).', 'wormiss' ), $post['title'], $e->getMessage() ) );
 			return 'skipped';
@@ -641,6 +646,12 @@ class Wormiss_Blog_Import {
 		$template = self::template_for( $parts['ids'], $parts['legacy'], (array) ( $listing['templates'] ?? [] ) );
 		$hash     = md5( (string) wp_json_encode( [ $post, $parts, $feature, $names, $template, self::comments_hash( $comments ) ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash ) {
+			// Unchanged. Record the update marker so later runs can fast-skip it — needed for posts
+			// imported before this feature (they have a source hash but no marker yet). Not in a dry run.
+			if ( empty( $report['dry_run'] ) && '' !== $post['updated']
+				&& (string) get_post_meta( $post_id, self::META_UPDATED, true ) !== $post['updated'] ) {
+				update_post_meta( $post_id, self::META_UPDATED, $post['updated'] );
+			}
 			return 'skipped';
 		}
 		if ( ! empty( $report['dry_run'] ) ) {

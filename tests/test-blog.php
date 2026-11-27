@@ -1242,6 +1242,65 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A post imported before this feature (a source hash but no update marker) gets the marker
+	 * backfilled on its first full re-read, so later imports can fast-skip it.
+	 *
+	 * @return void
+	 */
+	public function test_backfills_marker_on_unchanged(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+
+		// Simulate a pre-feature post: the source hash is there, the update marker is not.
+		delete_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED );
+		delete_option( Wormiss_Blog_Import::FULL_OPTION ); // Force the next run to be a full reconcile.
+		$this->imis->requests = [];
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['skipped'], 'Unchanged content: nothing written.' );
+		$this->assertSame(
+			'2026-06-18T10:04:59.743',
+			(string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ),
+			'The marker is backfilled on the unchanged path.'
+		);
+
+		// With the marker in place, the next import fast-skips the post (no per-post read).
+		$this->imis->requests = [];
+		$this->queue_list();
+		Wormiss_Blog_Import::run();
+		$this->assertSame( 0, $this->imis->count( '/api/Smart_Blogs_Blog_Post?BlogKey' ), 'Now fast-skipped.' );
+	}
+
+	/**
+	 * A per-post read that fails drops the post's update marker, so the next import retries it rather
+	 * than fast-skipping it until the next weekly reconcile.
+	 *
+	 * @return void
+	 */
+	public function test_failed_read_drops_marker(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+		$this->assertNotSame( '', (string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ) );
+
+		// A reconcile whose per-post read fails.
+		delete_option( Wormiss_Blog_Import::FULL_OPTION );
+		$this->imis->requests = [];
+		$this->queue_list();
+		$this->imis->fail( '/api/Smart_Blogs_Blog_Post?BlogKey' );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame(
+			'',
+			(string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ),
+			'The marker is dropped after a failed read, so the post is retried next import.'
+		);
+	}
+
+	/**
 	 * Off: nothing is read.
 	 *
 	 * @return void
