@@ -132,6 +132,13 @@ class Wormiss_Settings {
 			'news_import_category'            => 'News',
 			// Who imported posts are by (user ID; 0 for the first administrator).
 			'news_import_author'              => 0,
+			// Importing an iMIS website's pages (keeping the menu hierarchy): off, and a dry run, until turned on.
+			'page_import_enabled'             => false,
+			'page_import_dry_run'             => true,
+			// Publish imported pages (else drafts for an editor to publish).
+			'page_import_publish'             => false,
+			// The IQA that lists the website's navigation items (one row per item).
+			'page_import_query'               => '',
 			// Media categories: the roles that count as staff, whose uploads are not auto-filed into
 			// the reserved "End-user images" category (empty: administrators and the Wormiss Staff and
 			// Manager roles). Administrators always count as staff.
@@ -560,6 +567,10 @@ class Wormiss_Settings {
 				add_settings_error( self::OPTION, 'news_import_author', __( 'The news author must be able to write posts.', 'wormiss' ) );
 			}
 		}
+		if ( isset( $input['page_import_query'] ) ) {
+			$query                      = self::parse_queries( (string) $input['page_import_query'] );
+			$clean['page_import_query'] = $query ? $query[0] : '';
+		}
 		if ( isset( $input['blog_section'] ) ) {
 			$roles                      = isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ? $input['blog_reader_roles'] : [];
 			$known                      = array_keys( wp_roles()->get_names() );
@@ -640,6 +651,13 @@ class Wormiss_Settings {
 		}
 		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish' ] as $box ) {
 			if ( isset( $input['news_import_section'] ) ) {
+				$clean[ $box ] = ! empty( $input[ $box ] );
+			} elseif ( array_key_exists( $box, $input ) ) {
+				$clean[ $box ] = (bool) $input[ $box ];
+			}
+		}
+		foreach ( [ 'page_import_enabled', 'page_import_dry_run', 'page_import_publish' ] as $box ) {
+			if ( isset( $input['page_import_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {
 				$clean[ $box ] = (bool) $input[ $box ];

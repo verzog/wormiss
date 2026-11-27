@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.62.0
+Stable tag: 0.63.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.63.0 =
+* New import (Settings > Pages): brings an iMIS website's pages into WordPress over the REST API, keeping the menu hierarchy. Each navigation item an administrator's IQA lists becomes a page, nested under its parent as it is in iMIS, with the page content read from the iMIS content document and its formatting tidied (the same way the news import tidies articles). A page whose iMIS content is made of iParts (a sign-in form, a map, a cart) has no portable HTML, so it is imported as an empty page in the right place for an editor to fill in. Members-only pages stay members-only. iMIS is the source: later imports update the page unless "Stop updating from iMIS" is ticked on it. Import-only (nothing is changed in iMIS; pages are never removed), with a dry run, a daily schedule, throttled resumable background batches and a kill-switch. The WordPress navigation menu is not built yet (this step creates the pages and their parent/child nesting only).
 
 = 0.62.0 =
 * New tool (Settings > Media > "Move protected images into the private store"): moves the public original files of images already in a protected or lock-to-post category out of the uploads folder and into the private store. Flagging a category gates how images are linked, but an image already in the library keeps its public original until it is moved; this closes that gap for existing uploads (the blog import already does it for imported pictures). It runs in the background in small, resumable batches, asks for confirmation, can be cancelled, and has a kill-switch (the wormiss_media_migrate_enabled filter / WORMISS_MEDIA_MIGRATE_DISABLED constant). Moving a file cannot be undone.

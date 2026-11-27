@@ -55,6 +55,7 @@ class Wormiss_Admin {
 		'sign-in'    => [ 'wormiss_sign_in' ],
 		'events'     => [ 'wormiss_events', 'wormiss_event_sync', 'wormiss_event_import' ],
 		'news'       => [ 'wormiss_news_import' ],
+		'pages'      => [ 'wormiss_page_import' ],
 		'blog'       => [ 'wormiss_blog' ],
 		'media'      => [ 'wormiss_media' ],
 		'activity'   => [ 'wormiss_activity', 'wormiss_mail_divert', 'wormiss_log' ],
@@ -329,6 +330,7 @@ class Wormiss_Admin {
 			__( 'iMIS event import', 'wormiss' )        => $on( 'event_import_enabled' ) ? __( 'On (daily, as drafts)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 			__( 'CPD hours on event pages', 'wormiss' ) => $on( 'event_cpd' ) ? __( 'On (read from iMIS)', 'wormiss' ) : __( 'Off', 'wormiss' ),
 			__( 'iMIS news import', 'wormiss' )         => $state( $on( 'news_import_enabled' ), $on( 'news_import_dry_run' ) ),
+			__( 'iMIS page import', 'wormiss' )         => $state( $on( 'page_import_enabled' ), $on( 'page_import_dry_run' ) ),
 			__( 'iMIS blog import', 'wormiss' )         => $state( $on( 'blog_import_enabled' ), $on( 'blog_import_dry_run' ) ),
 		];
 		echo '<div class="wrap"><h1>' . esc_html__( 'Wormiss', 'wormiss' ) . '</h1>';
@@ -425,6 +427,13 @@ class Wormiss_Admin {
 		self::field( 'news_import_category', __( 'Category for imported news', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_author', __( 'Author for imported news', 'wormiss' ), 'wormiss_news_import' );
 
+		$title = __( 'Import iMIS pages', 'wormiss' );
+		self::section( 'wormiss_page_import', $title, [ __CLASS__, 'page_import_intro' ] );
+		self::field( 'page_import_enabled', __( 'Import iMIS pages daily', 'wormiss' ), 'wormiss_page_import' );
+		self::field( 'page_import_dry_run', __( 'Page import dry run (report only)', 'wormiss' ), 'wormiss_page_import' );
+		self::field( 'page_import_publish', __( 'Publish imported pages', 'wormiss' ), 'wormiss_page_import' );
+		self::field( 'page_import_query', __( 'Page query', 'wormiss' ), 'wormiss_page_import' );
+
 		$title = __( 'Members\' blog', 'wormiss' );
 		self::section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ] );
 		self::field( 'blog_reader_roles', __( 'Who can read the members\' blog', 'wormiss' ), 'wormiss_blog' );
@@ -511,6 +520,7 @@ class Wormiss_Admin {
 			'sign-in'    => __( 'Sign-in', 'wormiss' ),
 			'events'     => __( 'Events', 'wormiss' ),
 			'news'       => __( 'News', 'wormiss' ),
+			'pages'      => __( 'Pages', 'wormiss' ),
 			'blog'       => __( 'Members\' blog', 'wormiss' ),
 			'media'      => __( 'Media', 'wormiss' ),
 			'activity'   => __( 'Activity & logs', 'wormiss' ),
@@ -686,6 +696,22 @@ class Wormiss_Admin {
 			. ' ' . esc_html__( 'iMIS tags, publication date, summary, full text (formatting tidied) and images copied into the', 'wormiss' )
 			. ' ' . esc_html__( 'Media Library. Members-only articles stay members-only. Later imports update the post unless', 'wormiss' )
 			. ' ' . esc_html__( '"Stop updating from iMIS" is ticked on it. Nothing is changed in iMIS; posts are never removed.', 'wormiss' )
+			. '</p>';
+	}
+
+	/**
+	 * Intro text for the page import section (and the marker that its checkboxes were shown).
+	 *
+	 * @return void
+	 */
+	public static function page_import_intro(): void {
+		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[page_import_section]" value="1" />';
+		echo '<p>'
+			. esc_html__( 'Once a day, each navigation item the query lists becomes a WordPress page, nested under its', 'wormiss' )
+			. ' ' . esc_html__( 'parent as in iMIS, with the page content (formatting tidied). A page whose iMIS content is made', 'wormiss' )
+			. ' ' . esc_html__( 'of iParts (a form, a map, a cart) has no portable HTML, so it is imported as an empty page in', 'wormiss' )
+			. ' ' . esc_html__( 'the right place for an editor to fill in. Later imports update the page unless "Stop updating', 'wormiss' )
+			. ' ' . esc_html__( 'from iMIS" is ticked on it. Nothing is changed in iMIS; pages are never removed.', 'wormiss' )
 			. '</p>';
 	}
 
@@ -1102,6 +1128,18 @@ class Wormiss_Admin {
 					. ' ' . esc_html__( 'Name, Document Description, Publication Date, Tag Name and Thumbnail Image. No prompts.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'page_import_query':
+				printf(
+					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'An IQA path listing the website\'s navigation items (DocumentTypeCode NAV), one row per', 'wormiss' )
+					. ' ' . esc_html__( 'item, with Hierarchy Key and Document Version Key, and ideally Alternate Name. No prompts.', 'wormiss' )
+					. '</p>';
+				return;
 			case 'user_sync_query':
 				printf(
 					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
@@ -1197,6 +1235,9 @@ class Wormiss_Admin {
 			case 'news_import_enabled':
 			case 'news_import_dry_run':
 			case 'news_import_publish':
+			case 'page_import_enabled':
+			case 'page_import_dry_run':
+			case 'page_import_publish':
 			case 'blog_import_enabled':
 			case 'blog_import_dry_run':
 			case 'user_sync_enabled':
@@ -1252,6 +1293,22 @@ class Wormiss_Admin {
 				if ( 'news_import_dry_run' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'Reads iMIS and reports which posts would be made or updated, but saves nothing.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'page_import_publish' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'New imported pages go live. Off: drafts. Pages already made keep their status.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'page_import_dry_run' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Reads iMIS and reports which pages would be made or updated, but saves nothing.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'page_import_enabled' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Once a day, each navigation item the query lists becomes a page, nested under its parent', 'wormiss' )
+						. ' ' . esc_html__( 'as in iMIS. Pages whose iMIS content is made of iParts are imported empty, in place.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'member_push_enabled' === $key ) {
@@ -1399,6 +1456,17 @@ class Wormiss_Admin {
 					__( 'Import iMIS news now', 'wormiss' )
 				);
 				Wormiss_Content_Check::render();
+				break;
+			case 'pages':
+				self::render_run_now(
+					'wormiss-page-import',
+					__( 'Import iMIS pages now', 'wormiss' ),
+					Wormiss_Page_Import::summary(),
+					__( 'The page import has not run yet.', 'wormiss' ),
+					Wormiss_Page_Import::notes(),
+					'wormiss_page_import_now',
+					__( 'Import iMIS pages now', 'wormiss' )
+				);
 				break;
 			case 'blog':
 				self::render_run_now(
