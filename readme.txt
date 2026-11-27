@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.67.4
+Stable tag: 0.68.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.68.0 =
+* Imported pages keep their column layout. An iMIS page arranges its content in a grid of rows and columns; previously the import flattened everything into a single column. The page import now rebuilds the arrangement as native WordPress column blocks, so a block theme lays the page out in a grid. A heading on its own becomes a full-width section, and the row of content blocks after it becomes an equal-width columns row (so the icon rows and card rows come across side by side). This first version reads the layout from the content itself; the exact column widths and any section the template splits into several rows will follow once the page template is read. On by default; turn it off (a single column of content, as before) with the "wormiss_page_import_blocks" filter. Re-run the page import after upgrading to rebuild existing pages.
 
 = 0.67.4 =
 * SVG icons now import. iMIS pages often use SVG icons (the membership benefit tiles, the About Us value icons), and WordPress blocks SVG uploads by default because an SVG is XML that can carry script. The importers (pages, blog, news and events) now bring each SVG across after sanitising it: only a safe allow-list of drawing elements and attributes is kept, and anything that could run script — a <script>, an on* handler, a javascript: or external reference, a DOCTYPE — is stripped. The sanitised file is stored in the Media Library like any other image. SVG import is on by default; a site can turn it off with the "wormiss_import_svg" filter.

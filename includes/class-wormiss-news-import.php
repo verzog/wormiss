@@ -695,6 +695,7 @@ class Wormiss_News_Import {
 			'items'   => array_map(
 				static fn( array $item ): array => [
 					'name' => $item['name'],
+					'zone' => $item['zone'],
 					'html' => $item['html'],
 				],
 				$items

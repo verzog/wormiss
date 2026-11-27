@@ -250,10 +250,12 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 			'items' => [
 				[
 					'name' => 'PageHeading',
+					'zone' => 1,
 					'html' => '<h1>About Us</h1>',
 				],
 				[
 					'name' => 'Body Text',
+					'zone' => 2,
 					'html' => '<p>Our <font size="4">story</font>.</p>',
 				],
 			],
@@ -263,6 +265,96 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 		$this->assertStringNotContainsString( 'font', $body );
 		$this->assertStringNotContainsString( 'About Us', $body, 'The title heading block is left out.' );
 		$this->assertSame( '', Wormiss_Page_Import::build_body( 'X', [ 'items' => [] ] ) );
+	}
+
+	/**
+	 * The importer rebuilds the iMIS column layout as blocks: a heading-only cell is a full-width
+	 * section, and the run of cells after it becomes an equal-column row.
+	 *
+	 * @return void
+	 */
+	public function test_build_body_groups_rows_into_columns(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Heading',
+					'zone' => 1,
+					'html' => '<h2>Our Values</h2>',
+				],
+				[
+					'name' => 'Card A',
+					'zone' => 2,
+					'html' => '<h3>Progressive</h3><p>We are innovative.</p>',
+				],
+				[
+					'name' => 'Card B',
+					'zone' => 3,
+					'html' => '<h3>Inclusive</h3><p>We welcome all.</p>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'About Us', $content );
+		$this->assertStringContainsString( '<!-- wp:group {"className":"wormiss-section wormiss-heading"} -->', $body, 'The heading is a full-width section.' );
+		$this->assertStringContainsString( '<!-- wp:columns {"className":"wormiss-row"} -->', $body, 'The two cards form a columns row.' );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:column -->' ), 'One column per card.' );
+		$this->assertStringContainsString( 'Progressive', $body );
+		$this->assertStringContainsString( 'Inclusive', $body );
+	}
+
+	/**
+	 * A card that merely ends with a sub-heading is row content, not a full-width section, so such
+	 * cards still group into columns.
+	 *
+	 * @return void
+	 */
+	public function test_build_body_card_ending_in_heading_is_not_a_section(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Card A',
+					'zone' => 2,
+					'html' => '<h3>Benefit</h3><p>Description.</p><h4>Learn more</h4>',
+				],
+				[
+					'name' => 'Card B',
+					'zone' => 3,
+					'html' => '<h3>Benefit two</h3><p>More.</p><h4>Learn more</h4>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:columns {"className":"wormiss-row"} -->', $body, 'The two cards still form a row.' );
+		$this->assertStringNotContainsString( 'wormiss-heading', $body, 'Neither card is a full-width heading.' );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:column -->' ) );
+	}
+
+	/**
+	 * With the wormiss_page_import_blocks filter off, the body is a single column of content (no
+	 * column blocks), as before.
+	 *
+	 * @return void
+	 */
+	public function test_build_body_blocks_can_be_disabled(): void {
+		add_filter( 'wormiss_page_import_blocks', '__return_false' );
+		$content = [
+			'items' => [
+				[
+					'name' => 'A',
+					'zone' => 2,
+					'html' => '<p>One.</p>',
+				],
+				[
+					'name' => 'B',
+					'zone' => 3,
+					'html' => '<p>Two.</p>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		remove_filter( 'wormiss_page_import_blocks', '__return_false' );
+		$this->assertStringNotContainsString( 'wp:columns', $body );
+		$this->assertStringContainsString( '<p>One.</p>', $body );
+		$this->assertStringContainsString( '<p>Two.</p>', $body );
 	}
 
 	/**
