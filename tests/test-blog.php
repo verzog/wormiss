@@ -584,21 +584,11 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 * @param string $management The first category's name in iMIS.
 	 * @param string $diagnosis  The second category's name in iMIS.
 	 * @param array  $older      More (older) posts in the list.
+	 * @param string $updated    The post's iMIS UpdatedOn.
 	 * @return void
 	 */
-	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis', array $older = [] ): void {
-		$post    = [
-			'ID'             => '13397',
-			'BlogKey'        => self::KEY,
-			'Title'          => 'Small Bowl, Big Decisions!',
-			'Summary'        => 'ear reconstruction',
-			'Tags'           => 'BCC (Basal Cell Carcinoma),Ears (peri-aural)',
-			'Status'         => 'Published',
-			'CategoryKey'    => 'cat-1',
-			'SubcategoryKey' => 'sub-1',
-			'PublishedOn'    => '2026-06-18T10:00:38.173',
-			'UpdatedOn'      => '2026-06-18T10:04:59.743',
-		];
+	private function queue( array $data, string $management = 'Management', string $diagnosis = 'Diagnosis', array $older = [], string $updated = '2026-06-18T10:04:59.743' ): void {
+		$post    = $this->queue_list( $updated, $older, $management, $diagnosis );
 		$full    = array_merge(
 			$post,
 			[
@@ -621,6 +611,47 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 				'CreatedOn'        => $when,
 			];
 		};
+		$this->imis
+			->reply( '/api/Smart_Blogs_Blog_Post?BlogKey', 200, Wormiss_Fake_Imis::page( [ $full ] ) )
+			->reply(
+				'/api/Smart_Blogs_Comment',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						// The reply comes first in the list; it still goes under its parent.
+						$comment( 'c340cbe0-1cce-4975-a27d-55d9cbdebf07', '6093a8f1-fa14-424d-b3f6-04d6bfeeee7c', '13397', 'Thanks Lars', '2026-06-18T20:29:23.93' ),
+						$comment( '6093a8f1-fa14-424d-b3f6-04d6bfeeee7c', '', '12583', 'I would excise it.', '2026-06-18T10:37:22.577' ),
+					]
+				)
+			)
+			->reply( '/api/Party/', 200, [ 'Name' => 'Dr Lars Example' ] );
+	}
+
+	/**
+	 * Queue only the list-level reads of an import (token, post list, categories, subcategories,
+	 * templates) — not the per-post content, comments or author. Returns the list's post row, so
+	 * callers can build the full post read. Used on its own to prove a post is skipped without its
+	 * per-post read.
+	 *
+	 * @param string $updated    The post's iMIS UpdatedOn.
+	 * @param array  $older      More (older) posts in the list.
+	 * @param string $management The first category's name in iMIS.
+	 * @param string $diagnosis  The second category's name in iMIS.
+	 * @return array The post's list row.
+	 */
+	private function queue_list( string $updated = '2026-06-18T10:04:59.743', array $older = [], string $management = 'Management', string $diagnosis = 'Diagnosis' ): array {
+		$post = [
+			'ID'             => '13397',
+			'BlogKey'        => self::KEY,
+			'Title'          => 'Small Bowl, Big Decisions!',
+			'Summary'        => 'ear reconstruction',
+			'Tags'           => 'BCC (Basal Cell Carcinoma),Ears (peri-aural)',
+			'Status'         => 'Published',
+			'CategoryKey'    => 'cat-1',
+			'SubcategoryKey' => 'sub-1',
+			'PublishedOn'    => '2026-06-18T10:00:38.173',
+			'UpdatedOn'      => $updated,
+		];
 		$this->imis->token()
 			->reply( '/api/Smart_Blogs_Blog_Post?Limit', 200, Wormiss_Fake_Imis::page( array_merge( [ $post ], $older ) ) )
 			->reply(
@@ -672,20 +703,8 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 						],
 					]
 				)
-			)
-			->reply( '/api/Smart_Blogs_Blog_Post?BlogKey', 200, Wormiss_Fake_Imis::page( [ $full ] ) )
-			->reply(
-				'/api/Smart_Blogs_Comment',
-				200,
-				Wormiss_Fake_Imis::page(
-					[
-						// The reply comes first in the list; it still goes under its parent.
-						$comment( 'c340cbe0-1cce-4975-a27d-55d9cbdebf07', '6093a8f1-fa14-424d-b3f6-04d6bfeeee7c', '13397', 'Thanks Lars', '2026-06-18T20:29:23.93' ),
-						$comment( '6093a8f1-fa14-424d-b3f6-04d6bfeeee7c', '', '12583', 'I would excise it.', '2026-06-18T10:37:22.577' ),
-					]
-				)
-			)
-			->reply( '/api/Party/', 200, [ 'Name' => 'Dr Lars Example' ] );
+			);
+		return $post;
 	}
 
 	/**
@@ -755,7 +774,18 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	 */
 	public function test_categories(): void {
 		$tax = Wormiss_Blog::TAX_CATEGORY;
-		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_import_dry_run' => true ] ) );
+		// This exercises rename propagation, which under "changed only" waits for the weekly reconcile
+		// (a rename does not change the post's UpdatedOn); turn it off so every import re-reads the post.
+		update_option(
+			Wormiss_Settings::OPTION,
+			array_merge(
+				Wormiss_Settings::all(),
+				[
+					'blog_import_dry_run'     => true,
+					'blog_import_incremental' => false,
+				]
+			)
+		);
 		$this->queue( $this->modern() );
 		$report = Wormiss_Blog_Import::run();
 		$this->assertContains( 'Dry run: would make 4 blog categories.', $report['notes'] );
@@ -1146,6 +1176,128 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 		update_post_meta( $post_id, Wormiss_Blog_Import::META_KEY, self::KEY );
 		$html = Wormiss_Blog::link_old_addresses( '<a href="https://imis.example.org/blogs?_r_path=/view/index/' . strtoupper( self::KEY ) . '" target="_blank">x</a>' );
 		$this->assertStringContainsString( 'href="' . get_permalink( $post_id ) . '"', $html );
+	}
+
+	/**
+	 * With "changed only" on, the first import (a reconcile) reads the post in full and records its
+	 * UpdatedOn; the next import skips that post without reading its content or comments.
+	 *
+	 * @return void
+	 */
+	public function test_incremental_skips_unchanged(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+
+		// The first run has no reconcile timestamp yet, so it is a full read: the post is created.
+		$this->queue( $this->modern() );
+		$this->assertSame( 1, Wormiss_Blog_Import::run()['created'] );
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+		$this->assertSame( '2026-06-18T10:04:59.743', (string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ) );
+		$this->assertGreaterThan( 0, (int) get_option( Wormiss_Blog_Import::FULL_OPTION ), 'The reconcile time is recorded.' );
+
+		// The next run: same UpdatedOn, reconcile not due. Only the list-level calls are queued, so a
+		// per-post read would be an unexpected request and fail the test.
+		$this->imis->requests = [];
+		$this->queue_list();
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 0, $report['created'] + $report['updated'] );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, $this->imis->count( '/api/Smart_Blogs_Blog_Post?BlogKey' ), 'No per-post content read for an unchanged post.' );
+	}
+
+	/**
+	 * A post whose iMIS UpdatedOn has changed is re-read on the next incremental import.
+	 *
+	 * @return void
+	 */
+	public function test_incremental_rereads_changed(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+
+		// The post changes in iMIS (a new UpdatedOn): the next import reads and updates it, even
+		// though the reconcile is not yet due.
+		$this->queue( $this->modern( 'A revised answer.' ), 'Management', 'Diagnosis', [], '2026-07-01T09:00:00.000' );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['updated'] );
+		$this->assertSame( '2026-07-01T09:00:00.000', (string) get_post_meta( Wormiss_Blog_Import::post_for( self::KEY ), Wormiss_Blog_Import::META_UPDATED, true ) );
+	}
+
+	/**
+	 * With "changed only" off, every post is read every import (no fast skip).
+	 *
+	 * @return void
+	 */
+	public function test_non_incremental_rereads_every_post(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_import_incremental' => false ] ) );
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+
+		// Same post, unchanged: it is still read in full (the per-post read is queued and consumed).
+		$this->imis->requests = [];
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $this->imis->count( '/api/Smart_Blogs_Blog_Post?BlogKey' ), 'The post is re-read even though it is unchanged.' );
+		$this->assertSame( 1, $report['skipped'], 'The content hash is unchanged, so nothing is written.' );
+	}
+
+	/**
+	 * A post imported before this feature (a source hash but no update marker) gets the marker
+	 * backfilled on its first full re-read, so later imports can fast-skip it.
+	 *
+	 * @return void
+	 */
+	public function test_backfills_marker_on_unchanged(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+
+		// Simulate a pre-feature post: the source hash is there, the update marker is not.
+		delete_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED );
+		delete_option( Wormiss_Blog_Import::FULL_OPTION ); // Force the next run to be a full reconcile.
+		$this->imis->requests = [];
+		$this->queue( $this->modern() );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['skipped'], 'Unchanged content: nothing written.' );
+		$this->assertSame(
+			'2026-06-18T10:04:59.743',
+			(string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ),
+			'The marker is backfilled on the unchanged path.'
+		);
+
+		// With the marker in place, the next import fast-skips the post (no per-post read).
+		$this->imis->requests = [];
+		$this->queue_list();
+		Wormiss_Blog_Import::run();
+		$this->assertSame( 0, $this->imis->count( '/api/Smart_Blogs_Blog_Post?BlogKey' ), 'Now fast-skipped.' );
+	}
+
+	/**
+	 * A per-post read that fails drops the post's update marker, so the next import retries it rather
+	 * than fast-skipping it until the next weekly reconcile.
+	 *
+	 * @return void
+	 */
+	public function test_failed_read_drops_marker(): void {
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+		$post_id = Wormiss_Blog_Import::post_for( self::KEY );
+		$this->assertNotSame( '', (string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ) );
+
+		// A reconcile whose per-post read fails.
+		delete_option( Wormiss_Blog_Import::FULL_OPTION );
+		$this->imis->requests = [];
+		$this->queue_list();
+		$this->imis->fail( '/api/Smart_Blogs_Blog_Post?BlogKey' );
+		$report = Wormiss_Blog_Import::run();
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame(
+			'',
+			(string) get_post_meta( $post_id, Wormiss_Blog_Import::META_UPDATED, true ),
+			'The marker is dropped after a failed read, so the post is retried next import.'
+		);
 	}
 
 	/**

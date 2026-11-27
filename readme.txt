@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.65.0
+Stable tag: 0.66.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.66.0 =
+* Blog import is now incremental (Settings > Members' blog > "Only re-read changed posts", on by default). Previously every daily import read each post's full content and all its comments from iMIS, even when nothing had changed — thousands of calls on a large blog. Now a post whose iMIS UpdatedOn is unchanged since its last import is skipped without that read; only new and changed posts are fetched. A full re-read runs weekly to catch comment edits (which do not change a post's UpdatedOn). Turn the setting off to re-read every post every import, as before.
 
 = 0.65.0 =
 * Page import can now build a WordPress navigation menu from the imported iMIS tree (Settings > Pages > "Build a navigation menu"). After each import it makes or updates a menu (named in the settings, default "iMIS site") with one item per imported, published page, nested under its parent and ordered as in iMIS. The import manages that menu — items pointing at imported pages are kept in step and stale ones removed — but items an editor adds to it by hand are left alone. The menu is not assigned to a theme location; an editor does that once under Appearance > Menus. Off by default.
