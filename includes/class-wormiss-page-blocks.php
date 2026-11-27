@@ -53,12 +53,17 @@ class Wormiss_Page_Blocks {
 	 * Block markup for a page's body, from its content items (each with 'zone' and 'html'), in page
 	 * order. A cell that is only the page title as a heading is left out.
 	 *
-	 * @param string $title Page title.
-	 * @param array  $items Content items from Wormiss_News_Import::parse().
+	 * @param string     $title  Page title.
+	 * @param array      $items  Content items from Wormiss_News_Import::parse().
+	 * @param array|null $layout The page's layout template rows (from Wormiss_Page_Layout::rows()), to
+	 *                           rebuild the exact grid; null to group by heading instead.
 	 * @return string Block markup.
 	 */
-	public static function build( string $title, array $items ): string {
-		$cells  = self::cells( $items, $title );
+	public static function build( string $title, array $items, ?array $layout = null ): string {
+		$cells = self::cells( $items, $title );
+		if ( null !== $layout && array() !== $layout ) {
+			return self::from_template( $cells, $layout );
+		}
 		$blocks = [];
 		$run    = [];
 		foreach ( $cells as $html ) {
@@ -75,22 +80,60 @@ class Wormiss_Page_Blocks {
 	}
 
 	/**
-	 * The page's cells: the cleaned HTML of each layout zone (items sharing a zone joined), skipping
-	 * empty cells and a cell that is only the page title.
+	 * Build the body from the page's layout template: each template row becomes a columns row with the
+	 * template's exact widths (a zone with no content is left out; a row left with one cell, or a
+	 * full-width cell, becomes a section). Content whose zone the template does not place is kept,
+	 * full width, so nothing is lost.
+	 *
+	 * @param array $cells  Zone => cleaned cell HTML.
+	 * @param array $layout Template rows: each a list of [ 'zone' => int, 'width' => int (twelfths) ].
+	 * @return string
+	 */
+	private static function from_template( array $cells, array $layout ): string {
+		$blocks = [];
+		$placed = [];
+		foreach ( $layout as $row ) {
+			$columns = [];
+			foreach ( (array) $row as $col ) {
+				$zone = (int) ( $col['zone'] ?? 0 );
+				if ( empty( $cells[ $zone ] ) ) {
+					continue;
+				}
+				$placed[ $zone ] = true;
+				$columns[]       = [
+					'html'  => $cells[ $zone ],
+					'width' => (int) ( $col['width'] ?? 0 ),
+				];
+			}
+			if ( $columns ) {
+				$blocks[] = self::row_cols( $columns );
+			}
+		}
+		foreach ( $cells as $zone => $html ) {
+			if ( empty( $placed[ $zone ] ) ) {
+				$blocks[] = self::section( $html, self::is_heading( $html ) );
+			}
+		}
+		return trim( implode( "\n\n", array_filter( $blocks, static fn( string $b ): bool => '' !== $b ) ) );
+	}
+
+	/**
+	 * The page's cells: the cleaned HTML of each layout zone (items sharing a zone joined), keyed by
+	 * zone number and in page order, skipping empty cells and a cell that is only the page title.
 	 *
 	 * @param array  $items Content items.
 	 * @param string $title Page title.
-	 * @return string[] Cleaned cell HTML, in order.
+	 * @return array<int, string> Cleaned cell HTML keyed by zone.
 	 */
 	private static function cells( array $items, string $title ): array {
 		$cells = [];
 		$zone  = null;
 		$buf   = [];
-		$flush = static function () use ( &$cells, &$buf ) {
+		$flush = static function () use ( &$cells, &$buf, &$zone ) {
 			$html = trim( implode( "\n\n", $buf ) );
 			$buf  = [];
-			if ( '' !== $html ) {
-				$cells[] = $html;
+			if ( '' !== $html && null !== $zone ) {
+				$cells[ $zone ] = isset( $cells[ $zone ] ) ? $cells[ $zone ] . "\n\n" . $html : $html;
 			}
 		};
 		foreach ( $items as $item ) {
@@ -106,9 +149,12 @@ class Wormiss_Page_Blocks {
 			$buf[] = $html;
 		}
 		$flush();
-		return array_values(
-			array_filter( $cells, static fn( string $html ): bool => ! self::is_title( $html, $title ) )
-		);
+		foreach ( $cells as $key => $html ) {
+			if ( self::is_title( $html, $title ) ) {
+				unset( $cells[ $key ] );
+			}
+		}
+		return $cells;
 	}
 
 	/**
@@ -130,6 +176,41 @@ class Wormiss_Page_Blocks {
 			$columns .= "<!-- wp:column -->\n<div class=\"wp-block-column\">" . self::html_block( $html ) . "</div>\n<!-- /wp:column -->\n";
 		}
 		return "<!-- wp:columns {\"className\":\"wormiss-row\"} -->\n<div class=\"wp-block-columns wormiss-row\">\n" . $columns . "</div>\n<!-- /wp:columns -->";
+	}
+
+	/**
+	 * A columns row from the template, each column at its own width (in twelfths): a single surviving
+	 * column, or a full-width one, becomes a section instead.
+	 *
+	 * @param array $columns List of [ 'html' => string, 'width' => int (twelfths) ].
+	 * @return string
+	 */
+	private static function row_cols( array $columns ): string {
+		if ( 1 === count( $columns ) ) {
+			return self::section( $columns[0]['html'], self::is_heading( $columns[0]['html'] ) );
+		}
+		$out = '';
+		foreach ( $columns as $column ) {
+			$pct   = self::width_pct( (int) $column['width'] );
+			$attr  = null !== $pct ? ' {"width":"' . $pct . '"}' : '';
+			$style = null !== $pct ? ' style="flex-basis:' . $pct . '"' : '';
+			$out  .= "<!-- wp:column$attr -->\n<div class=\"wp-block-column\"$style>" . self::html_block( $column['html'] ) . "</div>\n<!-- /wp:column -->\n";
+		}
+		return "<!-- wp:columns {\"className\":\"wormiss-row\"} -->\n<div class=\"wp-block-columns wormiss-row\">\n" . $out . "</div>\n<!-- /wp:columns -->";
+	}
+
+	/**
+	 * A column width as a percentage string ("66.67%"), from twelfths; null for a full-width (12) or
+	 * invalid width, which leaves the column to share the row equally.
+	 *
+	 * @param int $twelfths Width in twelfths of the row.
+	 * @return string|null
+	 */
+	private static function width_pct( int $twelfths ): ?string {
+		if ( $twelfths <= 0 || $twelfths >= 12 ) {
+			return null;
+		}
+		return rtrim( rtrim( number_format( $twelfths / 12 * 100, 2, '.', '' ), '0' ), '.' ) . '%';
 	}
 
 	/**
