@@ -75,6 +75,12 @@ class Wormiss_Blog_Import {
 	 */
 	const PEOPLE_OPTION = 'wormiss_blog_people';
 
+	/** When the last full re-read (reconcile) finished, so the next can be scheduled a week on. */
+	const FULL_OPTION = 'wormiss_blog_import_full';
+
+	/** How often a full re-read runs even with "changed only" on (to catch comment edits etc.). */
+	const RECONCILE_SECONDS = 7 * DAY_IN_SECONDS;
+
 	/**
 	 * The post's Smart Blogs key.
 	 */
@@ -84,6 +90,9 @@ class Wormiss_Blog_Import {
 	 * A fingerprint of what the post last took from iMIS.
 	 */
 	const META_SOURCE = '_wormiss_blog_source';
+
+	/** On a post: the iMIS UpdatedOn of the post row at its last import (for the "changed only" skip). */
+	const META_UPDATED = '_wormiss_blog_updated';
 
 	/**
 	 * Ticked by an editor: later imports leave the post alone.
@@ -371,6 +380,9 @@ class Wormiss_Blog_Import {
 					'subcategories' => self::names( $client, 'Smart_Blogs_Subcategory', 'SubcategoryKey', 'ParentCategoryKey' ),
 					'templates'     => self::templates( $client ),
 					'time'          => time(),
+					// A full re-read (every post fetched) when "changed only" is off, or when the
+					// weekly reconcile is due; otherwise unchanged posts are skipped without a read.
+					'reconcile'     => self::reconcile_due(),
 				];
 			} catch ( Wormiss_Exception $e ) {
 				$report['status']  = 'error';
@@ -417,12 +429,11 @@ class Wormiss_Blog_Import {
 	 */
 	private static function read_list( Wormiss_Rest_Client $client, array $listing ): array {
 		$offset = (int) $listing['offset'];
-		// Note: this reads the whole post list every run (no "changed since" filter); the per-post
-		// content-hash skip in one() then avoids writes. Harmless at steady state but chatty on a
-		// large blog. For production, read incrementally: keep a high-water mark on UpdatedOn (already
-		// captured per row in list_entry()) and stop paging once rows are older than it, with a
-		// periodic full reconcile to catch unpublishes and deletions. The page importer should be
-		// built incrementally from the start for the same reason.
+		// This pages the whole post list every run (the iMIS entity list has no reliable "changed
+		// since" filter), but with "changed only" on, one() then skips the per-post content and
+		// comment reads for rows whose UpdatedOn is unchanged — the expensive part on a large blog.
+		// Reading the list rows themselves stays cheap; a weekly full reconcile (see reconcile_due())
+		// catches comment edits that do not change the post's UpdatedOn.
 		do {
 			$result = $client->request( 'GET', '/api/Smart_Blogs_Blog_Post?Limit=' . self::PAGE . '&Offset=' . $offset, null, null, false );
 			if ( ! is_object( $result->body ) ) {
@@ -577,6 +588,10 @@ class Wormiss_Blog_Import {
 		}
 		$report['remaining'] = $todo;
 		if ( 0 === $todo ) {
+			// A full re-read finished: hold off the next reconcile for a week.
+			if ( ! empty( $listing['reconcile'] ) ) {
+				update_option( self::FULL_OPTION, time(), false );
+			}
 			delete_option( self::DONE_OPTION );
 			delete_option( self::LIST_OPTION );
 			wp_clear_scheduled_hook( self::MORE_HOOK );
@@ -596,6 +611,14 @@ class Wormiss_Blog_Import {
 	private static function one( Wormiss_Rest_Client $client, array $post, array $listing, array &$report ): string {
 		$post_id = self::post_for( $post['key'] );
 		if ( $post_id && ( 'trash' === get_post_status( $post_id ) || get_post_meta( $post_id, self::META_DETACHED, true ) ) ) {
+			return 'skipped';
+		}
+		// "Changed only": a post iMIS reports unchanged since its last import (same UpdatedOn) is
+		// skipped without reading its content or comments — the expensive part on a large blog. A
+		// weekly full reconcile (reconcile = true) ignores this to catch comment edits and the like.
+		if ( empty( $listing['reconcile'] ) && $post_id && '' !== $post['updated']
+			&& '' !== (string) get_post_meta( $post_id, self::META_SOURCE, true )
+			&& (string) get_post_meta( $post_id, self::META_UPDATED, true ) === $post['updated'] ) {
 			return 'skipped';
 		}
 		try {
@@ -677,10 +700,26 @@ class Wormiss_Blog_Import {
 		}
 		if ( $complete ) {
 			update_post_meta( $saved, self::META_SOURCE, $hash );
+			// The row's UpdatedOn, so the next import can skip this post while iMIS says it is unchanged.
+			update_post_meta( $saved, self::META_UPDATED, $post['updated'] );
 		} else {
 			delete_post_meta( $saved, self::META_SOURCE );
 		}
 		return $post_id ? 'updated' : 'created';
+	}
+
+	/**
+	 * Whether this import should be a full re-read: when "changed only" is off, or when the weekly
+	 * reconcile is due. A reconcile fetches every post (so comment edits and the like are caught).
+	 *
+	 * @return bool
+	 */
+	private static function reconcile_due(): bool {
+		if ( ! Wormiss_Settings::get( 'blog_import_incremental' ) ) {
+			return true;
+		}
+		$last = (int) get_option( self::FULL_OPTION, 0 );
+		return time() - $last >= self::RECONCILE_SECONDS;
 	}
 
 	/**

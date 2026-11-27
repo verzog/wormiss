@@ -442,6 +442,7 @@ class Wormiss_Admin {
 		self::field( 'blog_media_category', __( 'Media category for imported pictures', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_enabled', __( 'Import the iMIS blog daily', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_import_dry_run', __( 'Blog import dry run (report only)', 'wormiss' ), 'wormiss_blog' );
+		self::field( 'blog_import_incremental', __( 'Only re-read changed posts', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_posts', __( 'Blog posts per batch', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_minutes', __( 'Minutes between blog batches', 'wormiss' ), 'wormiss_blog' );
 		self::field( 'blog_batch_seconds', __( 'Seconds per blog batch', 'wormiss' ), 'wormiss_blog' );
@@ -1254,6 +1255,7 @@ class Wormiss_Admin {
 			case 'page_import_menu':
 			case 'blog_import_enabled':
 			case 'blog_import_dry_run':
+			case 'blog_import_incremental':
 			case 'user_sync_enabled':
 			case 'user_sync_dry_run':
 			case 'member_push_enabled':
@@ -1330,6 +1332,12 @@ class Wormiss_Admin {
 						. esc_html__( 'After each import, make or update a WordPress navigation menu (named below) mirroring the', 'wormiss' )
 						. ' ' . esc_html__( 'iMIS tree: one item per imported, published page, nested and ordered as in iMIS. Assign it to', 'wormiss' )
 						. ' ' . esc_html__( 'a theme location once under Appearance > Menus. The import manages this menu, so avoid editing it by hand.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'blog_import_incremental' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Skip the per-post read for posts iMIS reports unchanged since the last import (much faster on a', 'wormiss' )
+						. ' ' . esc_html__( 'large blog). A full re-read runs weekly to catch comment edits. Off: every post is re-read every import.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'member_push_enabled' === $key ) {

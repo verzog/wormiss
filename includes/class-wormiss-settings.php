@@ -156,6 +156,9 @@ class Wormiss_Settings {
 			'blog_media_category'             => 0,
 			'blog_import_enabled'             => false,
 			'blog_import_dry_run'             => true,
+			// Only re-read posts that iMIS says have changed (with a weekly full re-read to catch
+			// comment edits and the like). Off: every post is re-read every import.
+			'blog_import_incremental'         => true,
 			'blog_batch_posts'                => 10,
 			'blog_batch_minutes'              => 1,
 			'blog_batch_seconds'              => 40,
@@ -649,7 +652,7 @@ class Wormiss_Settings {
 				}
 			}
 		}
-		foreach ( [ 'blog_import_enabled', 'blog_import_dry_run' ] as $box ) {
+		foreach ( [ 'blog_import_enabled', 'blog_import_dry_run', 'blog_import_incremental' ] as $box ) {
 			if ( isset( $input['blog_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {
