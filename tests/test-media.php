@@ -53,7 +53,6 @@ class Test_Wormiss_Media extends Wormiss_Test_Case {
 			default:
 				imagejpeg( $image, $path );
 		}
-		imagedestroy( $image );
 		return $path;
 	}
 
