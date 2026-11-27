@@ -465,6 +465,50 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Loose text with an inline link (content not wrapped in a paragraph) stays a single paragraph with
+	 * its spacing, rather than being split across a paragraph, an HTML block and another paragraph.
+	 *
+	 * @return void
+	 */
+	public function test_adjacent_inline_content_stays_one_paragraph(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Loose',
+					'zone' => 2,
+					'html' => 'Read <a href="/guide">this guide</a> before applying.',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertSame( 1, substr_count( $body, '<!-- wp:paragraph -->' ), 'The sentence is one paragraph.' );
+		$this->assertStringNotContainsString( '<!-- wp:html -->', $body, 'The link is not split into its own block.' );
+		$this->assertStringContainsString( 'Read <a href="/guide">this guide</a> before applying.', $body, 'Spacing around the link is kept.' );
+	}
+
+	/**
+	 * A figure holding more than a single image (here an image and a paragraph) is preserved whole as an
+	 * HTML block, so the content beside the image is not dropped.
+	 *
+	 * @return void
+	 */
+	public function test_figure_with_extra_content_falls_back(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Figure',
+					'zone' => 2,
+					'html' => '<figure><img src="/a.jpg" alt=""><p>Note beside image.</p></figure>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:html -->', $body );
+		$this->assertStringNotContainsString( '<!-- wp:image -->', $body, 'A figure with extra content is not forced into an image block.' );
+		$this->assertStringContainsString( 'Note beside image.', $body, 'The paragraph beside the image is kept.' );
+	}
+
+	/**
 	 * An import makes published pages, nests the child under its parent, and brings in the body.
 	 *
 	 * @return void

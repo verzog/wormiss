@@ -269,34 +269,120 @@ class Wormiss_Page_Blocks {
 		if ( ! $root ) {
 			return self::html_fallback( $html );
 		}
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
+		$blocks = self::nodes_to_blocks( iterator_to_array( $root->childNodes ) );
+		return $blocks ? implode( "\n\n", $blocks ) : self::html_fallback( $html );
+	}
+
+	/**
+	 * A list of sibling DOM nodes as block markup: each block-level element becomes its own block, and a
+	 * run of adjacent inline content (text and inline elements such as links or emphasis) is gathered
+	 * into a single paragraph, so a sentence with a link in the middle stays one paragraph with its
+	 * spacing intact rather than being split across blocks.
+	 *
+	 * @param DOMNode[] $nodes The sibling nodes.
+	 * @return string[] Block markup, one per element.
+	 */
+	private static function nodes_to_blocks( array $nodes ): array {
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
 		$blocks = [];
-		foreach ( iterator_to_array( $root->childNodes ) as $node ) {
+		$run    = [];
+		$flush  = static function () use ( &$blocks, &$run ): void {
+			if ( $run ) {
+				$block = self::inline_run_block( $run );
+				if ( '' !== $block ) {
+					$blocks[] = $block;
+				}
+				$run = [];
+			}
+		};
+		foreach ( $nodes as $node ) {
+			if ( XML_TEXT_NODE === $node->nodeType ) {
+				// Non-whitespace text is inline; whitespace is kept only to space an open inline run.
+				if ( '' !== trim( (string) $node->textContent ) || $run ) {
+					$run[] = $node;
+				}
+				continue;
+			}
+			if ( XML_ELEMENT_NODE !== $node->nodeType ) {
+				continue;
+			}
+			if ( self::is_inline_element( $node ) ) {
+				$run[] = $node;
+				continue;
+			}
+			$flush();
 			$block = self::node_block( $node );
 			if ( '' !== $block ) {
 				$blocks[] = $block;
 			}
 		}
+		$flush();
 		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-		return $blocks ? implode( "\n\n", $blocks ) : self::html_fallback( $html );
+		return $blocks;
 	}
 
 	/**
-	 * One top-level DOM node as a core block: a text node or a paragraph becomes a paragraph, a heading
-	 * its heading, a list its list, an image or figure an image, a blockquote a quote and a table a
-	 * table. A bare line break is dropped; anything else is preserved as an HTML block.
+	 * Whether an element is inline-level (so it belongs in a paragraph with its neighbours rather than
+	 * as its own block). An image counts as inline here: a lone image still becomes its own image block
+	 * in inline_run_block(), but an image sitting among text stays within that text.
 	 *
-	 * @param DOMNode $node The node.
+	 * @param DOMNode $node The element node.
+	 * @return bool
+	 */
+	private static function is_inline_element( DOMNode $node ): bool {
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
+		$name = strtolower( $node->nodeName );
+		return in_array(
+			$name,
+			[ 'a', 'strong', 'b', 'em', 'i', 'u', 'sup', 'sub', 'br', 'img' ],
+			true
+		);
+	}
+
+	/**
+	 * A run of adjacent inline nodes as one block: an image on its own (only whitespace around it)
+	 * becomes an image block, otherwise the run becomes a single paragraph keeping its inline markup
+	 * and internal spacing. An empty or whitespace-only run yields nothing.
+	 *
+	 * @param DOMNode[] $run The inline nodes.
+	 * @return string
+	 */
+	private static function inline_run_block( array $run ): string {
+		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
+		$has_text = false;
+		$elements = [];
+		foreach ( $run as $node ) {
+			if ( XML_TEXT_NODE === $node->nodeType ) {
+				if ( '' !== trim( (string) $node->textContent ) ) {
+					$has_text = true;
+				}
+			} elseif ( XML_ELEMENT_NODE === $node->nodeType && 'br' !== strtolower( $node->nodeName ) ) {
+				$elements[] = $node;
+			}
+		}
+		if ( ! $has_text && 1 === count( $elements ) && 'img' === strtolower( $elements[0]->nodeName ) ) {
+			return self::image_block( self::outer_html( $elements[0] ), '' );
+		}
+		$html = '';
+		foreach ( $run as $node ) {
+			$html .= self::outer_html( $node );
+		}
+		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		$html = trim( $html );
+		return '' === $html ? '' : "<!-- wp:paragraph -->\n<p>$html</p>\n<!-- /wp:paragraph -->";
+	}
+
+	/**
+	 * One block-level DOM element as its core block: a paragraph its paragraph, a heading its heading, a
+	 * list its list, a figure an image, a blockquote a quote and a table a table. Anything else is
+	 * preserved as an HTML block. Inline nodes are handled by nodes_to_blocks(), not here.
+	 *
+	 * @param DOMNode $node The element node.
 	 * @return string
 	 */
 	private static function node_block( DOMNode $node ): string {
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
-		if ( XML_TEXT_NODE === $node->nodeType ) {
-			if ( '' === trim( (string) $node->textContent ) ) {
-				return '';
-			}
-			return "<!-- wp:paragraph -->\n<p>" . trim( self::outer_html( $node ) ) . "</p>\n<!-- /wp:paragraph -->";
-		}
 		if ( XML_ELEMENT_NODE !== $node->nodeType ) {
 			return '';
 		}
@@ -385,27 +471,19 @@ class Wormiss_Page_Blocks {
 	 */
 	private static function quote_block( DOMNode $node ): string {
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
-		$inner = [];
-		foreach ( iterator_to_array( $node->childNodes ) as $child ) {
-			$block = self::node_block( $child );
-			if ( '' !== $block ) {
-				$inner[] = $block;
-			}
-		}
+		$inner = self::nodes_to_blocks( iterator_to_array( $node->childNodes ) );
 		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		if ( ! $inner ) {
-			$text = self::inner_html( $node );
-			if ( '' === $text ) {
-				return '';
-			}
-			$inner[] = "<!-- wp:paragraph -->\n<p>$text</p>\n<!-- /wp:paragraph -->";
+			return '';
 		}
 		return "<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\">" . implode( "\n\n", $inner ) . "</blockquote>\n<!-- /wp:quote -->";
 	}
 
 	/**
-	 * An image block from a figure: its image, with any figcaption kept as the block's caption. A
-	 * figure with no image is preserved as an HTML block.
+	 * An image block from a figure that holds exactly one image and, at most, one caption: the image,
+	 * with any figcaption kept as the block's caption. A figure with no image, more than one image, or
+	 * any other content (extra text or elements an image block could not carry) is preserved whole as
+	 * an HTML block, so nothing beside the image is lost.
 	 *
 	 * @param DOMNode $node The figure node.
 	 * @return string
@@ -414,19 +492,29 @@ class Wormiss_Page_Blocks {
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHP DOM API.
 		$img     = null;
 		$caption = '';
+		$extra   = false;
 		foreach ( $node->childNodes as $child ) {
+			if ( XML_TEXT_NODE === $child->nodeType ) {
+				if ( '' !== trim( (string) $child->textContent ) ) {
+					$extra = true;
+				}
+				continue;
+			}
 			if ( XML_ELEMENT_NODE !== $child->nodeType ) {
 				continue;
 			}
 			$name = strtolower( $child->nodeName );
-			if ( 'img' === $name ) {
+			if ( 'img' === $name && null === $img ) {
 				$img = $child;
-			} elseif ( 'figcaption' === $name ) {
+			} elseif ( 'figcaption' === $name && '' === $caption ) {
 				$caption = self::inner_html( $child );
+			} else {
+				// A second image, a second caption, or any other element: more than one image block holds.
+				$extra = true;
 			}
 		}
 		// phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
-		if ( null === $img ) {
+		if ( null === $img || $extra ) {
 			return self::html_fallback( self::outer_html( $node ) );
 		}
 		return self::image_block( self::outer_html( $img ), $caption );
