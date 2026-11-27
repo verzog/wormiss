@@ -561,6 +561,25 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The panel inventory lists every content item, including a panel with no HTML body (such as a
+	 * query listing or other non-HTML iPart), so the diagnostic is complete.
+	 *
+	 * @return void
+	 */
+	public function test_panel_index_includes_empty_body_panels(): void {
+		$xml   = '<Content xmlns="http://schemas.imis.com/2008/01/DataContracts/Content">'
+			. '<ContentItems xmlns:a="http://schemas.imis.com/2008/01/DataContracts/ContentItem">'
+			. '<a:ContentItem><a:ContentItemName>Content</a:ContentItemName><a:LayoutZone>2</a:LayoutZone>'
+			. '<a:SortOrder>1</a:SortOrder></a:ContentItem>'
+			. '<a:ContentItem><a:ContentItemName>BoardListing</a:ContentItemName><a:LayoutZone>4</a:LayoutZone>'
+			. '<a:SortOrder>1</a:SortOrder></a:ContentItem>'
+			. '</ContentItems></Content>';
+		$names = array_column( Wormiss_News_Import::panel_index( $xml ), 'name' );
+		$this->assertContains( 'Content', $names );
+		$this->assertContains( 'BoardListing', $names, 'A panel with no HTML body is still inventoried.' );
+	}
+
+	/**
 	 * A content read that fails (a temporary iMIS problem) leaves an existing page unchanged, rather
 	 * than blanking its body.
 	 *

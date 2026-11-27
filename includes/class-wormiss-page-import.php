@@ -423,7 +423,7 @@ class Wormiss_Page_Import {
 		if ( ! $post_id ) {
 			$post_id = self::adoptable( $title, $path );
 		}
-		$built = self::content( $client, $content, $title, $report, self::label( $node ) );
+		$built = self::content( $client, $content, $title, $report, self::label( $node ), (string) ( $node['key'] ?? '' ) );
 		if ( null === $built ) {
 			// The content could not be read this time (content() noted why): leave the page as it is,
 			// so a temporary iMIS problem does not blank an existing page. Tried again next import.
@@ -645,9 +645,10 @@ class Wormiss_Page_Import {
 	 * @param string              $title   The page title (so a title-only heading block is left out).
 	 * @param array               $report  Report, for notes.
 	 * @param string              $label   The page's name, for notes.
+	 * @param string              $key     The page's unique iMIS hierarchy key (keys the panel inventory).
 	 * @return array|null html, members; or null when the content could not be read.
 	 */
-	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label ): ?array {
+	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label, string $key = '' ): ?array {
 		if ( '' === $version ) {
 			// No content page: a legitimately empty page (a menu folder or an iParts-only page).
 			return [
@@ -675,7 +676,7 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
-		self::record_panels( $report, $label, (array) ( $content['items'] ?? [] ) );
+		self::record_panels( $report, $key, $label, $xml );
 		return [
 			'html'    => self::build_body( $title, $content, self::template_rows( $client, $xml, $report ) ),
 			'members' => (bool) $content['members'],
@@ -683,24 +684,28 @@ class Wormiss_Page_Import {
 	}
 
 	/**
-	 * Record each content panel's iMIS name (its ContentItemName) and layout zone in the report, keyed
-	 * by the page label, so the audit log shows which named panel sits in which zone on each page. This
-	 * is diagnostic only and changes nothing on the imported page; it is the groundwork for later work
-	 * that could style a known panel (a "Relevant documents" tile, say) to match the theme.
+	 * Record a page's content panels — each panel's iMIS name (its ContentItemName) and layout zone —
+	 * in the report, so the audit log shows which named panel sits in which zone on each page. Every
+	 * panel is listed, including empty-body panels and non-HTML iParts (so the inventory is complete),
+	 * and records are keyed by the page's unique hierarchy key so two same-titled pages do not collide.
+	 * This is diagnostic only and changes nothing on the imported page; it is the groundwork for later
+	 * work that could style a known panel (a "Relevant documents" tile, say) to match the theme.
 	 *
 	 * @param array  $report Report (by reference).
-	 * @param string $label  The page's label (its title and path).
-	 * @param array  $items  Content items from Wormiss_News_Import::parse(), each with 'name' and 'zone'.
+	 * @param string $key    The page's unique iMIS hierarchy key (the record key).
+	 * @param string $label  The page's label (its title and path), for display.
+	 * @param string $xml    The content document's decoded XML.
 	 * @return void
 	 */
-	private static function record_panels( array &$report, string $label, array $items ): void {
+	private static function record_panels( array &$report, string $key, string $label, string $xml ): void {
 		$panels = [];
-		foreach ( $items as $item ) {
-			$name     = trim( (string) ( $item['name'] ?? '' ) );
-			$panels[] = sprintf( '%s (zone %d)', '' !== $name ? $name : '(unnamed)', (int) ( $item['zone'] ?? 0 ) );
+		foreach ( Wormiss_News_Import::panel_index( $xml ) as $panel ) {
+			$name     = trim( (string) ( $panel['name'] ?? '' ) );
+			$panels[] = sprintf( '%s (zone %d)', '' !== $name ? $name : '(unnamed)', (int) ( $panel['zone'] ?? 0 ) );
 		}
 		if ( $panels ) {
-			$report['panels'][ $label ] = implode( ', ', $panels );
+			$id                      = '' !== trim( $key ) ? $key : $label;
+			$report['panels'][ $id ] = sprintf( '%s: %s', $label, implode( ', ', $panels ) );
 		}
 	}
 

@@ -707,6 +707,38 @@ class Wormiss_News_Import {
 	}
 
 	/**
+	 * Every content item's name and layout zone, in document order, regardless of whether it has an
+	 * HTML body. Unlike parse(), which drops items with no body, this keeps empty-body panels and
+	 * non-HTML iParts, so the page import can record a complete inventory of a page's content panels.
+	 *
+	 * @param string $xml The content page (the document's Data, decoded).
+	 * @return array[] Each entry has 'name' (string) and 'zone' (int).
+	 */
+	public static function panel_index( string $xml ): array {
+		if ( '' === trim( $xml ) || ! class_exists( 'DOMDocument' ) ) {
+			return [];
+		}
+		$dom      = new DOMDocument();
+		$previous = libxml_use_internal_errors( true );
+		$loaded   = $dom->loadXML( $xml, LIBXML_NONET );
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM property.
+		$root = $dom->documentElement;
+		if ( ! $loaded || ! $root instanceof DOMElement ) {
+			return [];
+		}
+		$panels = [];
+		foreach ( $root->getElementsByTagNameNS( '*', 'ContentItem' ) as $node ) {
+			$panels[] = [
+				'name' => self::child( $node, 'ContentItemName' ),
+				'zone' => (int) self::child( $node, 'LayoutZone' ),
+			];
+		}
+		return $panels;
+	}
+
+	/**
 	 * The text of a node's first direct child with this local name ('' if none).
 	 *
 	 * @param DOMElement $node Node.
