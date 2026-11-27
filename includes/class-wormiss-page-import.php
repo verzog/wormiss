@@ -202,6 +202,7 @@ class Wormiss_Page_Import {
 			'empty'     => 0,
 			'remaining' => 0,
 			'notes'     => [],
+			'panels'    => [],
 		];
 		if ( ! Wormiss_Settings::get( 'page_import_enabled' ) || ! Wormiss_Settings::is_configured()
 			|| '' === (string) Wormiss_Settings::get( 'page_import_query' ) ) {
@@ -417,12 +418,19 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: this matches one of the site\'s own pages (such as the cart or the front page), so it was not imported.', 'wormiss' ), self::label( $node ) ) );
 			return 'skipped';
 		}
+		// Leave event and course pages to the dynamic event pages (the wormiss_event post type), rather
+		// than importing them as static pages that would duplicate the event and need maintaining.
+		if ( self::should_skip_events() && self::is_event_page( $path, $title ) ) {
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: this looks like an event or course page, which is shown by the dynamic event pages, so it was not imported as a static page.', 'wormiss' ), self::label( $node ) ) );
+			return 'skipped';
+		}
 		// Take over a page that already exists for this iMIS page but was made before the import (so is
 		// not yet stamped as an imported page), instead of creating a duplicate of it.
 		if ( ! $post_id ) {
 			$post_id = self::adoptable( $title, $path );
 		}
-		$built = self::content( $client, $content, $title, $report, self::label( $node ) );
+		$built = self::content( $client, $content, $title, $report, self::label( $node ), (string) ( $node['key'] ?? '' ) );
 		if ( null === $built ) {
 			// The content could not be read this time (content() noted why): leave the page as it is,
 			// so a temporary iMIS problem does not blank an existing page. Tried again next import.
@@ -644,9 +652,10 @@ class Wormiss_Page_Import {
 	 * @param string              $title   The page title (so a title-only heading block is left out).
 	 * @param array               $report  Report, for notes.
 	 * @param string              $label   The page's name, for notes.
+	 * @param string              $key     The page's unique iMIS hierarchy key (keys the panel inventory).
 	 * @return array|null html, members; or null when the content could not be read.
 	 */
-	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label ): ?array {
+	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label, string $key = '' ): ?array {
 		if ( '' === $version ) {
 			// No content page: a legitimately empty page (a menu folder or an iParts-only page).
 			return [
@@ -674,10 +683,37 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
+		self::record_panels( $report, $key, $label, $xml );
 		return [
 			'html'    => self::build_body( $title, $content, self::template_rows( $client, $xml, $report ) ),
 			'members' => (bool) $content['members'],
 		];
+	}
+
+	/**
+	 * Record a page's content panels — each panel's iMIS name (its ContentItemName) and layout zone —
+	 * in the report, so the audit log shows which named panel sits in which zone on each page. Every
+	 * panel is listed, including empty-body panels and non-HTML iParts (so the inventory is complete),
+	 * and records are keyed by the page's unique hierarchy key so two same-titled pages do not collide.
+	 * This is diagnostic only and changes nothing on the imported page; it is the groundwork for later
+	 * work that could style a known panel (a "Relevant documents" tile, say) to match the theme.
+	 *
+	 * @param array  $report Report (by reference).
+	 * @param string $key    The page's unique iMIS hierarchy key (the record key).
+	 * @param string $label  The page's label (its title and path), for display.
+	 * @param string $xml    The content document's decoded XML.
+	 * @return void
+	 */
+	private static function record_panels( array &$report, string $key, string $label, string $xml ): void {
+		$panels = [];
+		foreach ( Wormiss_News_Import::panel_index( $xml ) as $panel ) {
+			$name     = trim( (string) ( $panel['name'] ?? '' ) );
+			$panels[] = sprintf( '%s (zone %d)', '' !== $name ? $name : '(unnamed)', (int) ( $panel['zone'] ?? 0 ) );
+		}
+		if ( $panels ) {
+			$id                      = '' !== trim( $key ) ? $key : $label;
+			$report['panels'][ $id ] = sprintf( '%s: %s', $label, implode( ', ', $panels ) );
+		}
 	}
 
 	/**
@@ -883,6 +919,45 @@ class Wormiss_Page_Import {
 		);
 		// phpcs:enable
 		return $found ? (int) $found[0] : 0;
+	}
+
+	/**
+	 * Whether the page import skips event and course pages, leaving them to the dynamic event pages
+	 * (the wormiss_event post type) rather than importing them as static pages that would need
+	 * maintaining and would duplicate the event. On by default; turn it off (import them as pages, as
+	 * before) with the 'wormiss_page_import_skip_events' filter.
+	 *
+	 * @return bool
+	 */
+	private static function should_skip_events(): bool {
+		return (bool) apply_filters( 'wormiss_page_import_skip_events', true );
+	}
+
+	/**
+	 * Whether a navigation item is an event or course page, recognised by its iMIS path. A page whose
+	 * path contains one of the event path fragments (by default "/courses/", "/course/", "/events/" or
+	 * "/event/") is treated as one. Change the fragments with the 'wormiss_page_import_event_paths'
+	 * filter (it also receives the path and title, for a site that needs a different rule).
+	 *
+	 * @param string $path  The page's iMIS path.
+	 * @param string $title The page title.
+	 * @return bool
+	 */
+	private static function is_event_page( string $path, string $title ): bool {
+		$fragments = apply_filters(
+			'wormiss_page_import_event_paths',
+			[ '/courses/', '/course/', '/events/', '/event/' ],
+			$path,
+			$title
+		);
+		$haystack  = strtolower( $path );
+		foreach ( (array) $fragments as $fragment ) {
+			$fragment = strtolower( trim( (string) $fragment ) );
+			if ( '' !== $fragment && false !== strpos( $haystack, $fragment ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

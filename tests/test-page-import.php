@@ -546,6 +546,40 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The import records each page's content-panel names and zones in the report (for the audit log),
+	 * as a diagnostic that does not change the imported pages.
+	 *
+	 * @return void
+	 */
+	public function test_run_records_panel_names(): void {
+		$this->queue_tree();
+		$report = Wormiss_Page_Import::run();
+		$this->assertArrayHasKey( 'panels', $report );
+		$this->assertNotEmpty( $report['panels'], 'Each imported page records its panels.' );
+		// queue_tree() gives each page one content item named "Body Text" in zone 4.
+		$this->assertStringContainsString( 'Body Text (zone 4)', implode( ' | ', $report['panels'] ) );
+	}
+
+	/**
+	 * The panel inventory lists every content item, including a panel with no HTML body (such as a
+	 * query listing or other non-HTML iPart), so the diagnostic is complete.
+	 *
+	 * @return void
+	 */
+	public function test_panel_index_includes_empty_body_panels(): void {
+		$xml   = '<Content xmlns="http://schemas.imis.com/2008/01/DataContracts/Content">'
+			. '<ContentItems xmlns:a="http://schemas.imis.com/2008/01/DataContracts/ContentItem">'
+			. '<a:ContentItem><a:ContentItemName>Content</a:ContentItemName><a:LayoutZone>2</a:LayoutZone>'
+			. '<a:SortOrder>1</a:SortOrder></a:ContentItem>'
+			. '<a:ContentItem><a:ContentItemName>BoardListing</a:ContentItemName><a:LayoutZone>4</a:LayoutZone>'
+			. '<a:SortOrder>1</a:SortOrder></a:ContentItem>'
+			. '</ContentItems></Content>';
+		$names = array_column( Wormiss_News_Import::panel_index( $xml ), 'name' );
+		$this->assertContains( 'Content', $names );
+		$this->assertContains( 'BoardListing', $names, 'A panel with no HTML body is still inventoried.' );
+	}
+
+	/**
 	 * A content read that fails (a temporary iMIS problem) leaves an existing page unchanged, rather
 	 * than blanking its body.
 	 *
@@ -1226,6 +1260,75 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 		$this->assertSame( 0, Wormiss_Page_Import::post_for( self::ABOUT_H ), 'Nothing was stamped for the skipped item.' );
 		$this->assertSame( '', (string) get_post_meta( $front, Wormiss_Page_Import::META_KEY, true ), 'The front page was left untouched.' );
 		$this->assertStringContainsString( 'Front page.', get_post_field( 'post_content', $front ), 'The front page content was not overwritten.' );
+	}
+
+	/**
+	 * An event or course page (recognised by its iMIS path) is skipped, so it is left to the dynamic
+	 * event pages rather than imported as a static page.
+	 *
+	 * @return void
+	 */
+	public function test_skips_event_and_course_pages(): void {
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Introduction to Skin Cancer',
+						],
+					]
+				)
+			)
+			->reply(
+				'/api/Document/_Execute',
+				200,
+				$this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Introduction to Skin Cancer', '@/web/Education/Courses/Introduction-to-Skin-Cancer' )
+			);
+
+		$report = Wormiss_Page_Import::run();
+
+		$this->assertSame( 0, $report['created'], 'An event or course page is not imported as a static page.' );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, Wormiss_Page_Import::post_for( self::ABOUT_H ), 'Nothing was stamped for the skipped event page.' );
+	}
+
+	/**
+	 * With the wormiss_page_import_skip_events filter off, an event or course page is imported as a
+	 * static page as before.
+	 *
+	 * @return void
+	 */
+	public function test_event_page_skip_can_be_disabled(): void {
+		add_filter( 'wormiss_page_import_skip_events', '__return_false' );
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Introduction to Skin Cancer',
+						],
+					]
+				)
+			)
+			->reply(
+				'/api/Document/_Execute',
+				200,
+				$this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Introduction to Skin Cancer', '@/web/Education/Courses/Introduction-to-Skin-Cancer' )
+			)
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Course body.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		remove_filter( 'wormiss_page_import_skip_events', '__return_false' );
+
+		$this->assertSame( 1, $report['created'], 'With the filter off, the event page is imported as a page.' );
 	}
 
 	/**
