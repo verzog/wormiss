@@ -847,6 +847,59 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A nested grid is too complex to flatten, so the parser returns null (the caller falls back to
+	 * the heading grouping) rather than duplicating zones.
+	 *
+	 * @return void
+	 */
+	public function test_layout_rows_rejects_nested_grid(): void {
+		$xml = '<ContentLayout xmlns="http://schemas.imis.com/2008/01/DataContracts/ContentLayout"><LayoutMarkup><div>'
+			. '<div class="row"><div class="col-sm-8"><div class="row"><div class="col-sm-6"> {2} </div><div class="col-sm-6"> {3} </div></div></div>'
+			. '<div class="col-sm-4"> {4} </div></div></div></LayoutMarkup></ContentLayout>';
+		$this->assertNull( Wormiss_Page_Layout::rows( $xml ) );
+	}
+
+	/**
+	 * In a template row, each full-width (col-sm-12) cell is its own section, not a column shared with
+	 * its neighbours.
+	 *
+	 * @return void
+	 */
+	public function test_template_full_width_cells_become_sections(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'A',
+					'zone' => 1,
+					'html' => '<p>One.</p>',
+				],
+				[
+					'name' => 'B',
+					'zone' => 2,
+					'html' => '<p>Two.</p>',
+				],
+			],
+		];
+		$layout  = [
+			[
+				[
+					'zone'  => 1,
+					'width' => 12,
+				],
+				[
+					'zone'  => 2,
+					'width' => 12,
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content, $layout );
+		$this->assertStringNotContainsString( 'wp:columns', $body, 'Two full-width cells are separate sections, not a columns row.' );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:group' ), 'Each full-width cell is its own section.' );
+		$this->assertStringContainsString( 'One.', $body );
+		$this->assertStringContainsString( 'Two.', $body );
+	}
+
+	/**
 	 * The importer rebuilds a page's exact column grid from its layout template: a template row with
 	 * col-sm-8 and col-sm-4 becomes a columns row with those widths (two thirds and one third).
 	 *

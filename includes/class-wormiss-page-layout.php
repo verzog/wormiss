@@ -77,10 +77,15 @@ class Wormiss_Page_Layout {
 		$rows = [];
 		foreach ( $xpath->query( '//div[contains(concat(" ", normalize-space(@class), " "), " row ")]' ) as $row_node ) {
 			$columns = [];
-			foreach ( $xpath->query( './/div[contains(@class, "col-sm-")]', $row_node ) as $col_node ) {
-				if ( ! preg_match( '/col-sm-(\d+)/', $col_node->getAttribute( 'class' ), $width )
-					|| ! preg_match( '/^\{(\d+)\}$/', trim( $col_node->textContent ), $zone ) ) {
-					continue; // Not a leaf placeholder column (e.g. a wrapper holding a nested row).
+			// Direct-child columns only, so a nested row's columns are not also pulled into this row.
+			foreach ( $xpath->query( './div[contains(@class, "col-sm-")]', $row_node ) as $col_node ) {
+				if ( ! preg_match( '/col-sm-(\d+)/', $col_node->getAttribute( 'class' ), $width ) ) {
+					continue;
+				}
+				if ( ! preg_match( '/^\{(\d+)\}$/', trim( $col_node->textContent ), $zone ) ) {
+					// A column holding more than a placeholder (e.g. a nested grid) is too complex to
+					// flatten safely; leave the whole template unused so the caller falls back.
+					return null;
 				}
 				$columns[] = [
 					'zone'  => (int) $zone[1],

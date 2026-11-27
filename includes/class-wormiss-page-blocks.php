@@ -100,14 +100,21 @@ class Wormiss_Page_Blocks {
 					continue;
 				}
 				$placed[ $zone ] = true;
-				$columns[]       = [
-					'html'  => $cells[ $zone ],
-					'width' => (int) ( $col['width'] ?? 0 ),
+				$html            = $cells[ $zone ];
+				$width           = (int) ( $col['width'] ?? 0 );
+				if ( $width <= 0 || $width >= 12 ) {
+					// A full-width cell is its own section: flush any columns before it first, in order.
+					$blocks[] = self::row_cols( $columns );
+					$columns  = [];
+					$blocks[] = self::section( $html, self::is_heading( $html ) );
+					continue;
+				}
+				$columns[] = [
+					'html'  => $html,
+					'width' => $width,
 				];
 			}
-			if ( $columns ) {
-				$blocks[] = self::row_cols( $columns );
-			}
+			$blocks[] = self::row_cols( $columns );
 		}
 		foreach ( $cells as $zone => $html ) {
 			if ( empty( $placed[ $zone ] ) ) {
@@ -186,6 +193,9 @@ class Wormiss_Page_Blocks {
 	 * @return string
 	 */
 	private static function row_cols( array $columns ): string {
+		if ( ! $columns ) {
+			return '';
+		}
 		if ( 1 === count( $columns ) ) {
 			return self::section( $columns[0]['html'], self::is_heading( $columns[0]['html'] ) );
 		}
