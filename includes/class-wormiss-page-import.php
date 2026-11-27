@@ -202,6 +202,7 @@ class Wormiss_Page_Import {
 			'empty'     => 0,
 			'remaining' => 0,
 			'notes'     => [],
+			'panels'    => [],
 		];
 		if ( ! Wormiss_Settings::get( 'page_import_enabled' ) || ! Wormiss_Settings::is_configured()
 			|| '' === (string) Wormiss_Settings::get( 'page_import_query' ) ) {
@@ -674,10 +675,33 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
+		self::record_panels( $report, $label, (array) ( $content['items'] ?? [] ) );
 		return [
 			'html'    => self::build_body( $title, $content, self::template_rows( $client, $xml, $report ) ),
 			'members' => (bool) $content['members'],
 		];
+	}
+
+	/**
+	 * Record each content panel's iMIS name (its ContentItemName) and layout zone in the report, keyed
+	 * by the page label, so the audit log shows which named panel sits in which zone on each page. This
+	 * is diagnostic only and changes nothing on the imported page; it is the groundwork for later work
+	 * that could style a known panel (a "Relevant documents" tile, say) to match the theme.
+	 *
+	 * @param array  $report Report (by reference).
+	 * @param string $label  The page's label (its title and path).
+	 * @param array  $items  Content items from Wormiss_News_Import::parse(), each with 'name' and 'zone'.
+	 * @return void
+	 */
+	private static function record_panels( array &$report, string $label, array $items ): void {
+		$panels = [];
+		foreach ( $items as $item ) {
+			$name     = trim( (string) ( $item['name'] ?? '' ) );
+			$panels[] = sprintf( '%s (zone %d)', '' !== $name ? $name : '(unnamed)', (int) ( $item['zone'] ?? 0 ) );
+		}
+		if ( $panels ) {
+			$report['panels'][ $label ] = implode( ', ', $panels );
+		}
 	}
 
 	/**

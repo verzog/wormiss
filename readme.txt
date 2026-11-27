@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.73.0
+Stable tag: 0.74.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.74.0 =
+* Page import now records each page's content-panel names and layout zones in the import report and audit log. An iMIS page is built from named content items ("content panels"), each placed in a numbered layout zone; the import now lists, per page, each panel's name and zone. This changes nothing on the imported pages — it is a diagnostic that makes the panel names visible, as the groundwork for later work that could recognise a known panel (a "Relevant documents" tile, for example) and style it to match the theme.
 
 = 0.73.0 =
 * Imported page content is now built as native WordPress blocks, so it can be edited in the block editor and styled by the theme. Previously each piece of an imported page was kept as one opaque HTML block: it displayed correctly but could not be edited block by block, and the theme's styling did not reach inside it. Each heading, paragraph, list, image, quote and table now comes across as the matching WordPress block. Anything without a block equivalent is still kept exactly as it was, so no imported content is lost. Re-run the page import after upgrading to rebuild existing pages.

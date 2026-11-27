@@ -546,6 +546,21 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * The import records each page's content-panel names and zones in the report (for the audit log),
+	 * as a diagnostic that does not change the imported pages.
+	 *
+	 * @return void
+	 */
+	public function test_run_records_panel_names(): void {
+		$this->queue_tree();
+		$report = Wormiss_Page_Import::run();
+		$this->assertArrayHasKey( 'panels', $report );
+		$this->assertNotEmpty( $report['panels'], 'Each imported page records its panels.' );
+		// queue_tree() gives each page one content item named "Body Text" in zone 4.
+		$this->assertStringContainsString( 'Body Text (zone 4)', implode( ' | ', $report['panels'] ) );
+	}
+
+	/**
 	 * A content read that fails (a temporary iMIS problem) leaves an existing page unchanged, rather
 	 * than blanking its body.
 	 *
