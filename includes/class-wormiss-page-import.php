@@ -391,8 +391,9 @@ class Wormiss_Page_Import {
 		$navigation = self::parse_navigation( self::document_data( $nav ) );
 		// phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS fields.
 		// The content page and parent may come from the query's own columns; failing that, from the
-		// navigation document (RelatedDocumentVersionKey is a document field, the parent is in the blob).
-		$related = strtolower( trim( (string) ( $nav->RelatedDocumentVersionKey ?? '' ) ) );
+		// navigation document. The REST DocumentData names it RelatedDocumentVersionId (the XML export
+		// uses RelatedDocumentVersionKey, so accept either); the parent is in the Navigation blob.
+		$related = strtolower( trim( (string) ( $nav->RelatedDocumentVersionId ?? ( $nav->RelatedDocumentVersionKey ?? '' ) ) ) );
 		$content = '' !== $node['content'] ? $node['content']
 			: ( ( Wormiss_Content_Check::is_key( $related ) && self::EMPTY_KEY !== $related ) ? $related : '' );
 		$parent  = '' !== $node['parent'] ? $node['parent'] : $navigation['parent'];
