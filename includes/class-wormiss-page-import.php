@@ -409,6 +409,19 @@ class Wormiss_Page_Import {
 			: ( '' !== $node['title'] ? $node['title'] : sanitize_text_field( (string) ( $nav->AlternateName ?? '' ) ) );
 		$path    = (string) ( $nav->Path ?? '' );
 		// phpcs:enable
+		// Never create or overwrite the site's own system pages (WooCommerce's cart, checkout, account
+		// or shop, or the front page, posts page or privacy policy): an iMIS nav item of the same name
+		// would otherwise collide with a working page the site needs.
+		if ( self::is_system_page( $title, $path ) ) {
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: this matches one of the site\'s own pages (such as the cart or the front page), so it was not imported.', 'wormiss' ), self::label( $node ) ) );
+			return 'skipped';
+		}
+		// Take over a page that already exists for this iMIS page but was made before the import (so is
+		// not yet stamped as an imported page), instead of creating a duplicate of it.
+		if ( ! $post_id ) {
+			$post_id = self::adoptable( $title, $path );
+		}
 		$built = self::content( $client, $content, $title, $report, self::label( $node ) );
 		if ( null === $built ) {
 			// The content could not be read this time (content() noted why): leave the page as it is,
@@ -444,6 +457,12 @@ class Wormiss_Page_Import {
 		if ( $post_id ) {
 			$fields['ID'] = $post_id;
 			$saved        = wp_update_post( wp_slash( $fields ), true );
+			if ( ! is_wp_error( $saved ) && (int) $saved > 0 ) {
+				// An adopted page (one that existed before the import) carries no key yet; stamp it so
+				// later imports recognise it and never duplicate it again. Harmless for a page that
+				// already has this key.
+				update_post_meta( (int) $saved, self::META_KEY, $node['key'] );
+			}
 		} else {
 			$fields['post_status'] = Wormiss_Settings::get( 'page_import_publish' ) ? 'publish' : 'draft';
 			$fields['post_author'] = self::author();
@@ -864,6 +883,127 @@ class Wormiss_Page_Import {
 		);
 		// phpcs:enable
 		return $found ? (int) $found[0] : 0;
+	}
+
+	/**
+	 * Whether a prospective imported page is one of the site's own system pages (WooCommerce's cart,
+	 * checkout, account or shop, or WordPress's front page, posts page or privacy policy), which the
+	 * import must never create or overwrite. Matched by the destination slug — taken from the title and
+	 * from the iMIS path's last segment — against those pages' slugs.
+	 *
+	 * @param string $title Page title.
+	 * @param string $path  iMIS path.
+	 * @return bool
+	 */
+	private static function is_system_page( string $title, string $path ): bool {
+		$slugs = [];
+		foreach ( self::system_page_ids() as $id ) {
+			$slug = (string) get_post_field( 'post_name', $id );
+			if ( '' !== $slug ) {
+				$slugs[ $slug ] = true;
+			}
+		}
+		if ( ! $slugs ) {
+			return false;
+		}
+		foreach ( [ sanitize_title( $title ), self::path_slug( $path ) ] as $slug ) {
+			if ( '' !== $slug && isset( $slugs[ $slug ] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The IDs of the site's system pages the import leaves alone: WordPress's front page, posts page and
+	 * privacy policy, and (when WooCommerce is active) its cart, checkout, account, shop and terms pages.
+	 *
+	 * @return int[]
+	 */
+	private static function system_page_ids(): array {
+		$ids = [];
+		foreach ( [ 'page_on_front', 'page_for_posts', 'wp_page_for_privacy_policy' ] as $option ) {
+			$ids[] = (int) get_option( $option );
+		}
+		if ( function_exists( 'wc_get_page_id' ) ) {
+			foreach ( [ 'cart', 'checkout', 'myaccount', 'shop', 'terms' ] as $page ) {
+				$ids[] = (int) wc_get_page_id( $page );
+			}
+		}
+		/**
+		 * The pages the iMIS page import must never create or overwrite (the site's own system pages).
+		 * A site can add or remove page IDs.
+		 *
+		 * @param int[] $ids Page IDs.
+		 */
+		$ids = (array) apply_filters( 'wormiss_page_import_system_pages', $ids );
+		return array_values( array_unique( array_filter( array_map( 'intval', $ids ), static fn( int $id ): bool => $id > 0 ) ) );
+	}
+
+	/**
+	 * The slug of an iMIS path's last segment (the page's own name), for matching against existing
+	 * pages. '' when the path has no usable segment.
+	 *
+	 * @param string $path iMIS path (e.g. "@/web/About-Us").
+	 * @return string
+	 */
+	private static function path_slug( string $path ): string {
+		$path = trim( (string) preg_replace( '/\.aspx$/i', '', trim( $path ) ), "/@ \t\n\r\0\x0B" );
+		if ( '' === $path ) {
+			return '';
+		}
+		$parts = explode( '/', $path );
+		return sanitize_title( (string) end( $parts ) );
+	}
+
+	/**
+	 * An existing page the import can take over rather than duplicate: a page not already stamped as an
+	 * imported page, and not one of the site's system pages, whose slug (from the iMIS path) or exact
+	 * title matches. Both criteria are gathered together, and a page is adopted only when they point to
+	 * one and the same single page; 0 when none matches, or when several do (too ambiguous to adopt one
+	 * safely, so a fresh page is made instead).
+	 *
+	 * @param string $title Page title.
+	 * @param string $path  iMIS path.
+	 * @return int
+	 */
+	private static function adoptable( string $title, string $path ): int {
+		$slug = self::path_slug( $path );
+		$base = [
+			'post_type'        => 'page',
+			'post_status'      => [ 'publish', 'draft', 'pending', 'private' ],
+			'numberposts'      => 2,
+			'fields'           => 'ids',
+			'suppress_filters' => true,
+			// System pages are never adopted (nor overwritten), even when one's title matches: its slug
+			// may differ, so the system-page skip alone would not catch it here.
+			'post__not_in'     => self::system_page_ids(),
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- One lookup, only when creating a page.
+			'meta_query'       => [
+				[
+					'key'     => self::META_KEY,
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		];
+		$queries = [];
+		if ( '' !== $slug ) {
+			$queries[] = [ 'name' => $slug ];
+		}
+		if ( '' !== trim( $title ) ) {
+			$queries[] = [ 'title' => $title ];
+		}
+		// Gather candidates from every criterion and adopt only when they all point to the one page: a
+		// slug match and a title match on two different pages is ambiguous, so a fresh page is made.
+		$found = [];
+		foreach ( $queries as $where ) {
+			// phpcs:disable WordPress.DB.SlowDBQuery -- One lookup, only when creating a page.
+			foreach ( get_posts( array_merge( $base, $where ) ) as $id ) {
+				$found[ (int) $id ] = true;
+			}
+			// phpcs:enable
+		}
+		return 1 === count( $found ) ? (int) array_key_first( $found ) : 0;
 	}
 
 	/**

@@ -949,6 +949,253 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A page that already exists for an iMIS item (made before the import, so not yet stamped) is taken
+	 * over and updated, not duplicated.
+	 *
+	 * @return void
+	 */
+	public function test_adopts_existing_page_instead_of_duplicating(): void {
+		$existing = (int) self::factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_title'   => 'About Us',
+				'post_name'    => 'about-us',
+				'post_content' => '<p>Old hand-made content.</p>',
+				'post_status'  => 'publish',
+			]
+		);
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'About Us',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us', '@/web/About-Us' ) )
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Imported about text.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		$this->assertSame( 0, $report['created'], 'No duplicate page was created.' );
+		$this->assertSame( 1, $report['updated'], 'The existing page was taken over and updated.' );
+
+		$pages = get_posts(
+			[
+				'post_type'        => 'page',
+				'title'            => 'About Us',
+				'post_status'      => [ 'publish', 'draft', 'pending', 'private' ],
+				'fields'           => 'ids',
+				'numberposts'      => -1,
+				'suppress_filters' => true,
+			]
+		);
+		$this->assertSame( [ $existing ], array_map( 'intval', $pages ), 'The import adopted the existing page rather than duplicating it.' );
+		$this->assertSame( $existing, Wormiss_Page_Import::post_for( self::ABOUT_H ), 'The adopted page is now stamped with the iMIS key.' );
+		$this->assertStringContainsString( 'Imported about text.', get_post_field( 'post_content', $existing ) );
+	}
+
+	/**
+	 * When two existing pages share the title and neither matches by slug, the import does not guess
+	 * which to adopt: it makes a fresh page and leaves both existing pages untouched.
+	 *
+	 * @return void
+	 */
+	public function test_does_not_adopt_when_the_match_is_ambiguous(): void {
+		$one = (int) self::factory()->post->create(
+			[
+				'post_type'   => 'page',
+				'post_title'  => 'Board',
+				'post_name'   => 'board',
+				'post_status' => 'publish',
+			]
+		);
+		$two = (int) self::factory()->post->create(
+			[
+				'post_type'   => 'page',
+				'post_title'  => 'Board',
+				'post_name'   => 'board-2',
+				'post_status' => 'publish',
+			]
+		);
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Board',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Board', '@/web/governance/board-members' ) )
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Imported board text.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		$this->assertSame( 1, $report['created'], 'Two same-titled pages are too ambiguous to adopt, so a fresh page is made.' );
+		$new = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$this->assertGreaterThan( 0, $new );
+		$this->assertNotSame( $one, $new );
+		$this->assertNotSame( $two, $new );
+		$this->assertSame( '', (string) get_post_meta( $one, Wormiss_Page_Import::META_KEY, true ), 'The existing pages are left unstamped.' );
+		$this->assertSame( '', (string) get_post_meta( $two, Wormiss_Page_Import::META_KEY, true ) );
+	}
+
+	/**
+	 * A nav item that matches one of the site's own system pages (here the front page) is skipped, not
+	 * imported, so it cannot collide with or overwrite a working page the site needs.
+	 *
+	 * @return void
+	 */
+	public function test_skips_the_sites_system_pages(): void {
+		$front = (int) self::factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_title'   => 'Welcome',
+				'post_name'    => 'welcome',
+				'post_content' => '<p>Front page.</p>',
+				'post_status'  => 'publish',
+			]
+		);
+		update_option( 'show_on_front', 'page' );
+		update_option( 'page_on_front', $front );
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Welcome',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Welcome', '@/web/Welcome' ) );
+
+		$report = Wormiss_Page_Import::run();
+		update_option( 'page_on_front', 0 );
+		update_option( 'show_on_front', 'posts' );
+
+		$this->assertSame( 0, $report['created'], 'The front page is not duplicated.' );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, Wormiss_Page_Import::post_for( self::ABOUT_H ), 'Nothing was stamped for the skipped item.' );
+		$this->assertSame( '', (string) get_post_meta( $front, Wormiss_Page_Import::META_KEY, true ), 'The front page was left untouched.' );
+		$this->assertStringContainsString( 'Front page.', get_post_field( 'post_content', $front ), 'The front page content was not overwritten.' );
+	}
+
+	/**
+	 * A system page whose slug differs from its title (so the slug-based skip does not catch it) is
+	 * still never adopted by title: adoption excludes system pages, so a fresh page is made instead of
+	 * overwriting the protected one.
+	 *
+	 * @return void
+	 */
+	public function test_system_page_is_not_adopted_by_title(): void {
+		$front = (int) self::factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_title'   => 'Welcome',
+				'post_name'    => 'home',
+				'post_content' => '<p>Front page.</p>',
+				'post_status'  => 'publish',
+			]
+		);
+		update_option( 'show_on_front', 'page' );
+		update_option( 'page_on_front', $front );
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Welcome',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Welcome', '@/web/Welcome' ) )
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Imported welcome text.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		update_option( 'page_on_front', 0 );
+		update_option( 'show_on_front', 'posts' );
+
+		$this->assertSame( 1, $report['created'], 'A fresh page is made rather than adopting the front page.' );
+		$new = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$this->assertGreaterThan( 0, $new );
+		$this->assertNotSame( $front, $new, 'The front page was not adopted.' );
+		$this->assertSame( '', (string) get_post_meta( $front, Wormiss_Page_Import::META_KEY, true ) );
+		$this->assertStringContainsString( 'Front page.', get_post_field( 'post_content', $front ), 'The front page content was not overwritten.' );
+	}
+
+	/**
+	 * When the slug matches one page and the exact title matches a different page, the two criteria
+	 * disagree: the import treats that as ambiguous and makes a fresh page rather than overwriting
+	 * either.
+	 *
+	 * @return void
+	 */
+	public function test_does_not_adopt_when_slug_and_title_match_different_pages(): void {
+		$by_slug  = (int) self::factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_title'   => 'Other',
+				'post_name'    => 'about-us',
+				'post_content' => '<p>Unrelated page.</p>',
+				'post_status'  => 'publish',
+			]
+		);
+		$by_title = (int) self::factory()->post->create(
+			[
+				'post_type'   => 'page',
+				'post_title'  => 'About Us',
+				'post_name'   => 'about-us-page',
+				'post_status' => 'publish',
+			]
+		);
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'About Us',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us', '@/web/About-Us' ) )
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Imported about text.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		$this->assertSame( 1, $report['created'], 'Disagreeing slug and title matches are ambiguous, so a fresh page is made.' );
+		$new = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$this->assertNotSame( $by_slug, $new );
+		$this->assertNotSame( $by_title, $new );
+		$this->assertSame( '', (string) get_post_meta( $by_slug, Wormiss_Page_Import::META_KEY, true ), 'The slug-matching page was not overwritten.' );
+		$this->assertStringContainsString( 'Unrelated page.', get_post_field( 'post_content', $by_slug ) );
+		$this->assertSame( '', (string) get_post_meta( $by_title, Wormiss_Page_Import::META_KEY, true ), 'The title-matching page was not overwritten.' );
+	}
+
+	/**
 	 * A dry run saves nothing.
 	 *
 	 * @return void

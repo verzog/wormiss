@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.69.0
+Stable tag: 0.70.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.70.0 =
+* Page import no longer creates duplicate pages. If a page for an iMIS item already exists on the site but was made before the import (so it is not yet marked as imported), the import now takes that page over and keeps it up to date, instead of adding a second copy beside it. It matches by the page's web address (the last part of the iMIS path) or its exact title, and only when there is a single, unambiguous match; if two pages could match, it makes a fresh one as before rather than guess. The import also now leaves the site's own system pages alone — WooCommerce's cart, checkout, account and shop pages, and WordPress's front page, posts page and privacy policy — so an iMIS "Cart" item, for example, can no longer collide with the working shop cart. Duplicates created by an earlier version are not removed automatically; delete those by hand once, and they will not come back.
 
 = 0.69.0 =
 * Imported pages now keep their exact column grid. The page import reads each page's layout template and rebuilds its precise rows and column widths, instead of the earlier heading-based guess. A row the template splits into, say, a two-thirds and a one-third column now comes across exactly that way, and a section the template makes several rows (a text-and-image band above a pair of cards, for example) is no longer merged into one wide row. Pages whose template cannot be read fall back to the previous heading-based grouping. Re-run the page import after upgrading to rebuild existing pages. (The matching responsive styling for these columns is in the SCCA theme.)
