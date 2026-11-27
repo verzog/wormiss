@@ -162,7 +162,11 @@ class Wormiss_Page_Blocks {
 	 * @return bool
 	 */
 	private static function is_heading( string $html ): bool {
-		return 1 === preg_match( '#^<h[1-4][^>]*>.*</h[1-4]>$#is', trim( $html ) );
+		// Exactly one heading element, with inline markup allowed inside it but no sibling content and
+		// no second heading: the negative lookahead keeps the content from spanning past the first
+		// heading's close, so a card like "<h3>..</h3><p>..</p><h4>..</h4>" is not mistaken for a
+		// section header.
+		return 1 === preg_match( '#^<(h[1-4])\b[^>]*>(?:(?!</?h[1-4]\b).)*</\1>$#is', trim( $html ) );
 	}
 
 	/**

@@ -302,6 +302,33 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A card that merely ends with a sub-heading is row content, not a full-width section, so such
+	 * cards still group into columns.
+	 *
+	 * @return void
+	 */
+	public function test_build_body_card_ending_in_heading_is_not_a_section(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Card A',
+					'zone' => 2,
+					'html' => '<h3>Benefit</h3><p>Description.</p><h4>Learn more</h4>',
+				],
+				[
+					'name' => 'Card B',
+					'zone' => 3,
+					'html' => '<h3>Benefit two</h3><p>More.</p><h4>Learn more</h4>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:columns {"className":"wormiss-row"} -->', $body, 'The two cards still form a row.' );
+		$this->assertStringNotContainsString( 'wormiss-heading', $body, 'Neither card is a full-width heading.' );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:column -->' ) );
+	}
+
+	/**
 	 * With the wormiss_page_import_blocks filter off, the body is a single column of content (no
 	 * column blocks), as before.
 	 *
