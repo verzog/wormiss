@@ -378,6 +378,93 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A cell's content is rebuilt as native blocks (heading, paragraph), not sealed in one HTML block,
+	 * so it can be edited in the block editor and styled by the theme.
+	 *
+	 * @return void
+	 */
+	public function test_cell_content_becomes_native_blocks(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Intro',
+					'zone' => 2,
+					'html' => '<h3>Our Board</h3><p>Our Board oversees governance.</p>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:heading {"level":3} -->', $body, 'The h3 becomes a heading block.' );
+		$this->assertStringContainsString( '<h3 class="wp-block-heading">Our Board</h3>', $body );
+		$this->assertStringContainsString( '<!-- wp:paragraph -->', $body, 'The paragraph becomes a paragraph block.' );
+		$this->assertStringNotContainsString( '<!-- wp:html -->', $body, 'Simple content is not left as an HTML block.' );
+	}
+
+	/**
+	 * A list becomes a list block with a list-item block per item, keeping any icon image inside the
+	 * item.
+	 *
+	 * @return void
+	 */
+	public function test_list_becomes_list_block(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Benefits',
+					'zone' => 2,
+					'html' => '<ul><li>One</li><li>Two</li></ul>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:list -->', $body );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:list-item -->' ), 'One list-item block per item.' );
+		$this->assertStringNotContainsString( '<!-- wp:html -->', $body );
+	}
+
+	/**
+	 * A figure with an image becomes an image block, its caption carried across.
+	 *
+	 * @return void
+	 */
+	public function test_figure_becomes_image_block(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Picture',
+					'zone' => 2,
+					'html' => '<figure><img src="/logo.webp" alt="Logo"><figcaption>A caption</figcaption></figure>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:image -->', $body );
+		$this->assertStringContainsString( '<figure class="wp-block-image">', $body );
+		$this->assertStringContainsString( 'A caption', $body );
+	}
+
+	/**
+	 * Markup with no native-block equivalent (here a list nesting another list) is preserved whole in
+	 * an HTML block rather than dropped, so no imported content is lost.
+	 *
+	 * @return void
+	 */
+	public function test_unconvertible_markup_falls_back_to_html(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'Nested',
+					'zone' => 2,
+					'html' => '<ul><li>Parent<ul><li>Child</li></ul></li></ul>',
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content );
+		$this->assertStringContainsString( '<!-- wp:html -->', $body );
+		$this->assertStringContainsString( 'Child', $body, 'The nested content is kept, not dropped.' );
+	}
+
+	/**
 	 * An import makes published pages, nests the child under its parent, and brings in the body.
 	 *
 	 * @return void

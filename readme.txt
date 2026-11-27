@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.72.0
+Stable tag: 0.73.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.73.0 =
+* Imported page content is now built as native WordPress blocks, so it can be edited in the block editor and styled by the theme. Previously each piece of an imported page was kept as one opaque HTML block: it displayed correctly but could not be edited block by block, and the theme's styling did not reach inside it. Each heading, paragraph, list, image, quote and table now comes across as the matching WordPress block. Anything without a block equivalent is still kept exactly as it was, so no imported content is lost. Re-run the page import after upgrading to rebuild existing pages.
 
 = 0.72.0 =
 * Imported pages no longer show blocks of raw CSS (or script) as text. An iMIS page can carry its own styles in an embedded style block; the import kept the style's contents while removing its tag, so the CSS appeared on the page as a wall of text. Style and script blocks are now removed whole — tag and contents — on every import (pages, news, blog and events). Re-run the page import after upgrading to tidy pages already brought across.
