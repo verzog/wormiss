@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.70.0
+Stable tag: 0.71.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.71.0 =
+* The navigation menu built from the imported pages now works on block themes. A block theme has no classic menu locations, so the old menu (still built for classic themes) never appeared. The import now detects a block theme and builds a block Navigation instead — a managed Navigation menu, named as in the settings, with the imported pages nested and ordered as in iMIS. Turn on "Build a navigation menu" in Wormiss > Settings, run the import, then point your theme's Navigation block at the menu once in the Site Editor; after that it stays in step on its own. (The menu, of either kind, is built when an import run finishes — when the report shows no items remaining — so let the import complete after turning it on.)
 
 = 0.70.0 =
 * Page import no longer creates duplicate pages. If a page for an iMIS item already exists on the site but was made before the import (so it is not yet marked as imported), the import now takes that page over and keeps it up to date, instead of adding a second copy beside it. It matches by the page's web address (the last part of the iMIS path) or its exact title, and only when there is a single, unambiguous match; if two pages could match, it makes a fresh one as before rather than guess. The import also now leaves the site's own system pages alone — WooCommerce's cart, checkout, account and shop pages, and WordPress's front page, posts page and privacy policy — so an iMIS "Cart" item, for example, can no longer collide with the working shop cart. Duplicates created by an earlier version are not removed automatically; delete those by hand once, and they will not come back.
