@@ -527,6 +527,27 @@ class Test_Wormiss_Media_Delivery extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Content rewriting resolves a protected image referenced by a generated-size URL and by its
+	 * wp-image-<ID> class, so such references survive the original file being moved into the store.
+	 *
+	 * @return void
+	 */
+	public function test_rewrite_content_resolves_sized_and_class(): void {
+		// A sized URL (…-300x200.jpg) → full-size attachment → endpoint.
+		$sized_id = $this->attachment();
+		$plain    = (string) wp_get_attachment_url( $sized_id );
+		$sized    = (string) preg_replace( '#(\.\w+)$#', '-300x200$1', $plain );
+		wp_set_object_terms( $sized_id, [ $this->protected_category() ], Wormiss_Media_Categories::TAXONOMY );
+		$out = Wormiss_Media_Delivery::rewrite_content( '<p><img src="' . esc_url( $sized ) . '" alt="a" /></p>' );
+		$this->assertStringContainsString( 'src="' . home_url( '/wormiss-media/' . $sized_id ) . '"', $out, 'Sized URL resolves to the endpoint.' );
+
+		// The wp-image-<ID> class resolves even when the src cannot be matched.
+		$class_id = $this->attachment( [ $this->protected_category() ] );
+		$out2     = Wormiss_Media_Delivery::rewrite_content( '<img class="size-medium wp-image-' . $class_id . '" src="https://example.org/unknown.jpg" alt="b" />' );
+		$this->assertStringContainsString( 'src="' . home_url( '/wormiss-media/' . $class_id ) . '"', $out2, 'wp-image class resolves.' );
+	}
+
+	/**
 	 * The content rewrite is a no-op when no category is protected.
 	 *
 	 * @return void

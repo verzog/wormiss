@@ -1415,6 +1415,7 @@ class Wormiss_Admin {
 			case 'media':
 				self::render_media_matrix();
 				self::render_media_bulk();
+				self::render_media_migrate();
 				break;
 		}
 
@@ -1560,6 +1561,86 @@ class Wormiss_Admin {
 		echo '<p><label><input type="checkbox" name="wormiss_bulk_confirm" value="1" required /> '
 			. esc_html__( 'Yes, add the chosen category to the matching images.', 'wormiss' ) . '</label></p>';
 		submit_button( __( 'Start bulk categorise', 'wormiss' ) );
+		echo '</form>';
+	}
+
+	/**
+	 * The "Move protected images into the private store" tool (migrates existing public originals of
+	 * images in a protected or locked category).
+	 *
+	 * @return void
+	 */
+	public static function render_media_migrate(): void {
+		echo '<hr /><h2 id="wormiss-media-migrate">' . esc_html__( 'Move protected images into the private store', 'wormiss' ) . '</h2>';
+		if ( ! Wormiss_Media_Migrate::enabled() ) {
+			echo '<p class="description">' . esc_html__( 'This tool is turned off on this site.', 'wormiss' ) . '</p>';
+			return;
+		}
+		echo '<p class="description">'
+			. esc_html__( 'Flagging a category as protected or lock-to-post gates how its images are linked, but an image already in the library keeps its public original file until it is moved into the private store.', 'wormiss' )
+			. ' ' . esc_html__( 'This moves the originals of images already in a protected or locked category out of the public uploads folder. It runs in the background in small batches, and cannot be undone (the files are moved).', 'wormiss' )
+			. '</p>';
+
+		$report = get_option( Wormiss_Media_Migrate::REPORT_OPTION );
+		if ( is_array( $report ) && ! Wormiss_Media_Migrate::is_running() ) {
+			$line = sprintf(
+				/* translators: 1: number of images, 2: date. */
+				__( 'Last run: moved %1$d images into the private store on %2$s.', 'wormiss' ),
+				(int) $report['moved'],
+				wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $report['time'] )
+			);
+			if ( (int) $report['failed'] > 0 ) {
+				/* translators: %d: number of images that could not be moved. */
+				$line .= ' ' . sprintf( __( '%d could not be moved and their originals are still public.', 'wormiss' ), (int) $report['failed'] );
+				$ids   = array_map( 'intval', (array) ( $report['failed_ids'] ?? [] ) );
+				if ( $ids ) {
+					/* translators: %s: comma-separated list of attachment IDs. */
+					$line .= ' ' . sprintf( __( 'Attachment IDs: %s.', 'wormiss' ), implode( ', ', $ids ) );
+				}
+			}
+			echo '<p class="description">' . esc_html( $line ) . '</p>';
+		}
+
+		$job = Wormiss_Media_Migrate::job();
+		if ( $job ) {
+			echo '<p>' . esc_html(
+				sprintf(
+					/* translators: 1: processed, 2: total. */
+					__( 'Moving in the background: %1$d of %2$d done. The rest continues automatically.', 'wormiss' ),
+					(int) $job['done'],
+					(int) $job['total']
+				)
+			) . '</p>';
+			echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+			wp_nonce_field( 'wormiss_media_migrate_cancel', 'wormiss_media_migrate_nonce' );
+			echo '<input type="hidden" name="action" value="wormiss_media_migrate_cancel" />';
+			submit_button( __( 'Cancel move', 'wormiss' ), 'secondary' );
+			echo '</form>';
+			return;
+		}
+
+		$waiting = Wormiss_Media_Migrate::count();
+		if ( 0 === $waiting ) {
+			echo '<p>' . esc_html__( 'Nothing to move: every image in a protected or locked category is already in the private store.', 'wormiss' ) . '</p>';
+			return;
+		}
+		if ( Wormiss_Media_Delivery::using_fallback() ) {
+			echo '<p class="description"><strong>' . esc_html__( 'Note:', 'wormiss' ) . '</strong> '
+				. esc_html__( 'the private store is the wp-content fallback, which is not truly outside the web root. Set WORMISS_PROTECTED_DIR (and the nginx location) first for real protection.', 'wormiss' )
+				. '</p>';
+		}
+		echo '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		wp_nonce_field( 'wormiss_media_migrate_start', 'wormiss_media_migrate_nonce' );
+		echo '<input type="hidden" name="action" value="wormiss_media_migrate_start" />';
+		echo '<p><label><input type="checkbox" name="wormiss_migrate_confirm" value="1" required /> '
+			. esc_html(
+				sprintf(
+					/* translators: %d: number of images. */
+					_n( 'Yes, move %d image into the private store.', 'Yes, move %d images into the private store.', $waiting, 'wormiss' ),
+					$waiting
+				)
+			) . '</label></p>';
+		submit_button( __( 'Move protected images now', 'wormiss' ) );
 		echo '</form>';
 	}
 

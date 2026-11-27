@@ -460,7 +460,15 @@ class Wormiss_Media_Delivery {
 		if ( preg_match( '#/wormiss-media/(\d+)\b#', $src, $matches ) ) {
 			return (int) $matches[1];
 		}
-		return (int) attachment_url_to_postid( $src );
+		$id = (int) attachment_url_to_postid( $src );
+		if ( $id > 0 ) {
+			return $id;
+		}
+		// A generated size (e.g. photo-300x200.jpg) is not its own attachment and attachment_url_to_postid
+		// matches only the full-size file; strip the -WxH suffix and resolve that.
+		$base = (string) preg_replace( '#\?.*$#', '', $src );
+		$full = (string) preg_replace( '#-\d+x\d+(\.\w+)$#', '$1', $base );
+		return $full !== $base ? (int) attachment_url_to_postid( $full ) : 0;
 	}
 
 	/**
@@ -488,10 +496,17 @@ class Wormiss_Media_Delivery {
 			if ( ! is_string( $src ) || '' === $src ) {
 				continue;
 			}
-			if ( ! array_key_exists( $src, $cache ) ) {
-				$cache[ $src ] = self::attachment_from_src( $src );
+			// Prefer the wp-image-<ID> class WordPress adds to inserted images: it is exact and works
+			// for a generated-size src. Fall back to resolving the src (endpoint, full, or sized URL).
+			$class = (string) $processor->get_attribute( 'class' );
+			if ( preg_match( '#\bwp-image-(\d+)\b#', $class, $m ) ) {
+				$attachment = (int) $m[1];
+			} else {
+				if ( ! array_key_exists( $src, $cache ) ) {
+					$cache[ $src ] = self::attachment_from_src( $src );
+				}
+				$attachment = $cache[ $src ];
 			}
-			$attachment = $cache[ $src ];
 			if ( $attachment < 1 || ! Wormiss_Media_Protected::attachment_is_protected( $attachment ) ) {
 				continue;
 			}

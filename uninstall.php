@@ -41,6 +41,9 @@ delete_option( 'wormiss_media_rewrite' );
 // moved into the private store, it is the only pointer back to those bytes (its public file was
 // removed). Deleting it would orphan the stored files, so a later reinstall can still recover.
 wp_clear_scheduled_hook( 'wormiss_media_bulk' );
+delete_option( 'wormiss_media_migrate_job' );
+delete_option( 'wormiss_media_migrate_report' );
+wp_clear_scheduled_hook( 'wormiss_media_migrate' );
 // Remove the internal Staff and Manager roles and the per-user departments.
 if ( file_exists( __DIR__ . '/includes/class-wormiss-roles.php' ) ) {
 	require_once __DIR__ . '/includes/class-wormiss-roles.php';
