@@ -132,6 +132,9 @@ class Wormiss_Settings {
 			'news_import_category'            => 'News',
 			// Who imported posts are by (user ID; 0 for the first administrator).
 			'news_import_author'              => 0,
+			// Only re-read articles the query reports changed (needs an updated column in the query);
+			// a weekly full re-read catches the rest. Off: every article is re-read every import.
+			'news_import_incremental'         => true,
 			// Importing an iMIS website's pages (keeping the menu hierarchy): off, and a dry run, until turned on.
 			'page_import_enabled'             => false,
 			'page_import_dry_run'             => true,
@@ -659,7 +662,7 @@ class Wormiss_Settings {
 				$clean[ $box ] = (bool) $input[ $box ];
 			}
 		}
-		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish' ] as $box ) {
+		foreach ( [ 'news_import_enabled', 'news_import_dry_run', 'news_import_publish', 'news_import_incremental' ] as $box ) {
 			if ( isset( $input['news_import_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {

@@ -426,6 +426,7 @@ class Wormiss_Admin {
 		self::field( 'news_import_query', __( 'News query', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_category', __( 'Category for imported news', 'wormiss' ), 'wormiss_news_import' );
 		self::field( 'news_import_author', __( 'Author for imported news', 'wormiss' ), 'wormiss_news_import' );
+		self::field( 'news_import_incremental', __( 'Only re-read changed articles', 'wormiss' ), 'wormiss_news_import' );
 
 		$title = __( 'Import iMIS pages', 'wormiss' );
 		self::section( 'wormiss_page_import', $title, [ __CLASS__, 'page_import_intro' ] );
@@ -1128,7 +1129,7 @@ class Wormiss_Admin {
 				);
 				echo '<p class="description">'
 					. esc_html__( 'An IQA path. One row per article and tag, with Document Version Key, and ideally Alternate', 'wormiss' )
-					. ' ' . esc_html__( 'Name, Document Description, Publication Date, Tag Name and Thumbnail Image. No prompts.', 'wormiss' )
+					. ' ' . esc_html__( 'Name, Document Description, Publication Date, Tag Name, Thumbnail Image and Updated On. No prompts.', 'wormiss' )
 					. '</p>';
 				return;
 			case 'page_import_query':
@@ -1249,6 +1250,7 @@ class Wormiss_Admin {
 			case 'news_import_enabled':
 			case 'news_import_dry_run':
 			case 'news_import_publish':
+			case 'news_import_incremental':
 			case 'page_import_enabled':
 			case 'page_import_dry_run':
 			case 'page_import_publish':
@@ -1309,6 +1311,12 @@ class Wormiss_Admin {
 				if ( 'news_import_dry_run' === $key ) {
 					echo ' <span class="description">'
 						. esc_html__( 'Reads iMIS and reports which posts would be made or updated, but saves nothing.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'news_import_incremental' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'Skip the per-article read for articles the query reports unchanged (needs an Updated On column', 'wormiss' )
+						. ' ' . esc_html__( 'in the query). A full re-read runs weekly. Off, or with no such column, every article is re-read every import.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'page_import_publish' === $key ) {
