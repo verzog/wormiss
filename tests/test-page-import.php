@@ -794,19 +794,132 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
-	 * The importer reads the page's layout template (the document its LayoutDocumentVersionKey names)
-	 * and records a preview of it in the report, so its grid format can be seen for the next pass.
+	 * Wormiss_Page_Layout::rows() turns a template's LayoutMarkup into ordered rows of zone and width.
 	 *
 	 * @return void
 	 */
-	public function test_reads_and_logs_layout_template(): void {
-		$layout_key = 'cccccccc-0000-0000-0000-000000000009';
-		$content    = str_replace(
-			'</Content>',
-			'<LayoutDocumentVersionKey>' . $layout_key . '</LayoutDocumentVersionKey></Content>',
-			$this->content_xml( '<p>About us text.</p>' )
+	public function test_layout_rows_parses_the_grid(): void {
+		$xml = '<ContentLayout xmlns="http://schemas.imis.com/2008/01/DataContracts/ContentLayout"><LayoutMarkup> <div> '
+			. '<div class="row"><div class="col-sm-12"> {1} </div></div>'
+			. '<div class="row"><div class="col-sm-8"> {2} </div><div class="col-sm-4"> {3} </div></div>'
+			. '<div class="row"><div class="col-sm-3"> {7} </div><div class="col-sm-3"> {8} </div><div class="col-sm-3"> {9} </div><div class="col-sm-3"> {10} </div></div>'
+			. ' </div> </LayoutMarkup></ContentLayout>';
+		$this->assertSame(
+			[
+				[
+					[
+						'zone'  => 1,
+						'width' => 12,
+					],
+				],
+				[
+					[
+						'zone'  => 2,
+						'width' => 8,
+					],
+					[
+						'zone'  => 3,
+						'width' => 4,
+					],
+				],
+				[
+					[
+						'zone'  => 7,
+						'width' => 3,
+					],
+					[
+						'zone'  => 8,
+						'width' => 3,
+					],
+					[
+						'zone'  => 9,
+						'width' => 3,
+					],
+					[
+						'zone'  => 10,
+						'width' => 3,
+					],
+				],
+			],
+			Wormiss_Page_Layout::rows( $xml )
 		);
-		$layout_xml = '<ContentLayout><Zone><Number>4</Number><Width>12</Width></Zone></ContentLayout>';
+		$this->assertNull( Wormiss_Page_Layout::rows( '<ContentLayout></ContentLayout>' ), 'No markup gives null.' );
+	}
+
+	/**
+	 * A nested grid is too complex to flatten, so the parser returns null (the caller falls back to
+	 * the heading grouping) rather than duplicating zones.
+	 *
+	 * @return void
+	 */
+	public function test_layout_rows_rejects_nested_grid(): void {
+		$xml = '<ContentLayout xmlns="http://schemas.imis.com/2008/01/DataContracts/ContentLayout"><LayoutMarkup><div>'
+			. '<div class="row"><div class="col-sm-8"><div class="row"><div class="col-sm-6"> {2} </div><div class="col-sm-6"> {3} </div></div></div>'
+			. '<div class="col-sm-4"> {4} </div></div></div></LayoutMarkup></ContentLayout>';
+		$this->assertNull( Wormiss_Page_Layout::rows( $xml ) );
+	}
+
+	/**
+	 * In a template row, each full-width (col-sm-12) cell is its own section, not a column shared with
+	 * its neighbours.
+	 *
+	 * @return void
+	 */
+	public function test_template_full_width_cells_become_sections(): void {
+		$content = [
+			'items' => [
+				[
+					'name' => 'A',
+					'zone' => 1,
+					'html' => '<p>One.</p>',
+				],
+				[
+					'name' => 'B',
+					'zone' => 2,
+					'html' => '<p>Two.</p>',
+				],
+			],
+		];
+		$layout  = [
+			[
+				[
+					'zone'  => 1,
+					'width' => 12,
+				],
+				[
+					'zone'  => 2,
+					'width' => 12,
+				],
+			],
+		];
+		$body    = Wormiss_Page_Import::build_body( 'X', $content, $layout );
+		$this->assertStringNotContainsString( 'wp:columns', $body, 'Two full-width cells are separate sections, not a columns row.' );
+		$this->assertSame( 2, substr_count( $body, '<!-- wp:group' ), 'Each full-width cell is its own section.' );
+		$this->assertStringContainsString( 'One.', $body );
+		$this->assertStringContainsString( 'Two.', $body );
+	}
+
+	/**
+	 * The importer rebuilds a page's exact column grid from its layout template: a template row with
+	 * col-sm-8 and col-sm-4 becomes a columns row with those widths (two thirds and one third).
+	 *
+	 * @return void
+	 */
+	public function test_uses_layout_template_for_columns(): void {
+		$layout_key = 'cccccccc-0000-0000-0000-000000000009';
+		$item       = static function ( string $name, int $zone, string $html ): string {
+			return '<a:ContentItem i:type="b:ContentHtml" xmlns:b="http://schemas.imis.com/2008/01/DataContracts/ContentHtml">'
+				. '<a:ContentItemName>' . $name . '</a:ContentItemName><a:LayoutZone>' . $zone . '</a:LayoutZone>'
+				. '<a:SortOrder>1</a:SortOrder><b:Body>' . htmlspecialchars( htmlspecialchars( $html ) ) . '</b:Body></a:ContentItem>';
+		};
+		$content    = '<Content xmlns="http://schemas.imis.com/2008/01/DataContracts/Content" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">'
+			. '<ContentItems xmlns:a="http://schemas.imis.com/2008/01/DataContracts/ContentItem">'
+			. $item( 'Intro', 2, '<p>Intro text.</p>' )
+			. $item( 'Image', 3, '<p>Picture here.</p>' )
+			. '</ContentItems><IsMemberOnly>false</IsMemberOnly><RequireAuthenticatedUser>false</RequireAuthenticatedUser>'
+			. '<LayoutDocumentVersionKey>' . $layout_key . '</LayoutDocumentVersionKey></Content>';
+		$template   = '<ContentLayout xmlns="http://schemas.imis.com/2008/01/DataContracts/ContentLayout">'
+			. '<LayoutMarkup><div><div class="row"><div class="col-sm-8"> {2} </div><div class="col-sm-4"> {3} </div></div></div></LayoutMarkup></ContentLayout>';
 		$this->imis->token()
 			->reply(
 				'/api/iqa',
@@ -823,14 +936,16 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 			)
 			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us', '@/web/About-Us' ) )
 			->reply( '/api/Document/_Execute', 200, $this->doc_with_data( $content ) )
-			->reply( '/api/Document/_Execute', 200, $this->doc_with_data( $layout_xml ) );
+			->reply( '/api/Document/_Execute', 200, $this->doc_with_data( $template ) );
 
-		$report = Wormiss_Page_Import::run();
+		Wormiss_Page_Import::run();
 
-		$notes = implode( ' ', $report['notes'] );
-		$this->assertStringContainsString( 'Page layout template', $notes );
-		$this->assertStringContainsString( $layout_key, $notes );
-		$this->assertStringContainsString( 'ContentLayout', $notes, 'The template preview is included.' );
+		$body = get_post_field( 'post_content', Wormiss_Page_Import::post_for( self::ABOUT_H ) );
+		$this->assertStringContainsString( '<!-- wp:columns {"className":"wormiss-row"} -->', $body );
+		$this->assertStringContainsString( '"width":"66.67%"', $body, 'Zone 2 takes eight twelfths.' );
+		$this->assertStringContainsString( '"width":"33.33%"', $body, 'Zone 3 takes four twelfths.' );
+		$this->assertStringContainsString( 'Intro text.', $body );
+		$this->assertStringContainsString( 'Picture here.', $body );
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.68.1
+Stable tag: 0.69.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.69.0 =
+* Imported pages now keep their exact column grid. The page import reads each page's layout template and rebuilds its precise rows and column widths, instead of the earlier heading-based guess. A row the template splits into, say, a two-thirds and a one-third column now comes across exactly that way, and a section the template makes several rows (a text-and-image band above a pair of cards, for example) is no longer merged into one wide row. Pages whose template cannot be read fall back to the previous heading-based grouping. Re-run the page import after upgrading to rebuild existing pages. (The matching responsive styling for these columns is in the SCCA theme.)
 
 = 0.68.1 =
 * Page import: the page's layout template is now read during an import and a preview of it recorded in the report and audit log. An iMIS page's exact row and column arrangement lives in a separate template document (its LayoutDocumentVersionKey); this reads that document once per import so its format is visible. It changes nothing on the page yet — it is the groundwork for a later version that will use the template to rebuild each page's exact column widths and multi-row sections, instead of the current heading-based grouping.

@@ -123,11 +123,12 @@ class Wormiss_Page_Import {
 	private static $images = 0;
 
 	/**
-	 * Whether the page layout template has been read and logged yet this run (once is enough).
+	 * Layout templates read this run, keyed by their document version key (parsed rows, or null when
+	 * there is none), so a template shared by many pages is fetched once.
 	 *
-	 * @var bool
+	 * @var array<string, array[]|null>
 	 */
-	private static $layout_logged = false;
+	private static $templates = [];
 
 	/**
 	 * Hook in.
@@ -654,47 +655,44 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
-		self::log_layout_template( $client, $xml, $report );
 		return [
-			'html'    => self::build_body( $title, $content ),
+			'html'    => self::build_body( $title, $content, self::template_rows( $client, $xml, $report ) ),
 			'members' => (bool) $content['members'],
 		];
 	}
 
 	/**
-	 * Read the page's layout template (the document its LayoutDocumentVersionKey points to) once per
-	 * import, and record a preview of it in the report, so the exact grid format iMIS stores can be
-	 * seen. The template arranges each content block's layout zone into rows and columns; a later
-	 * pass will parse it to rebuild those rows and widths exactly. This changes no page output.
+	 * The rows of the page's layout template (the document its LayoutDocumentVersionKey names), so the
+	 * page's exact column grid can be rebuilt; null when the page has no template or it cannot be read.
+	 * A template is fetched once per import and reused for every page that shares it.
 	 *
 	 * @param Wormiss_Rest_Client $client Client.
-	 * @param string              $xml    The content document's decoded XML.
-	 * @param array               $report Report, for the note.
-	 * @return void
+	 * @param string              $xml    The content document's decoded XML (it names the template).
+	 * @param array               $report Report, for a note when the template cannot be read.
+	 * @return array[]|null
 	 */
-	private static function log_layout_template( Wormiss_Rest_Client $client, string $xml, array &$report ): void {
-		if ( self::$layout_logged ) {
-			return;
-		}
+	private static function template_rows( Wormiss_Rest_Client $client, string $xml, array &$report ): ?array {
 		if ( ! preg_match( '#<LayoutDocumentVersionKey[^>]*>([^<]+)</LayoutDocumentVersionKey>#', $xml, $match ) ) {
-			return;
+			return null;
 		}
 		$key = trim( $match[1] );
 		if ( '' === $key ) {
-			return;
+			return null;
 		}
-		self::$layout_logged = true;
+		if ( array_key_exists( $key, self::$templates ) ) {
+			return self::$templates[ $key ];
+		}
+		self::$templates[ $key ] = null; // Remembered even on failure, so it is not retried this run.
 		try {
 			$document = $client->find_document( $key );
 		} catch ( Wormiss_Exception $e ) {
 			/* translators: 1: template key, 2: reason. */
-			self::note( $report, sprintf( __( 'Page layout template %1$s could not be read (%2$s).', 'wormiss' ), $key, $e->getMessage() ) );
-			return;
+			self::note( $report, sprintf( __( 'A page layout template (%1$s) could not be read (%2$s); those pages keep a simpler layout.', 'wormiss' ), $key, $e->getMessage() ) );
+			return null;
 		}
-		$data    = null !== $document ? self::document_data( $document ) : '';
-		$preview = substr( (string) preg_replace( '/\s+/', ' ', $data ), 0, 2000 );
-		/* translators: 1: template key, 2: size in bytes, 3: a preview of the template. */
-		self::note( $report, sprintf( __( 'Page layout template %1$s read (%2$d bytes), for reconstructing the column grid in a later version. Preview: %3$s', 'wormiss' ), $key, strlen( $data ), $preview ) );
+		$rows                    = null !== $document ? Wormiss_Page_Layout::rows( self::document_data( $document ) ) : null;
+		self::$templates[ $key ] = $rows;
+		return $rows;
 	}
 
 	/**
@@ -714,15 +712,16 @@ class Wormiss_Page_Import {
 	 * The page body from the content page's blocks (in page order), tidied as the news import tidies
 	 * article text; a block that is only the page title as a heading is left out.
 	 *
-	 * @param string $title   Page title.
-	 * @param array  $content From Wormiss_News_Import::parse().
+	 * @param string     $title   Page title.
+	 * @param array      $content From Wormiss_News_Import::parse().
+	 * @param array|null $layout  The page's layout template rows, or null (see Wormiss_Page_Blocks).
 	 * @return string
 	 */
-	public static function build_body( string $title, array $content ): string {
+	public static function build_body( string $title, array $content, ?array $layout = null ): string {
 		$items = (array) ( $content['items'] ?? [] );
 		if ( Wormiss_Page_Blocks::enabled() ) {
 			// Rebuild the iMIS column layout as block markup (see Wormiss_Page_Blocks).
-			return Wormiss_Page_Blocks::build( $title, $items );
+			return Wormiss_Page_Blocks::build( $title, $items, $layout );
 		}
 		$parts = [];
 		foreach ( $items as $item ) {
