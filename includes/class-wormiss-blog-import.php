@@ -417,6 +417,12 @@ class Wormiss_Blog_Import {
 	 */
 	private static function read_list( Wormiss_Rest_Client $client, array $listing ): array {
 		$offset = (int) $listing['offset'];
+		// Note: this reads the whole post list every run (no "changed since" filter); the per-post
+		// content-hash skip in one() then avoids writes. Harmless at steady state but chatty on a
+		// large blog. For production, read incrementally: keep a high-water mark on UpdatedOn (already
+		// captured per row in list_entry()) and stop paging once rows are older than it, with a
+		// periodic full reconcile to catch unpublishes and deletions. The page importer should be
+		// built incrementally from the start for the same reason.
 		do {
 			$result = $client->request( 'GET', '/api/Smart_Blogs_Blog_Post?Limit=' . self::PAGE . '&Offset=' . $offset, null, null, false );
 			if ( ! is_object( $result->body ) ) {
