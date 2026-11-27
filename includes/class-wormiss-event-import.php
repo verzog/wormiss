@@ -704,9 +704,19 @@ class Wormiss_Event_Import {
 			self::note( $report, sprintf( __( 'Event %1$s: its image could not be downloaded (%2$s).', 'wormiss' ), $event['id'], $tmp->get_error_message() ) );
 			return false;
 		}
-		$name       = sanitize_file_name( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
+		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
+		// name the file from its real type (see Wormiss_Media::sideload_name()).
+		$name = Wormiss_Media::sideload_name( $tmp, $url, 'event-image' );
+		if ( null === $name ) {
+			// Not an image type WordPress accepts (e.g. SVG). The address is already remembered above,
+			// so it is not downloaded again every day.
+			wp_delete_file( $tmp );
+			/* translators: %s: iMIS event ID. */
+			self::note( $report, sprintf( __( 'Event %s: its image is not a supported type, so it was not added.', 'wormiss' ), $event['id'] ) );
+			return false;
+		}
 		$file       = [
-			'name'     => '' !== $name ? $name : 'event-image.jpg',
+			'name'     => $name,
 			'tmp_name' => $tmp,
 		];
 		$attachment = media_handle_sideload( $file, $post_id, $event['name'] );

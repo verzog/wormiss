@@ -1681,7 +1681,17 @@ class Wormiss_Blog_Import {
 			self::note( $report, sprintf( __( '%1$s: a picture could not be copied (%2$s).', 'wormiss' ), $title, $tmp->get_error_message() ) );
 			return 0;
 		}
-		$name = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
+		// name the file from its real type (see Wormiss_Media::sideload_name()).
+		$name = Wormiss_Media::sideload_name( $tmp, $url, 'blog-image' );
+		if ( null === $name ) {
+			// Not an image type WordPress accepts (e.g. SVG): leave the post pointing at the iMIS
+			// picture rather than failing it and retrying every import.
+			wp_delete_file( $tmp );
+			/* translators: %s: title. */
+			self::note( $report, sprintf( __( '%s: a picture is not a supported type, so it was left on the iMIS site.', 'wormiss' ), $title ) );
+			return 0;
+		}
 		// Only the sizes the blog shows: each size is another resize, the slow part of a copy.
 		add_filter( 'intermediate_image_sizes_advanced', [ __CLASS__, 'blog_sizes' ] );
 		// Attribute the picture to the blog post's author (the member), not the account that ran the
@@ -1694,7 +1704,7 @@ class Wormiss_Blog_Import {
 		}
 		$attachment = media_handle_sideload(
 			[
-				'name'     => '' !== $name ? $name : 'blog-image.jpg',
+				'name'     => $name,
 				'tmp_name' => $tmp,
 			],
 			$post_id,
