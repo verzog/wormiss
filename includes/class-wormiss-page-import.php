@@ -78,11 +78,17 @@ class Wormiss_Page_Import {
 	/** On a page: the page's address on the iMIS site. */
 	const META_URL = '_wormiss_page_url';
 
+	/** On an imported image: the iMIS address it was copied from (so an image is copied once). */
+	const META_FROM = '_wormiss_page_image_from';
+
 	/** Pages made or updated per batch. */
 	const BATCH = 5;
 
 	/** Navigation items checked per batch (each is one or two iMIS reads, changed or not). */
 	const MAX_CHECKS = 20;
+
+	/** Images copied per batch. */
+	const MAX_IMAGES = 6;
 
 	/** Seconds between batches. */
 	const BATCH_GAP = 2 * MINUTE_IN_SECONDS;
@@ -101,6 +107,13 @@ class Wormiss_Page_Import {
 
 	/** An all-zero GUID: iMIS's "no key" (a navigation item with no content page, or the tree root). */
 	const EMPTY_KEY = '00000000-0000-0000-0000-000000000000';
+
+	/**
+	 * Images copied so far in this run.
+	 *
+	 * @var int
+	 */
+	private static $images = 0;
 
 	/**
 	 * Hook in.
@@ -275,6 +288,7 @@ class Wormiss_Page_Import {
 	 * @return array The report.
 	 */
 	private static function write( Wormiss_Rest_Client $client, array $report, array $done, array $nodes, int $read ): array {
+		self::$images   = 0;
 		$report['read'] = count( $nodes );
 		$writes         = 0;
 		$checked        = 0;
@@ -427,8 +441,129 @@ class Wormiss_Page_Import {
 		update_post_meta( $saved, self::META_PARENT, $parent );
 		update_post_meta( $saved, Wormiss_Access::META_ENABLED, $built['members'] );
 		update_post_meta( $saved, self::META_URL, Wormiss_News_Import::page_url( $path ) );
-		update_post_meta( $saved, self::META_SOURCE, $hash );
+		$complete = self::images( $saved, $built['html'], self::label( $node ), $report );
+		// Record the fingerprint only once every image is copied, so an image that did not fit this
+		// batch or failed is tried again next import.
+		if ( $complete ) {
+			update_post_meta( $saved, self::META_SOURCE, $hash );
+		} else {
+			delete_post_meta( $saved, self::META_SOURCE );
+		}
 		return $post_id ? 'updated' : 'created';
+	}
+
+	/**
+	 * Copy the page's images on the iMIS site into the Media Library (each address once, across all
+	 * pages) and point the page's content at the copies. Images on other sites are left where they
+	 * are. Copying can be turned off with the wormiss_page_import_images filter.
+	 *
+	 * @param int    $post_id Page ID.
+	 * @param string $html    The page body (with iMIS image addresses).
+	 * @param string $label   The page's name, for notes.
+	 * @param array  $report  Report, for notes.
+	 * @return bool Whether every image is done (false when one did not fit this batch or failed).
+	 */
+	private static function images( int $post_id, string $html, string $label, array &$report ): bool {
+		/**
+		 * Whether imported pages copy their images into the Media Library.
+		 *
+		 * @param bool $copy Copy images (default true).
+		 */
+		if ( ! apply_filters( 'wormiss_page_import_images', true ) ) {
+			return true;
+		}
+		$base = Wormiss_Settings::base_url();
+		if ( '' === $base || ! preg_match_all( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $matches ) ) {
+			return true;
+		}
+		$complete = true;
+		$original = $html;
+		foreach ( array_unique( $matches[1] ) as $src ) {
+			$url = html_entity_decode( $src, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			if ( 0 !== strpos( $url, $base . '/' ) ) {
+				continue; // Images on other sites stay where they are.
+			}
+			$attachment = self::copy( $post_id, $url, $label, $report, $complete );
+			if ( $attachment ) {
+				$html = str_replace( 'src="' . $src . '"', 'src="' . esc_attr( (string) wp_get_attachment_url( $attachment ) ) . '"', $html );
+			}
+		}
+		if ( $html !== $original ) {
+			wp_update_post(
+				wp_slash(
+					[
+						'ID'           => $post_id,
+						'post_content' => $html,
+					]
+				)
+			);
+		}
+		return $complete;
+	}
+
+	/**
+	 * The Media Library copy of an iMIS image: one already copied, or a new copy (if this batch has
+	 * room).
+	 *
+	 * @param int    $post_id  Page the image belongs to.
+	 * @param string $url      Image address.
+	 * @param string $label    The page's name, for notes.
+	 * @param array  $report   Report, for notes.
+	 * @param bool   $complete Set to false when it was not copied (no room, or it failed).
+	 * @return int Attachment ID, or 0.
+	 */
+	private static function copy( int $post_id, string $url, string $label, array &$report, bool &$complete ): int {
+		// phpcs:disable WordPress.DB.SlowDBQuery -- One lookup per image.
+		$found = get_posts(
+			[
+				'post_type'        => 'attachment',
+				'post_status'      => 'inherit',
+				'meta_key'         => self::META_FROM,
+				'meta_value'       => $url,
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+			]
+		);
+		// phpcs:enable
+		if ( $found ) {
+			return (int) $found[0];
+		}
+		if ( self::$images >= self::MAX_IMAGES || Wormiss_Batch::out_of_time() ) {
+			Wormiss_Batch::stop();
+			$complete = false;
+			return 0;
+		}
+		++self::$images;
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		$tmp = download_url( $url, 30 );
+		if ( is_wp_error( $tmp ) ) {
+			$complete = false; // Tried again next import.
+			/* translators: 1: page title, 2: reason. */
+			self::note( $report, sprintf( __( '%1$s: an image could not be copied (%2$s).', 'wormiss' ), $label, $tmp->get_error_message() ) );
+			return 0;
+		}
+		$name       = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		$attachment = media_handle_sideload(
+			[
+				'name'     => '' !== $name ? $name : 'page-image.jpg',
+				'tmp_name' => $tmp,
+			],
+			$post_id,
+			$label
+		);
+		if ( is_wp_error( $attachment ) ) {
+			$complete = false; // Tried again next import.
+			wp_delete_file( $tmp );
+			/* translators: 1: page title, 2: reason. */
+			self::note( $report, sprintf( __( '%1$s: an image could not be added (%2$s).', 'wormiss' ), $label, $attachment->get_error_message() ) );
+			return 0;
+		}
+		update_post_meta( (int) $attachment, self::META_FROM, $url );
+		Wormiss_Batch::progress();
+		return (int) $attachment;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.63.0
+Stable tag: 0.64.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.64.0 =
+* Page import: images in an imported page's body that live on the iMIS site are now copied into the WordPress Media Library, and the page is pointed at the local copies, so the pages keep working if iMIS goes away. Each image address is copied once (shared across pages), in small per-batch amounts, and an image that does not fit a batch or cannot be fetched is retried on the next import. Copying can be turned off with the wormiss_page_import_images filter. Images hosted on other sites are left where they are.
 
 = 0.63.0 =
 * New import (Settings > Pages): brings an iMIS website's pages into WordPress over the REST API, keeping the menu hierarchy. Each navigation item an administrator's IQA lists becomes a page, nested under its parent as it is in iMIS, with the page content read from the iMIS content document and its formatting tidied (the same way the news import tidies articles). A page whose iMIS content is made of iParts (a sign-in form, a map, a cart) has no portable HTML, so it is imported as an empty page in the right place for an editor to fill in. Members-only pages stay members-only. iMIS is the source: later imports update the page unless "Stop updating from iMIS" is ticked on it. Import-only (nothing is changed in iMIS; pages are never removed), with a dry run, a daily schedule, throttled resumable background batches and a kill-switch. The WordPress navigation menu is not built yet (this step creates the pages and their parent/child nesting only).

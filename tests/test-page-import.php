@@ -408,6 +408,74 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * Images in the page body that live on the iMIS site are copied into the Media Library and the
+	 * body is pointed at the local copies; a second import reuses the copy rather than copying again.
+	 *
+	 * @return void
+	 */
+	public function test_copies_body_images(): void {
+		if ( ! function_exists( 'imagejpeg' ) ) {
+			$this->markTestSkipped( 'GD is not available.' );
+		}
+		// Serve a real JPEG into download_url()'s stream target for the image request. Added at a
+		// later priority than the fake iMIS so its return value wins for this URL.
+		$serve = static function ( $pre, $args, $url ) {
+			if ( false !== strpos( $url, 'team.jpg' ) && ! empty( $args['filename'] ) ) {
+				$image = imagecreatetruecolor( 4, 4 );
+				imagejpeg( $image, $args['filename'] );
+				return [
+					'headers'  => [],
+					'body'     => '',
+					'response' => [
+						'code'    => 200,
+						'message' => 'OK',
+					],
+					'cookies'  => [],
+					'filename' => $args['filename'],
+				];
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $serve, 20, 3 );
+
+		$body = '<p>Meet the team.</p><p><img src="/images/team.jpg" alt="Team" /></p>';
+		$rows = [
+			[
+				'HierarchyKey'       => self::ABOUT_H,
+				'DocumentVersionKey' => self::ABOUT_NAV,
+				'AlternateName'      => 'About Us',
+			],
+		];
+		$this->imis->token()
+			->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( $rows ) )
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us' ) )
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( $body ) );
+		Wormiss_Page_Import::run();
+		remove_filter( 'pre_http_request', $serve, 20 );
+
+		$about   = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$content = get_post_field( 'post_content', $about );
+		$this->assertStringNotContainsString( 'imis.example.org/images/team.jpg', $content, 'The iMIS image address is replaced.' );
+
+		// phpcs:disable WordPress.DB.SlowDBQuery -- Test assertion.
+		$found = get_posts(
+			[
+				'post_type'        => 'attachment',
+				'post_status'      => 'inherit',
+				'meta_key'         => Wormiss_Page_Import::META_FROM,
+				'meta_value'       => 'https://imis.example.org/images/team.jpg',
+				'fields'           => 'ids',
+				'numberposts'      => -1,
+				'suppress_filters' => true,
+			]
+		);
+		// phpcs:enable
+		$this->assertCount( 1, $found, 'The image was copied once.' );
+		$this->assertStringContainsString( (string) wp_get_attachment_url( (int) $found[0] ), $content, 'The body points at the local copy.' );
+		$this->assertSame( $about, (int) wp_get_post_parent_id( (int) $found[0] ), 'The copy is attached to the page.' );
+	}
+
+	/**
 	 * A dry run saves nothing.
 	 *
 	 * @return void

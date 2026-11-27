@@ -708,7 +708,7 @@ class Wormiss_Admin {
 		echo '<input type="hidden" name="' . esc_attr( Wormiss_Settings::OPTION ) . '[page_import_section]" value="1" />';
 		echo '<p>'
 			. esc_html__( 'Once a day, each navigation item the query lists becomes a WordPress page, nested under its', 'wormiss' )
-			. ' ' . esc_html__( 'parent as in iMIS, with the page content (formatting tidied). A page whose iMIS content is made', 'wormiss' )
+			. ' ' . esc_html__( 'parent as in iMIS, with the page content (formatting tidied, images copied into the Media Library). A page whose iMIS content is made', 'wormiss' )
 			. ' ' . esc_html__( 'of iParts (a form, a map, a cart) has no portable HTML, so it is imported as an empty page in', 'wormiss' )
 			. ' ' . esc_html__( 'the right place for an editor to fill in. Later imports update the page unless "Stop updating', 'wormiss' )
 			. ' ' . esc_html__( 'from iMIS" is ticked on it. Nothing is changed in iMIS; pages are never removed.', 'wormiss' )
