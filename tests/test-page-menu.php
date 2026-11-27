@@ -58,11 +58,28 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	 * @return void
 	 */
 	public function tear_down(): void {
+		delete_option( Wormiss_Page_Menu::JOB_OPTION );
+		wp_clear_scheduled_hook( Wormiss_Page_Menu::HOOK );
 		$menu = wp_get_nav_menu_object( self::MENU );
 		if ( $menu instanceof WP_Term ) {
 			wp_delete_nav_menu( $menu->term_id );
 		}
 		parent::tear_down();
+	}
+
+	/**
+	 * Queue a build and work it to completion (small trees finish in one batch).
+	 *
+	 * @param string[] $keys Hierarchy keys in tree order.
+	 * @return void
+	 */
+	private function build( array $keys ): void {
+		Wormiss_Page_Menu::schedule( $keys );
+		$guard = 0;
+		do {
+			Wormiss_Page_Menu::run();
+			++$guard;
+		} while ( null !== Wormiss_Page_Menu::job() && $guard < 50 );
 	}
 
 	/**
@@ -113,7 +130,7 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 		$team    = $this->page( 'b', 'a', 'Our Team' );
 		$contact = $this->page( 'c', '', 'Contact' );
 
-		Wormiss_Page_Menu::rebuild( [ 'a', 'b', 'c' ] );
+		$this->build( [ 'a', 'b', 'c' ] );
 
 		$this->assertInstanceOf( WP_Term::class, wp_get_nav_menu_object( self::MENU ) );
 		$items = $this->managed();
@@ -137,13 +154,13 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	public function test_reuses_and_prunes(): void {
 		$about = $this->page( 'a', '', 'About Us' );
 		$team  = $this->page( 'b', 'a', 'Our Team' );
-		Wormiss_Page_Menu::rebuild( [ 'a', 'b' ] );
+		$this->build( [ 'a', 'b' ] );
 		$first      = $this->managed();
 		$about_item = $first[ $about ]->ID;
 
 		// The team page leaves the tree.
 		wp_delete_post( $team, true );
-		Wormiss_Page_Menu::rebuild( [ 'a' ] );
+		$this->build( [ 'a' ] );
 
 		$second = $this->managed();
 		$this->assertCount( 1, $second, 'The item for the removed page is pruned.' );
@@ -159,7 +176,7 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	public function test_skips_drafts(): void {
 		$this->page( 'a', '', 'About Us' );
 		$this->page( 'b', '', 'Draft', 'draft' );
-		Wormiss_Page_Menu::rebuild( [ 'a', 'b' ] );
+		$this->build( [ 'a', 'b' ] );
 		$this->assertCount( 1, $this->managed(), 'Only the published page is in the menu.' );
 	}
 
@@ -170,7 +187,7 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	 */
 	public function test_leaves_manual_items(): void {
 		$this->page( 'a', '', 'About Us' );
-		Wormiss_Page_Menu::rebuild( [ 'a' ] );
+		$this->build( [ 'a' ] );
 
 		$menu   = wp_get_nav_menu_object( self::MENU );
 		$manual = wp_update_nav_menu_item(
@@ -184,9 +201,42 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 		);
 		$this->assertIsInt( $manual );
 
-		Wormiss_Page_Menu::rebuild( [ 'a' ] );
+		$this->build( [ 'a' ] );
 		$ids = array_map( static fn( $i ) => (int) $i->ID, (array) wp_get_nav_menu_items( $menu->term_id ) );
 		$this->assertContains( (int) $manual, $ids, 'The hand-added item survives a rebuild.' );
+	}
+
+	/**
+	 * A build spanning several batches finishes and nests correctly: it is resumable and does not
+	 * depend on placing the whole tree in one request.
+	 *
+	 * @return void
+	 */
+	public function test_resumable_across_batches(): void {
+		$about = $this->page( 'a', '', 'About Us' );
+		$team  = $this->page( 'b', 'a', 'Our Team' );
+		$this->page( 'c', '', 'Contact' );
+
+		$one = static fn() => 1;
+		add_filter( 'wormiss_page_menu_batch', $one );
+
+		Wormiss_Page_Menu::schedule( [ 'a', 'b', 'c' ] );
+		Wormiss_Page_Menu::run();
+		$this->assertNotNull( Wormiss_Page_Menu::job(), 'The build is still going after one batch.' );
+		$this->assertCount( 1, $this->managed(), 'One item placed per batch.' );
+
+		Wormiss_Page_Menu::run();
+		Wormiss_Page_Menu::run();
+		remove_filter( 'wormiss_page_menu_batch', $one );
+
+		$this->assertNull( Wormiss_Page_Menu::job(), 'The build finishes after enough batches.' );
+		$items = $this->managed();
+		$this->assertCount( 3, $items );
+		$this->assertSame(
+			$items[ $about ]->ID,
+			(int) get_post_meta( $items[ $team ]->ID, '_menu_item_menu_item_parent', true ),
+			'Nesting is applied once the build finishes.'
+		);
 	}
 
 	/**
@@ -197,7 +247,7 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	public function test_off(): void {
 		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'page_import_menu' => false ] ) );
 		$this->page( 'a', '', 'About Us' );
-		Wormiss_Page_Menu::rebuild( [ 'a' ] );
+		$this->build( [ 'a' ] );
 		$this->assertFalse( wp_get_nav_menu_object( self::MENU ), 'No menu is created when the feature is off.' );
 	}
 }

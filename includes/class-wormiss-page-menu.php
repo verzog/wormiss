@@ -43,6 +43,31 @@ class Wormiss_Page_Menu {
 	/** The default menu name, used when the setting is blank. */
 	const DEFAULT_NAME = 'iMIS site';
 
+	/** Cron hook that works a batch of the menu build. */
+	const HOOK = 'wormiss_page_menu';
+
+	/** Option holding the running build (its keys, how far it has got, and the items so far). */
+	const JOB_OPTION = 'wormiss_page_menu_job';
+
+	/** Menu items placed per batch. */
+	const BATCH = 50;
+
+	/** Seconds a batch works for. */
+	const SECONDS = 15;
+
+	/** Seconds between batches. */
+	const BATCH_GAP = MINUTE_IN_SECONDS;
+
+	/**
+	 * Hook in (the cron batch and a resume check).
+	 *
+	 * @return void
+	 */
+	public static function init(): void {
+		add_action( self::HOOK, [ __CLASS__, 'run' ] );
+		add_action( 'init', [ __CLASS__, 'maybe_resume' ] );
+	}
+
 	/**
 	 * Whether building the menu is turned on.
 	 *
@@ -63,44 +88,118 @@ class Wormiss_Page_Menu {
 	}
 
 	/**
-	 * Make or update the menu from the imported pages, in the given tree order.
+	 * Menu items placed per batch (filterable, chiefly for tests).
+	 *
+	 * @return int
+	 */
+	public static function batch(): int {
+		return max( 1, (int) apply_filters( 'wormiss_page_menu_batch', self::BATCH ) );
+	}
+
+	/**
+	 * Queue a build of the menu from the imported pages, in tree order. The build then runs in the
+	 * background, in batches, so a large tree cannot exhaust one request (and cannot hold up the
+	 * import that queued it). Nothing is queued when the feature is off or there is nothing to build.
 	 *
 	 * @param string[] $ordered_keys Imported navigation items' hierarchy keys, in tree order.
 	 * @return void
 	 */
-	public static function rebuild( array $ordered_keys ): void {
+	public static function schedule( array $ordered_keys ): void {
 		if ( ! self::enabled() ) {
+			return;
+		}
+		$keys = array_values( array_unique( array_map( 'strval', $ordered_keys ) ) );
+		if ( ! $keys ) {
+			// Never wipe the menu from an empty list (e.g. a query that returned nothing this run).
+			return;
+		}
+		update_option(
+			self::JOB_OPTION,
+			[
+				'keys'  => $keys,
+				'pos'   => 0,
+				'items' => [],
+			],
+			false
+		);
+		if ( ! wp_next_scheduled( self::HOOK ) ) {
+			wp_schedule_single_event( time() + 5, self::HOOK );
+		}
+	}
+
+	/**
+	 * Reschedule a build whose continuation was lost (e.g. the plugin was deactivated between batches).
+	 *
+	 * @return void
+	 */
+	public static function maybe_resume(): void {
+		if ( self::enabled() && is_array( get_option( self::JOB_OPTION ) ) && ! wp_next_scheduled( self::HOOK ) ) {
+			wp_schedule_single_event( time() + self::BATCH_GAP, self::HOOK );
+		}
+	}
+
+	/**
+	 * The running build, or null.
+	 *
+	 * @return array|null
+	 */
+	public static function job(): ?array {
+		$job = get_option( self::JOB_OPTION );
+		return is_array( $job ) ? $job : null;
+	}
+
+	/**
+	 * Work through a batch of the queued build: place or update each page's menu item in tree order,
+	 * then reschedule. When the last item is placed, nest them and remove items for pages that have
+	 * left the tree. Safe to resume: items placed in an earlier batch are reused, not duplicated.
+	 *
+	 * @return void
+	 */
+	public static function run(): void {
+		$job = self::job();
+		if ( ! $job ) {
+			return;
+		}
+		if ( ! self::enabled() ) {
+			self::finish();
 			return;
 		}
 		$menu = self::menu();
 		if ( ! $menu instanceof WP_Term ) {
+			self::finish();
 			return;
 		}
-		// wp_update_nav_menu_item() lives in the admin includes; the import runs in the background.
+		// wp_update_nav_menu_item() lives in the admin includes; the build runs in the background.
 		require_once ABSPATH . 'wp-admin/includes/nav-menu.php';
 
-		$managed  = self::managed_items( $menu->term_id );
-		$item_for = []; // Hierarchy key => menu item ID (this run).
-		$page_for = []; // Hierarchy key => page ID (this run).
-		$kept     = []; // Menu item IDs kept this run.
-		$position = 0;
-		foreach ( $ordered_keys as $hkey ) {
-			$page = Wormiss_Page_Import::post_for( (string) $hkey );
+		Wormiss_Batch::start( self::SECONDS );
+		$managed   = self::managed_items( $menu->term_id );
+		$keys      = array_map( 'strval', (array) ( $job['keys'] ?? [] ) );
+		$pos       = (int) ( $job['pos'] ?? 0 );
+		$items     = is_array( $job['items'] ?? null ) ? $job['items'] : [];
+		$total     = count( $keys );
+		$batch     = self::batch();
+		$processed = 0;
+		while ( $pos < $total && $processed < $batch && ! Wormiss_Batch::out_of_time() ) {
+			$hkey = $keys[ $pos ];
+			++$pos;
+			++$processed;
+			$page = Wormiss_Page_Import::post_for( $hkey );
 			// Only published pages go in the menu; a draft (not yet published) would 404 for visitors.
 			if ( ! $page || 'publish' !== get_post_status( $page ) ) {
 				continue;
 			}
-			++$position;
-			$item_id = wp_update_nav_menu_item(
+			$existing = (int) ( $items[ $hkey ] ?? ( $managed['by_page'][ $page ] ?? 0 ) );
+			$item_id  = wp_update_nav_menu_item(
 				$menu->term_id,
-				(int) ( $managed['by_page'][ $page ] ?? 0 ),
+				$existing,
 				[
 					'menu-item-object-id' => $page,
 					'menu-item-object'    => 'page',
 					'menu-item-type'      => 'post_type',
 					'menu-item-status'    => 'publish',
 					'menu-item-title'     => get_the_title( $page ),
-					'menu-item-position'  => $position,
+					'menu-item-position'  => $pos,
 				]
 			);
 			if ( is_wp_error( $item_id ) || ! $item_id ) {
@@ -108,32 +207,52 @@ class Wormiss_Page_Menu {
 			}
 			$item_id = (int) $item_id;
 			update_post_meta( $item_id, self::ITEM_FLAG, 1 );
-			$item_for[ (string) $hkey ] = $item_id;
-			$page_for[ (string) $hkey ] = $page;
-			$kept[ $item_id ]           = true;
+			$items[ $hkey ] = $item_id;
 		}
-		self::set_parents( $item_for, $page_for );
-		// Remove menu items this import made for pages no longer in the tree.
-		foreach ( $managed['ids'] as $item_id ) {
-			if ( empty( $kept[ $item_id ] ) ) {
-				wp_delete_post( $item_id, true );
+		$job['pos']   = $pos;
+		$job['items'] = $items;
+		if ( $pos < $total ) {
+			update_option( self::JOB_OPTION, $job, false );
+			if ( ! wp_next_scheduled( self::HOOK ) ) {
+				wp_schedule_single_event( time() + self::BATCH_GAP, self::HOOK );
 			}
+			return;
 		}
+		self::nest_and_prune( $menu->term_id, $items );
+		self::finish();
 	}
 
 	/**
-	 * Nest each menu item under its parent's menu item (from the page's stored parent key).
+	 * Clear the running build.
 	 *
-	 * @param array $item_for Hierarchy key => menu item ID.
-	 * @param array $page_for Hierarchy key => page ID.
 	 * @return void
 	 */
-	private static function set_parents( array $item_for, array $page_for ): void {
-		foreach ( $item_for as $hkey => $item_id ) {
-			$parent_key  = (string) get_post_meta( $page_for[ $hkey ], Wormiss_Page_Import::META_PARENT, true );
-			$parent_item = ( '' !== $parent_key && isset( $item_for[ $parent_key ] ) ) ? (int) $item_for[ $parent_key ] : 0;
+	private static function finish(): void {
+		delete_option( self::JOB_OPTION );
+		wp_clear_scheduled_hook( self::HOOK );
+	}
+
+	/**
+	 * Nest each placed item under its parent's item (from the page's stored parent key), then remove
+	 * items this import made for pages no longer in the tree.
+	 *
+	 * @param int   $menu_id Menu term ID.
+	 * @param array $items   Hierarchy key => menu item ID (placed this build).
+	 * @return void
+	 */
+	private static function nest_and_prune( int $menu_id, array $items ): void {
+		foreach ( $items as $hkey => $item_id ) {
+			$page        = Wormiss_Page_Import::post_for( (string) $hkey );
+			$parent_key  = $page ? (string) get_post_meta( $page, Wormiss_Page_Import::META_PARENT, true ) : '';
+			$parent_item = ( '' !== $parent_key && isset( $items[ $parent_key ] ) ) ? (int) $items[ $parent_key ] : 0;
 			// This is the field wp_update_nav_menu_item() itself writes for the parent item.
-			update_post_meta( $item_id, '_menu_item_menu_item_parent', (string) $parent_item );
+			update_post_meta( (int) $item_id, '_menu_item_menu_item_parent', (string) $parent_item );
+		}
+		$kept = array_map( 'intval', array_values( $items ) );
+		foreach ( self::managed_items( $menu_id )['ids'] as $item_id ) {
+			if ( ! in_array( (int) $item_id, $kept, true ) ) {
+				wp_delete_post( (int) $item_id, true );
+			}
 		}
 	}
 
