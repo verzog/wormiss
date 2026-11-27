@@ -985,22 +985,29 @@ class Wormiss_News_Import {
 		}
 		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
 		// name the file from its real type (see Wormiss_Media::sideload_name()).
-		$name = Wormiss_Media::sideload_name( $tmp, $url, 'news-image' );
+		$name   = Wormiss_Media::sideload_name( $tmp, $url, 'news-image' );
+		$is_svg = false;
 		if ( null === $name ) {
-			// Not an image type WordPress accepts (e.g. SVG): leave the article pointing at the iMIS
-			// image rather than failing it and retrying every import.
-			wp_delete_file( $tmp );
-			/* translators: %s: article title. */
-			self::note( $report, sprintf( __( '%s: an image is not a supported type, so it was left on the iMIS site.', 'wormiss' ), self::label( $article ) ) );
-			return 0;
+			// An SVG (which WordPress blocks by default) is sanitised and imported if SVG import is on.
+			$name = Wormiss_Media::svg_name( $tmp, $url, 'news-image' );
+			if ( null === $name ) {
+				// Not an image type WordPress accepts: leave the article pointing at the iMIS image
+				// rather than failing it and retrying every import.
+				wp_delete_file( $tmp );
+				/* translators: %s: article title. */
+				self::note( $report, sprintf( __( '%s: an image is not a supported type, so it was left on the iMIS site.', 'wormiss' ), self::label( $article ) ) );
+				return 0;
+			}
+			$is_svg = true;
 		}
-		$attachment = media_handle_sideload(
+		$attachment = Wormiss_Media::handle_sideload(
 			[
 				'name'     => $name,
 				'tmp_name' => $tmp,
 			],
 			$post_id,
-			self::label( $article )
+			self::label( $article ),
+			$is_svg
 		);
 		if ( is_wp_error( $attachment ) ) {
 			$complete = false; // Tried again next import.

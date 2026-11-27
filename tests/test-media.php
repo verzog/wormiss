@@ -131,4 +131,109 @@ class Test_Wormiss_Media extends Wormiss_Test_Case {
 		wp_delete_file( $path );
 		$this->assertNull( $name );
 	}
+
+	/**
+	 * Write SVG markup to a temp file and return its path.
+	 *
+	 * @param string $svg Markup.
+	 * @return string Path.
+	 */
+	private function svg_file( string $svg ): string {
+		$path = (string) tempnam( sys_get_temp_dir(), 'wormiss-svg' );
+		file_put_contents( $path, $svg ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		return $path;
+	}
+
+	/**
+	 * Read a file's contents (test assertion helper).
+	 *
+	 * @param string $path Path.
+	 * @return string Contents.
+	 */
+	private function read( string $path ): string {
+		return (string) file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test assertion.
+	}
+
+	/**
+	 * A clean icon SVG is accepted, named .svg, and keeps its drawing.
+	 *
+	 * @return void
+	 */
+	public function test_imports_clean_svg(): void {
+		$tmp  = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="#512b7f"/></svg>' );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/images/_SCCA/about-us/vision.svg', 'page-image' );
+		$out  = $this->read( $tmp );
+		wp_delete_file( $tmp );
+		$this->assertSame( 'vision.svg', $name );
+		$this->assertStringContainsString( '<path', $out );
+	}
+
+	/**
+	 * A <script> in an SVG is removed by sanitising.
+	 *
+	 * @return void
+	 */
+	public function test_strips_script_from_svg(): void {
+		$tmp  = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><path d="M0 0h8v8H0z"/></svg>' );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		$out  = $this->read( $tmp );
+		wp_delete_file( $tmp );
+		$this->assertSame( 'x.svg', $name );
+		$this->assertStringNotContainsString( 'script', $out );
+		$this->assertStringNotContainsString( 'alert', $out );
+	}
+
+	/**
+	 * An on* event-handler attribute is removed by sanitising.
+	 *
+	 * @return void
+	 */
+	public function test_strips_event_handler_from_svg(): void {
+		$tmp = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg"><rect width="8" height="8" onload="alert(1)" onclick="x()"/></svg>' );
+		Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		$out = $this->read( $tmp );
+		wp_delete_file( $tmp );
+		$this->assertStringNotContainsString( 'onload', $out );
+		$this->assertStringNotContainsString( 'onclick', $out );
+	}
+
+	/**
+	 * An external or javascript href is dropped; only internal (#id) references survive.
+	 *
+	 * @return void
+	 */
+	public function test_strips_dangerous_href_from_svg(): void {
+		$tmp = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="https://evil.example/x.svg#a"/><use href="javascript:alert(1)"/></svg>' );
+		Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		$out = $this->read( $tmp );
+		wp_delete_file( $tmp );
+		$this->assertStringNotContainsString( 'evil.example', $out );
+		$this->assertStringNotContainsString( 'javascript:', $out );
+	}
+
+	/**
+	 * An SVG carrying a DOCTYPE (an entity-expansion / XXE vector) is refused outright.
+	 *
+	 * @return void
+	 */
+	public function test_rejects_doctype_svg(): void {
+		$tmp  = $this->svg_file( '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "y">]><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h4v4H0z"/></svg>' );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		wp_delete_file( $tmp );
+		$this->assertNull( $name );
+	}
+
+	/**
+	 * With the wormiss_import_svg filter off, SVGs are not imported.
+	 *
+	 * @return void
+	 */
+	public function test_svg_import_can_be_disabled(): void {
+		add_filter( 'wormiss_import_svg', '__return_false' );
+		$tmp  = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h4v4H0z"/></svg>' );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		wp_delete_file( $tmp );
+		remove_filter( 'wormiss_import_svg', '__return_false' );
+		$this->assertNull( $name );
+	}
 }
