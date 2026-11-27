@@ -96,26 +96,14 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	/**
 	 * Queue the IQA rows and the article's document.
 	 *
-	 * @param string $xml    The content page.
-	 * @param string $status Document status.
+	 * @param string $xml     The content page.
+	 * @param string $status  Document status.
+	 * @param string $updated An Updated On value for the query rows ('' for no such column).
 	 * @return void
 	 */
-	private function queue( string $xml, string $status = 'Published' ): void {
-		$rows = [
-			[
-				'DocumentVersionKey'  => self::KEY,
-				'AlternateName'       => 'Vale Professor',
-				'DocumentDescription' => 'A summary.',
-				'PublicationDate'     => '8/06/2026 11:45:00 AM',
-				'TagName'             => 'Latest News',
-			],
-			[
-				'DocumentVersionKey' => self::KEY,
-				'TagName'            => 'Advocacy',
-			],
-		];
-		$this->imis->token()
-			->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( $rows ) )
+	private function queue( string $xml, string $status = 'Published', string $updated = '' ): void {
+		$this->queue_list( $updated );
+		$this->imis
 			->reply(
 				'/api/Document/_Execute',
 				200,
@@ -134,6 +122,34 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 					],
 				]
 			);
+	}
+
+	/**
+	 * Queue only the list-level read (token and the IQA), not the article's document. Used to prove
+	 * an unchanged article is skipped without its per-article read.
+	 *
+	 * @param string $updated An Updated On value for the first row ('' for no such column).
+	 * @return void
+	 */
+	private function queue_list( string $updated = '' ): void {
+		$first = [
+			'DocumentVersionKey'  => self::KEY,
+			'AlternateName'       => 'Vale Professor',
+			'DocumentDescription' => 'A summary.',
+			'PublicationDate'     => '8/06/2026 11:45:00 AM',
+			'TagName'             => 'Latest News',
+		];
+		if ( '' !== $updated ) {
+			$first['UpdatedOn'] = $updated;
+		}
+		$rows = [
+			$first,
+			[
+				'DocumentVersionKey' => self::KEY,
+				'TagName'            => 'Advocacy',
+			],
+		];
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( $rows ) );
 	}
 
 	/**
@@ -449,6 +465,61 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 		$report = Wormiss_News_Import::run();
 		$this->assertSame( 'error', $report['status'] );
 		$this->assertStringContainsString( 'cannot be selected as DISTINCT', Wormiss_News_Import::summary() );
+	}
+
+	/**
+	 * With an Updated On column and "changed only" on, the first import (a reconcile) reads the
+	 * article and records its updated value; the next import skips it without reading its document.
+	 *
+	 * @return void
+	 */
+	public function test_incremental_skips_unchanged(): void {
+		$this->queue( $this->page(), 'Published', '2026-06-18T10:04:59.743' );
+		$this->assertSame( 1, Wormiss_News_Import::run()['created'] );
+		$post_id = Wormiss_News_Import::post_for( self::KEY );
+		$this->assertSame( '2026-06-18T10:04:59.743', (string) get_post_meta( $post_id, Wormiss_News_Import::META_UPDATED, true ) );
+		$this->assertGreaterThan( 0, (int) get_option( Wormiss_News_Import::FULL_OPTION ), 'The reconcile time is recorded.' );
+
+		// Next import: same updated value, reconcile not due. Only the IQA is queued, so reading the
+		// article's document would be an unexpected request and fail the test.
+		$this->imis->requests = [];
+		$this->queue_list( '2026-06-18T10:04:59.743' );
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( 0, $report['created'] + $report['updated'] );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, $this->imis->count( '/api/Document/_Execute' ), 'No per-article read for an unchanged article.' );
+	}
+
+	/**
+	 * An article whose updated value has changed is re-read on the next incremental import.
+	 *
+	 * @return void
+	 */
+	public function test_incremental_rereads_changed(): void {
+		$this->queue( $this->page(), 'Published', '2026-06-18T10:04:59.743' );
+		Wormiss_News_Import::run();
+
+		$this->queue( $this->page( '<p>Changed text.</p>' ), 'Published', '2026-07-01T09:00:00.000' );
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( 1, $report['updated'] );
+		$this->assertStringContainsString( 'Changed text.', get_post_field( 'post_content', Wormiss_News_Import::post_for( self::KEY ) ) );
+	}
+
+	/**
+	 * A query with no Updated On column keeps reading every article (no fast skip possible).
+	 *
+	 * @return void
+	 */
+	public function test_no_updated_column_rereads_every_article(): void {
+		$this->queue( $this->page() );
+		Wormiss_News_Import::run();
+
+		// No Updated On in the rows, so the article is read again even though it is unchanged.
+		$this->imis->requests = [];
+		$this->queue( $this->page() );
+		$report = Wormiss_News_Import::run();
+		$this->assertSame( 1, $this->imis->count( '/api/Document/_Execute' ), 'The article is re-read without an updated column.' );
+		$this->assertSame( 1, $report['skipped'], 'Its content hash is unchanged, so nothing is written.' );
 	}
 
 	/**

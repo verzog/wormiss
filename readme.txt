@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.66.0
+Stable tag: 0.67.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.67.0 =
+* News import is now incremental too (Settings > News > "Only re-read changed articles", on by default). Previously every import fetched each article's iMIS document even when unchanged. If the news query returns an Updated On column, an article whose updated value is unchanged since its last import is now skipped without that read; only new and changed articles are fetched. A full re-read runs weekly to catch edits the query cannot flag. With no updated column in the query (or the setting off), every article is read every import, as before.
 
 = 0.66.0 =
 * Blog import is now incremental (Settings > Members' blog > "Only re-read changed posts", on by default). Previously every daily import read each post's full content and all its comments from iMIS, even when nothing had changed — thousands of calls on a large blog. Now a post whose iMIS UpdatedOn is unchanged since its last import is skipped without that read; only new and changed posts are fetched. A full re-read runs weekly to catch comment edits (which do not change a post's UpdatedOn). Turn the setting off to re-read every post every import, as before.

@@ -79,6 +79,21 @@ class Wormiss_News_Import {
 	const META_SOURCE = '_wormiss_news_source';
 
 	/**
+	 * On a post: the article's iMIS updated value at its last import (for the "changed only" skip).
+	 */
+	const META_UPDATED = '_wormiss_news_updated';
+
+	/**
+	 * When the last full re-read (reconcile) finished, so the next can be scheduled a week on.
+	 */
+	const FULL_OPTION = 'wormiss_news_import_full';
+
+	/**
+	 * How often a full re-read runs even with "changed only" on (to catch edits the query misses).
+	 */
+	const RECONCILE_SECONDS = 7 * DAY_IN_SECONDS;
+
+	/**
 	 * Ticked by an editor: later imports leave the post alone.
 	 */
 	const META_DETACHED = '_wormiss_news_detached';
@@ -333,7 +348,7 @@ class Wormiss_News_Import {
 		$client       = new Wormiss_Rest_Client();
 		$kept         = $carry_on ? get_option( self::LIST_OPTION ) : false;
 		if ( is_array( $kept ) && (int) ( $kept['time'] ?? 0 ) > time() - self::LIST_MAX_AGE && is_array( $kept['articles'] ?? null ) ) {
-			return self::write( $client, $report, $done, $kept['articles'], (int) $kept['time'] );
+			return self::write( $client, $report, $done, $kept['articles'], (int) $kept['time'], (bool) ( $kept['reconcile'] ?? true ) );
 		}
 		try {
 			$rows = $client->run_iqa( (string) Wormiss_Settings::get( 'news_import_query' ), [], null, self::MAX_ROWS );
@@ -348,7 +363,20 @@ class Wormiss_News_Import {
 			$report['notes'][] = __( 'The news query has no Document Version Key column, so nothing was imported.', 'wormiss' );
 			return self::save( $report );
 		}
-		return self::write( $client, $report, $done, $articles, time() );
+		return self::write( $client, $report, $done, $articles, time(), self::reconcile_due() );
+	}
+
+	/**
+	 * Whether this import should be a full re-read: when "changed only" is off, or when the weekly
+	 * reconcile is due. A reconcile reads every article (so edits the query cannot flag are caught).
+	 *
+	 * @return bool
+	 */
+	private static function reconcile_due(): bool {
+		if ( ! Wormiss_Settings::get( 'news_import_incremental' ) ) {
+			return true;
+		}
+		return time() - (int) get_option( self::FULL_OPTION, 0 ) >= self::RECONCILE_SECONDS;
 	}
 
 	/**
@@ -377,6 +405,9 @@ class Wormiss_News_Import {
 					'summary'   => sanitize_textarea_field( $cells['documentdescription'] ?? ( $cells['description'] ?? '' ) ),
 					'date'      => $cells['publicationdate'] ?? '',
 					'thumbnail' => $cells['thumbnailimage'] ?? '',
+					// An updated value, if the query has such a column: it lets the "changed only" skip
+					// avoid re-reading an unchanged article. Absent, every article is read every import.
+					'updated'   => (string) ( $cells['updatedon'] ?? ( $cells['updated'] ?? ( $cells['documentupdatedon'] ?? ( $cells['lastupdated'] ?? '' ) ) ) ),
 					'tags'      => [],
 				];
 			}
@@ -396,9 +427,10 @@ class Wormiss_News_Import {
 	 * @param array               $done     Article keys earlier batches dealt with.
 	 * @param array[]             $articles From articles().
 	 * @param int                 $read     When the list was read.
+	 * @param bool                $reconcile Whether this is a full re-read (no "changed only" skip).
 	 * @return array The report.
 	 */
-	private static function write( Wormiss_Rest_Client $client, array $report, array $done, array $articles, int $read ): array {
+	private static function write( Wormiss_Rest_Client $client, array $report, array $done, array $articles, int $read, bool $reconcile ): array {
 		$report['read'] = count( $articles );
 		$writes         = 0;
 		$checked        = 0;
@@ -407,8 +439,9 @@ class Wormiss_News_Import {
 		update_option(
 			self::LIST_OPTION,
 			[
-				'time'     => $read,
-				'articles' => $articles,
+				'time'      => $read,
+				'articles'  => $articles,
+				'reconcile' => $reconcile,
 			],
 			false
 		);
@@ -433,7 +466,7 @@ class Wormiss_News_Import {
 				continue;
 			}
 			++$checked;
-			$result = self::one( $client, $article, $report );
+			$result = self::one( $client, $article, $report, $reconcile );
 			Wormiss_Batch::done( self::WORKING_OPTION );
 			if ( 'created' === $result || 'updated' === $result ) {
 				++$writes;
@@ -450,6 +483,10 @@ class Wormiss_News_Import {
 		}
 		$report['remaining'] = $todo;
 		if ( 0 === $todo ) {
+			// A full re-read finished: hold off the next reconcile for a week.
+			if ( $reconcile ) {
+				update_option( self::FULL_OPTION, time(), false );
+			}
 			delete_option( self::DONE_OPTION );
 			delete_option( self::LIST_OPTION );
 			wp_clear_scheduled_hook( self::MORE_HOOK );
@@ -461,12 +498,13 @@ class Wormiss_News_Import {
 	/**
 	 * Make or update the post for one article.
 	 *
-	 * @param Wormiss_Rest_Client $client  Client.
-	 * @param array               $article From articles().
-	 * @param array               $report  Report, for notes.
+	 * @param Wormiss_Rest_Client $client    Client.
+	 * @param array               $article   From articles().
+	 * @param array               $report    Report, for notes.
+	 * @param bool                $reconcile Whether this is a full re-read (no "changed only" skip).
 	 * @return string created, updated or skipped.
 	 */
-	private static function one( Wormiss_Rest_Client $client, array $article, array &$report ): string {
+	private static function one( Wormiss_Rest_Client $client, array $article, array &$report, bool $reconcile = true ): string {
 		$post_id = self::post_for( $article['key'] );
 		if ( $post_id && ( 'trash' === get_post_status( $post_id ) || get_post_meta( $post_id, self::META_DETACHED, true ) ) ) {
 			return 'skipped';
@@ -480,9 +518,21 @@ class Wormiss_News_Import {
 				]
 			);
 		}
+		// "Changed only": an article the query reports unchanged (same updated value) since its last
+		// import is skipped without reading its iMIS document. Needs an updated column in the query;
+		// a weekly reconcile reads every article so edits the query cannot flag are still caught.
+		if ( ! $reconcile && $post_id && '' !== (string) $article['updated']
+			&& '' !== (string) get_post_meta( $post_id, self::META_SOURCE, true )
+			&& (string) get_post_meta( $post_id, self::META_UPDATED, true ) === (string) $article['updated'] ) {
+			return 'skipped';
+		}
 		try {
 			$document = $client->find_document( $article['key'] );
 		} catch ( Wormiss_Exception $e ) {
+			// A read that failed must be retried next import, not fast-skipped: drop the marker.
+			if ( $post_id ) {
+				delete_post_meta( $post_id, self::META_UPDATED );
+			}
 			/* translators: 1: article title, 2: reason. */
 			self::note( $report, sprintf( __( '%1$s: not read from iMIS (%2$s).', 'wormiss' ), self::label( $article ), $e->getMessage() ) );
 			return 'skipped';
@@ -513,6 +563,12 @@ class Wormiss_News_Import {
 		$feature = '' !== $built['feature'] ? $built['feature'] : (string) $article['thumbnail'];
 		$hash    = md5( (string) wp_json_encode( [ $title, $article['summary'], $date, $built['html'], $feature, $article['tags'], $content['members'] ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash ) {
+			// Unchanged. Record the updated marker so later runs can fast-skip it — needed for posts
+			// imported before this feature (a source hash but no marker yet). Not in a dry run.
+			if ( empty( $report['dry_run'] ) && '' !== (string) $article['updated']
+				&& (string) get_post_meta( $post_id, self::META_UPDATED, true ) !== (string) $article['updated'] ) {
+				update_post_meta( $post_id, self::META_UPDATED, (string) $article['updated'] );
+			}
 			return 'skipped';
 		}
 		if ( ! empty( $report['dry_run'] ) ) {
@@ -561,6 +617,8 @@ class Wormiss_News_Import {
 		// again next time.
 		if ( $complete ) {
 			update_post_meta( $saved, self::META_SOURCE, $hash );
+			// The article's updated value, so the next import can fast-skip it while it is unchanged.
+			update_post_meta( $saved, self::META_UPDATED, (string) $article['updated'] );
 		} else {
 			delete_post_meta( $saved, self::META_SOURCE );
 		}
