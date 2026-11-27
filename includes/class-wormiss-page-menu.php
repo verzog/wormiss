@@ -27,18 +27,25 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Keeps a WordPress navigation menu in step with the imported iMIS site tree.
  *
- * When the page import finishes a run it calls rebuild() with the navigation items in tree order.
- * This makes (or updates) a menu named in the settings, with one menu item per imported, published
- * page, nested under its parent as in iMIS and in the same order. The menu is managed by the import:
- * items that point at imported pages are kept in step and stale ones removed, but any item an editor
- * adds to the menu by hand (not pointing at an imported page) is left alone. The menu is not assigned
- * to a theme location; an editor does that once under Appearance > Menus. Nothing is assigned or
- * removed when the feature is off.
+ * When the page import finishes a run it is given the navigation items in tree order and, if the
+ * feature is on, builds a menu with one entry per imported, published page, nested under its parent
+ * as in iMIS and in the same order.
+ *
+ * Which kind of menu depends on the active theme. A classic theme gets a classic navigation menu
+ * (named in the settings): items pointing at imported pages are kept in step and stale ones removed,
+ * while any item an editor adds by hand is left alone; an editor assigns it to a theme location once
+ * under Appearance > Menus. A block theme has no menu locations, so instead a Navigation (a
+ * wp_navigation post, named the same) is built and fully managed; an editor points the theme's
+ * Navigation block at it once in the Site Editor, and it then stays in step on its own. Nothing is
+ * built or removed when the feature is off.
  */
 class Wormiss_Page_Menu {
 
 	/** On a nav menu item: marks it as one this import manages. */
 	const ITEM_FLAG = '_wormiss_page_menu';
+
+	/** On a wp_navigation post: marks the block-theme Navigation this import manages. */
+	const NAV_FLAG = '_wormiss_page_nav';
 
 	/** The default menu name, used when the setting is blank. */
 	const DEFAULT_NAME = 'iMIS site';
@@ -164,6 +171,13 @@ class Wormiss_Page_Menu {
 			self::finish();
 			return;
 		}
+		if ( self::is_block_theme() ) {
+			// A block theme has no classic menu locations: build a Navigation (wp_navigation) post the
+			// theme's Navigation block can use. Block markup is cheap to build, so it is done in one pass.
+			self::build_block_nav( array_map( 'strval', (array) ( $job['keys'] ?? [] ) ) );
+			self::finish();
+			return;
+		}
 		$menu = self::menu();
 		if ( ! $menu instanceof WP_Term ) {
 			self::finish();
@@ -279,6 +293,138 @@ class Wormiss_Page_Menu {
 			'ids'     => $ids,
 			'by_page' => $by_page,
 		];
+	}
+
+	/**
+	 * Whether a block Navigation (wp_navigation post) is built rather than a classic menu: true for a
+	 * block theme. Filterable, so a site (or a test) can force either kind.
+	 *
+	 * @return bool
+	 */
+	public static function is_block_theme(): bool {
+		$block = function_exists( 'wp_is_block_theme' ) && wp_is_block_theme();
+		/**
+		 * Whether the imported-pages menu is built as a block Navigation (a wp_navigation post) instead
+		 * of a classic navigation menu. Defaults to whether the active theme is a block theme.
+		 *
+		 * @param bool $block Build a block Navigation.
+		 */
+		return (bool) apply_filters( 'wormiss_page_import_block_nav', $block );
+	}
+
+	/**
+	 * Build (or update) the block-theme Navigation from the imported pages: a wp_navigation post whose
+	 * content is navigation-link and navigation-submenu blocks for each published imported page, nested
+	 * under its parent and in the given order.
+	 *
+	 * @param string[] $keys Imported navigation items' hierarchy keys, in tree order.
+	 * @return void
+	 */
+	private static function build_block_nav( array $keys ): void {
+		$pages = [];
+		$order = [];
+		foreach ( $keys as $hkey ) {
+			$page = Wormiss_Page_Import::post_for( $hkey );
+			// Only published pages go in the menu; a draft would 404 for visitors.
+			if ( $page && 'publish' === get_post_status( $page ) ) {
+				$pages[ $hkey ] = (int) $page;
+				$order[]        = $hkey;
+			}
+		}
+		if ( ! $pages ) {
+			return; // Never wipe the Navigation from an empty result (e.g. a query that returned nothing).
+		}
+		$children = [];
+		$roots    = [];
+		foreach ( $order as $hkey ) {
+			$parent_key = (string) get_post_meta( $pages[ $hkey ], Wormiss_Page_Import::META_PARENT, true );
+			if ( '' !== $parent_key && isset( $pages[ $parent_key ] ) && $parent_key !== $hkey ) {
+				$children[ $parent_key ][] = $hkey;
+			} else {
+				$roots[] = $hkey;
+			}
+		}
+		self::save_block_nav( self::render_block_items( $roots, $children, $pages ) );
+	}
+
+	/**
+	 * Render a list of pages (and their descendants) as navigation block markup: a page with children
+	 * becomes a navigation-submenu wrapping them, a page without becomes a navigation-link.
+	 *
+	 * @param string[]            $keys     Hierarchy keys to render, in order.
+	 * @param array<string,array> $children Parent key => child keys.
+	 * @param array<string,int>   $pages    Hierarchy key => page ID.
+	 * @return string
+	 */
+	private static function render_block_items( array $keys, array $children, array $pages ): string {
+		$out = '';
+		foreach ( $keys as $hkey ) {
+			$page  = $pages[ $hkey ];
+			$attrs = [
+				'label' => wp_strip_all_tags( (string) get_the_title( $page ) ),
+				'type'  => 'page',
+				'id'    => $page,
+				'url'   => (string) get_permalink( $page ),
+				'kind'  => 'post-type',
+			];
+			$json  = (string) wp_json_encode( $attrs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+			if ( ! empty( $children[ $hkey ] ) ) {
+				$out .= "<!-- wp:navigation-submenu $json -->\n"
+					. self::render_block_items( $children[ $hkey ], $children, $pages )
+					. "<!-- /wp:navigation-submenu -->\n";
+			} else {
+				$out .= "<!-- wp:navigation-link $json /-->\n";
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Store the navigation block markup in the import's own wp_navigation post (made if missing),
+	 * leaving any other Navigation the site has alone.
+	 *
+	 * @param string $markup Navigation block markup.
+	 * @return void
+	 */
+	private static function save_block_nav( string $markup ): void {
+		$data     = [
+			'post_type'    => 'wp_navigation',
+			'post_title'   => self::menu_name(),
+			'post_status'  => 'publish',
+			'post_content' => trim( $markup ),
+		];
+		$existing = self::block_nav_post();
+		if ( $existing ) {
+			$data['ID'] = $existing;
+			wp_update_post( wp_slash( $data ) );
+			return;
+		}
+		$id = wp_insert_post( wp_slash( $data ), true );
+		if ( ! is_wp_error( $id ) && $id ) {
+			update_post_meta( (int) $id, self::NAV_FLAG, 1 );
+		}
+	}
+
+	/**
+	 * The wp_navigation post this import manages (marked with NAV_FLAG), or 0.
+	 *
+	 * @return int
+	 */
+	private static function block_nav_post(): int {
+		// phpcs:disable WordPress.DB.SlowDBQuery -- One lookup, once per completed import.
+		$found = get_posts(
+			[
+				'post_type'        => 'wp_navigation',
+				'post_status'      => [ 'publish', 'draft', 'pending', 'private' ],
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+				'meta_key'         => self::NAV_FLAG,
+				'meta_value'       => 1,
+			]
+		);
+		// phpcs:enable
+		return $found ? (int) $found[0] : 0;
 	}
 
 	/**

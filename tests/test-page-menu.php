@@ -50,6 +50,9 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 				]
 			)
 		);
+		// These tests cover the classic-menu path; pin it so the active theme (which may be a block
+		// theme) does not switch the build to the block Navigation path.
+		add_filter( 'wormiss_page_import_block_nav', '__return_false' );
 	}
 
 	/**
@@ -63,6 +66,19 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 		$menu = wp_get_nav_menu_object( self::MENU );
 		if ( $menu instanceof WP_Term ) {
 			wp_delete_nav_menu( $menu->term_id );
+		}
+		remove_filter( 'wormiss_page_import_block_nav', '__return_false' );
+		remove_filter( 'wormiss_page_import_block_nav', '__return_true' );
+		foreach ( get_posts(
+			[
+				'post_type'        => 'wp_navigation',
+				'post_status'      => 'any',
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+			]
+		) as $nav ) {
+			wp_delete_post( (int) $nav, true );
 		}
 		parent::tear_down();
 	}
@@ -237,6 +253,95 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 			(int) get_post_meta( $items[ $team ]->ID, '_menu_item_menu_item_parent', true ),
 			'Nesting is applied once the build finishes.'
 		);
+	}
+
+	/**
+	 * The import's managed block Navigation post, or null.
+	 *
+	 * @return WP_Post|null
+	 */
+	private function block_nav(): ?WP_Post {
+		// phpcs:disable WordPress.DB.SlowDBQuery -- Test assertion.
+		$found = get_posts(
+			[
+				'post_type'        => 'wp_navigation',
+				'post_status'      => 'any',
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+				'meta_key'         => Wormiss_Page_Menu::NAV_FLAG,
+				'meta_value'       => 1,
+			]
+		);
+		// phpcs:enable
+		return $found ? get_post( (int) $found[0] ) : null;
+	}
+
+	/**
+	 * On a block theme the build makes a managed wp_navigation post, with the imported pages as
+	 * navigation blocks nested under their parent (a parent is a submenu) and in order.
+	 *
+	 * @return void
+	 */
+	public function test_builds_block_navigation(): void {
+		remove_filter( 'wormiss_page_import_block_nav', '__return_false' );
+		add_filter( 'wormiss_page_import_block_nav', '__return_true' );
+		$about = $this->page( 'a', '', 'About Us' );
+		$this->page( 'b', 'a', 'Our Team' );
+		$this->page( 'c', '', 'Contact' );
+
+		$this->build( [ 'a', 'b', 'c' ] );
+
+		$nav = $this->block_nav();
+		$this->assertInstanceOf( WP_Post::class, $nav, 'A managed Navigation post is created.' );
+		$this->assertSame( self::MENU, $nav->post_title );
+		$content = $nav->post_content;
+		$this->assertStringContainsString( '<!-- wp:navigation-submenu', $content, 'A page with a child is a submenu.' );
+		$this->assertStringContainsString( '"label":"About Us"', $content );
+		$this->assertStringContainsString( '"id":' . $about, $content, 'The entry points at the page by ID.' );
+		$this->assertStringContainsString( '"label":"Our Team"', $content );
+		$this->assertStringContainsString( '"label":"Contact"', $content );
+
+		$submenu_open  = strpos( $content, '<!-- wp:navigation-submenu' );
+		$submenu_close = strpos( $content, '<!-- /wp:navigation-submenu -->' );
+		$team_at       = strpos( $content, '"label":"Our Team"' );
+		$contact_at    = strpos( $content, '"label":"Contact"' );
+		$this->assertTrue( $submenu_open < $team_at && $team_at < $submenu_close, 'The child nests inside its parent submenu.' );
+		$this->assertTrue( $contact_at > $submenu_close, 'The next top-level item follows the submenu, in order.' );
+	}
+
+	/**
+	 * A second block-theme build updates the same Navigation post rather than making another.
+	 *
+	 * @return void
+	 */
+	public function test_block_navigation_reused_not_duplicated(): void {
+		remove_filter( 'wormiss_page_import_block_nav', '__return_false' );
+		add_filter( 'wormiss_page_import_block_nav', '__return_true' );
+		$this->page( 'a', '', 'About Us' );
+		$this->build( [ 'a' ] );
+		$first = $this->block_nav();
+		$this->assertInstanceOf( WP_Post::class, $first );
+
+		$this->page( 'b', '', 'Contact' );
+		$this->build( [ 'a', 'b' ] );
+
+		// phpcs:disable WordPress.DB.SlowDBQuery -- Test assertion.
+		$all = get_posts(
+			[
+				'post_type'        => 'wp_navigation',
+				'post_status'      => 'any',
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+				'meta_key'         => Wormiss_Page_Menu::NAV_FLAG,
+				'meta_value'       => 1,
+			]
+		);
+		// phpcs:enable
+		$this->assertCount( 1, $all, 'The Navigation post is reused, not duplicated.' );
+		$this->assertSame( $first->ID, (int) $all[0] );
+		$this->assertStringContainsString( '"label":"Contact"', (string) get_post( (int) $all[0] )->post_content, 'The new page is added to the same Navigation.' );
 	}
 
 	/**

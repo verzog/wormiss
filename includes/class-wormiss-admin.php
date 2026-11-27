@@ -1337,9 +1337,10 @@ class Wormiss_Admin {
 				}
 				if ( 'page_import_menu' === $key ) {
 					echo ' <span class="description">'
-						. esc_html__( 'After each import, make or update a WordPress navigation menu (named below) mirroring the', 'wormiss' )
-						. ' ' . esc_html__( 'iMIS tree: one item per imported, published page, nested and ordered as in iMIS. Assign it to', 'wormiss' )
-						. ' ' . esc_html__( 'a theme location once under Appearance > Menus. The import manages this menu, so avoid editing it by hand.', 'wormiss' )
+						. esc_html__( 'After each import, make or update a navigation menu (named below) mirroring the iMIS tree:', 'wormiss' )
+						. ' ' . esc_html__( 'one entry per imported, published page, nested and ordered as in iMIS. On a classic theme this is a', 'wormiss' )
+						. ' ' . esc_html__( 'menu you assign to a theme location once under Appearance > Menus; on a block theme it is a Navigation', 'wormiss' )
+						. ' ' . esc_html__( 'you point the Navigation block at once in the Site Editor. The import manages it, so avoid editing it by hand.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'blog_import_incremental' === $key ) {
