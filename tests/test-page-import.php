@@ -483,7 +483,9 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 		$body    = Wormiss_Page_Import::build_body( 'X', $content );
 		$this->assertSame( 1, substr_count( $body, '<!-- wp:paragraph -->' ), 'The sentence is one paragraph.' );
 		$this->assertStringNotContainsString( '<!-- wp:html -->', $body, 'The link is not split into its own block.' );
-		$this->assertStringContainsString( 'Read <a href="/guide">this guide</a> before applying.', $body, 'Spacing around the link is kept.' );
+		// clean() may rewrite the link (absolute URL, target/rel), so assert only the spacing around it.
+		$this->assertStringContainsString( 'Read <a ', $body, 'The space before the link is kept.' );
+		$this->assertStringContainsString( '>this guide</a> before applying.', $body, 'The space after the link is kept.' );
 	}
 
 	/**
