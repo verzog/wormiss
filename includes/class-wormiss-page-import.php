@@ -674,8 +674,13 @@ class Wormiss_Page_Import {
 	 * @return string
 	 */
 	public static function build_body( string $title, array $content ): string {
+		$items = (array) ( $content['items'] ?? [] );
+		if ( Wormiss_Page_Blocks::enabled() ) {
+			// Rebuild the iMIS column layout as block markup (see Wormiss_Page_Blocks).
+			return Wormiss_Page_Blocks::build( $title, $items );
+		}
 		$parts = [];
-		foreach ( (array) ( $content['items'] ?? [] ) as $item ) {
+		foreach ( $items as $item ) {
 			$html = Wormiss_News_Import::clean( (string) ( $item['html'] ?? '' ) );
 			if ( '' === $html ) {
 				continue;
