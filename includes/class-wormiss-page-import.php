@@ -347,6 +347,8 @@ class Wormiss_Page_Import {
 		if ( 0 === $todo ) {
 			if ( empty( $report['dry_run'] ) ) {
 				self::relink( $nodes );
+				// Rebuild the WordPress navigation menu from the tree, if that is turned on.
+				Wormiss_Page_Menu::rebuild( array_keys( $nodes ) );
 			}
 			delete_option( self::DONE_OPTION );
 			delete_option( self::LIST_OPTION );

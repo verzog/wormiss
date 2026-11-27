@@ -139,6 +139,9 @@ class Wormiss_Settings {
 			'page_import_publish'             => false,
 			// The IQA that lists the website's navigation items (one row per item).
 			'page_import_query'               => '',
+			// Build a WordPress navigation menu from the imported pages, and the menu's name.
+			'page_import_menu'                => false,
+			'page_import_menu_name'           => 'iMIS site',
 			// Media categories: the roles that count as staff, whose uploads are not auto-filed into
 			// the reserved "End-user images" category (empty: administrators and the Wormiss Staff and
 			// Manager roles). Administrators always count as staff.
@@ -571,6 +574,10 @@ class Wormiss_Settings {
 			$query                      = self::parse_queries( (string) $input['page_import_query'] );
 			$clean['page_import_query'] = $query ? $query[0] : '';
 		}
+		if ( isset( $input['page_import_menu_name'] ) ) {
+			$name                           = sanitize_text_field( (string) $input['page_import_menu_name'] );
+			$clean['page_import_menu_name'] = '' !== $name ? $name : 'iMIS site';
+		}
 		if ( isset( $input['blog_section'] ) ) {
 			$roles                      = isset( $input['blog_reader_roles'] ) && is_array( $input['blog_reader_roles'] ) ? $input['blog_reader_roles'] : [];
 			$known                      = array_keys( wp_roles()->get_names() );
@@ -656,7 +663,7 @@ class Wormiss_Settings {
 				$clean[ $box ] = (bool) $input[ $box ];
 			}
 		}
-		foreach ( [ 'page_import_enabled', 'page_import_dry_run', 'page_import_publish' ] as $box ) {
+		foreach ( [ 'page_import_enabled', 'page_import_dry_run', 'page_import_publish', 'page_import_menu' ] as $box ) {
 			if ( isset( $input['page_import_section'] ) ) {
 				$clean[ $box ] = ! empty( $input[ $box ] );
 			} elseif ( array_key_exists( $box, $input ) ) {

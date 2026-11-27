@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.64.0
+Stable tag: 0.65.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.65.0 =
+* Page import can now build a WordPress navigation menu from the imported iMIS tree (Settings > Pages > "Build a navigation menu"). After each import it makes or updates a menu (named in the settings, default "iMIS site") with one item per imported, published page, nested under its parent and ordered as in iMIS. The import manages that menu — items pointing at imported pages are kept in step and stale ones removed — but items an editor adds to it by hand are left alone. The menu is not assigned to a theme location; an editor does that once under Appearance > Menus. Off by default.
 
 = 0.64.0 =
 * Page import: images in an imported page's body that live on the iMIS site are now copied into the WordPress Media Library, and the page is pointed at the local copies, so the pages keep working if iMIS goes away. Each image address is copied once (shared across pages), in small per-batch amounts, and an image that does not fit a batch or cannot be fetched is retried on the next import. Copying can be turned off with the wormiss_page_import_images filter. Images hosted on other sites are left where they are.
