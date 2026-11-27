@@ -958,9 +958,10 @@ class Wormiss_Page_Import {
 
 	/**
 	 * An existing page the import can take over rather than duplicate: a page not already stamped as an
-	 * imported page whose slug (from the iMIS path) or exact title matches, when exactly one such page
-	 * exists. 0 when none matches, or when several do (too ambiguous to adopt one safely, so a fresh
-	 * page is made instead).
+	 * imported page, and not one of the site's system pages, whose slug (from the iMIS path) or exact
+	 * title matches. Both criteria are gathered together, and a page is adopted only when they point to
+	 * one and the same single page; 0 when none matches, or when several do (too ambiguous to adopt one
+	 * safely, so a fresh page is made instead).
 	 *
 	 * @param string $title Page title.
 	 * @param string $path  iMIS path.
@@ -974,6 +975,9 @@ class Wormiss_Page_Import {
 			'numberposts'      => 2,
 			'fields'           => 'ids',
 			'suppress_filters' => true,
+			// System pages are never adopted (nor overwritten), even when one's title matches: its slug
+			// may differ, so the system-page skip alone would not catch it here.
+			'post__not_in'     => self::system_page_ids(),
 			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- One lookup, only when creating a page.
 			'meta_query'       => [
 				[
@@ -989,15 +993,17 @@ class Wormiss_Page_Import {
 		if ( '' !== trim( $title ) ) {
 			$queries[] = [ 'title' => $title ];
 		}
+		// Gather candidates from every criterion and adopt only when they all point to the one page: a
+		// slug match and a title match on two different pages is ambiguous, so a fresh page is made.
+		$found = [];
 		foreach ( $queries as $where ) {
 			// phpcs:disable WordPress.DB.SlowDBQuery -- One lookup, only when creating a page.
-			$found = array_map( 'intval', get_posts( array_merge( $base, $where ) ) );
-			// phpcs:enable
-			if ( 1 === count( $found ) ) {
-				return $found[0];
+			foreach ( get_posts( array_merge( $base, $where ) ) as $id ) {
+				$found[ (int) $id ] = true;
 			}
+			// phpcs:enable
 		}
-		return 0;
+		return 1 === count( $found ) ? (int) array_key_first( $found ) : 0;
 	}
 
 	/**
