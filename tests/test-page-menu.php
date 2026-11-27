@@ -345,6 +345,33 @@ class Test_Wormiss_Page_Menu extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * When the imported pages are all unpublished, a rebuild clears the managed Navigation rather than
+	 * leaving stale links to pages visitors can no longer reach.
+	 *
+	 * @return void
+	 */
+	public function test_block_navigation_cleared_when_nothing_published(): void {
+		remove_filter( 'wormiss_page_import_block_nav', '__return_false' );
+		add_filter( 'wormiss_page_import_block_nav', '__return_true' );
+		$about = $this->page( 'a', '', 'About Us' );
+		$this->build( [ 'a' ] );
+		$this->assertStringContainsString( '"label":"About Us"', (string) $this->block_nav()->post_content );
+
+		// The page leaves the tree (unpublished); the item list still has its key.
+		wp_update_post(
+			[
+				'ID'          => $about,
+				'post_status' => 'draft',
+			]
+		);
+		$this->build( [ 'a' ] );
+
+		$nav = $this->block_nav();
+		$this->assertInstanceOf( WP_Post::class, $nav, 'The Navigation post is kept.' );
+		$this->assertSame( '', trim( (string) $nav->post_content ), 'Its stale links are cleared when nothing is published.' );
+	}
+
+	/**
 	 * With the feature off, no menu is made.
 	 *
 	 * @return void

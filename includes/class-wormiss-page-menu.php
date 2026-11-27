@@ -321,6 +321,10 @@ class Wormiss_Page_Menu {
 	 * @return void
 	 */
 	private static function build_block_nav( array $keys ): void {
+		if ( ! $keys ) {
+			// No navigation items at all (schedule() already guards this); leave any Navigation alone.
+			return;
+		}
 		$pages = [];
 		$order = [];
 		foreach ( $keys as $hkey ) {
@@ -330,9 +334,6 @@ class Wormiss_Page_Menu {
 				$pages[ $hkey ] = (int) $page;
 				$order[]        = $hkey;
 			}
-		}
-		if ( ! $pages ) {
-			return; // Never wipe the Navigation from an empty result (e.g. a query that returned nothing).
 		}
 		$children = [];
 		$roots    = [];
@@ -344,7 +345,14 @@ class Wormiss_Page_Menu {
 				$roots[] = $hkey;
 			}
 		}
-		self::save_block_nav( self::render_block_items( $roots, $children, $pages ) );
+		$markup = self::render_block_items( $roots, $children, $pages );
+		// When the items were read but none are published, clear the managed Navigation so it never
+		// shows links to pages that have left the tree (as the classic path prunes them); but do not
+		// create an empty Navigation where none exists.
+		if ( '' === $markup && ! self::block_nav_post() ) {
+			return;
+		}
+		self::save_block_nav( $markup );
 	}
 
 	/**
