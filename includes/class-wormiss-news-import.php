@@ -483,8 +483,9 @@ class Wormiss_News_Import {
 		}
 		$report['remaining'] = $todo;
 		if ( 0 === $todo ) {
-			// A full re-read finished: hold off the next reconcile for a week.
-			if ( $reconcile ) {
+			// A full re-read finished: hold off the next reconcile for a week. Not after a dry run,
+			// which saves nothing, so a preview does not stop the next live import applying the changes.
+			if ( $reconcile && empty( $report['dry_run'] ) ) {
 				update_option( self::FULL_OPTION, time(), false );
 			}
 			delete_option( self::DONE_OPTION );

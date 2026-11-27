@@ -523,6 +523,19 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A dry-run reconcile does not record the reconcile time, so a preview does not stop the next
+	 * live import from re-reading and applying changes.
+	 *
+	 * @return void
+	 */
+	public function test_dry_run_reconcile_does_not_advance(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'news_import_dry_run' => true ] ) );
+		$this->queue( $this->page(), 'Published', '2026-06-18T10:04:59.743' );
+		Wormiss_News_Import::run();
+		$this->assertSame( 0, (int) get_option( Wormiss_News_Import::FULL_OPTION, 0 ), 'A dry-run reconcile does not consume the weekly window.' );
+	}
+
+	/**
 	 * Off, or with no query, nothing is read.
 	 *
 	 * @return void

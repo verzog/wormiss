@@ -1301,6 +1301,20 @@ class Test_Wormiss_Blog extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A dry-run reconcile does not record the reconcile time, so a preview does not stop the next
+	 * live import from re-reading and applying changes.
+	 *
+	 * @return void
+	 */
+	public function test_dry_run_reconcile_does_not_advance(): void {
+		update_option( Wormiss_Settings::OPTION, array_merge( Wormiss_Settings::all(), [ 'blog_import_dry_run' => true ] ) );
+		self::factory()->user->create( [ 'user_login' => '13397' ] );
+		$this->queue( $this->modern() );
+		Wormiss_Blog_Import::run();
+		$this->assertSame( 0, (int) get_option( Wormiss_Blog_Import::FULL_OPTION, 0 ), 'A dry-run reconcile does not consume the weekly window.' );
+	}
+
+	/**
 	 * Off: nothing is read.
 	 *
 	 * @return void
