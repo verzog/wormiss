@@ -167,6 +167,26 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A DocumentData reply whose Data is the given (already-decoded) XML.
+	 *
+	 * @param string $xml The document's XML.
+	 * @return array
+	 */
+	private function doc_with_data( string $xml ): array {
+		return [
+			'Result' => [
+				'$type'  => 'Asi.Soa.Core.DataContracts.DocumentData, Asi.Contracts',
+				'Status' => 'Published',
+				'Data'   => [
+					'$type'  => 'System.Byte[], mscorlib',
+					// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- As iMIS sends it.
+					'$value' => base64_encode( $xml ),
+				],
+			],
+		];
+	}
+
+	/**
 	 * Queue the IQA list and, for About Us then its child Our Team, each one's navigation document
 	 * and content document in processing order.
 	 *
@@ -771,6 +791,46 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Test assertion.
 		$this->assertStringNotContainsString( 'script', (string) file_get_contents( (string) get_attached_file( (int) $found[0] ) ), 'The script was sanitised out.' );
 		$this->assertStringContainsString( (string) wp_get_attachment_url( (int) $found[0] ), get_post_field( 'post_content', $page ) );
+	}
+
+	/**
+	 * The importer reads the page's layout template (the document its LayoutDocumentVersionKey names)
+	 * and records a preview of it in the report, so its grid format can be seen for the next pass.
+	 *
+	 * @return void
+	 */
+	public function test_reads_and_logs_layout_template(): void {
+		$layout_key = 'cccccccc-0000-0000-0000-000000000009';
+		$content    = str_replace(
+			'</Content>',
+			'<LayoutDocumentVersionKey>' . $layout_key . '</LayoutDocumentVersionKey></Content>',
+			$this->content_xml( '<p>About us text.</p>' )
+		);
+		$layout_xml = '<ContentLayout><Zone><Number>4</Number><Width>12</Width></Zone></ContentLayout>';
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'About Us',
+						],
+					]
+				)
+			)
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us', '@/web/About-Us' ) )
+			->reply( '/api/Document/_Execute', 200, $this->doc_with_data( $content ) )
+			->reply( '/api/Document/_Execute', 200, $this->doc_with_data( $layout_xml ) );
+
+		$report = Wormiss_Page_Import::run();
+
+		$notes = implode( ' ', $report['notes'] );
+		$this->assertStringContainsString( 'Page layout template', $notes );
+		$this->assertStringContainsString( $layout_key, $notes );
+		$this->assertStringContainsString( 'ContentLayout', $notes, 'The template preview is included.' );
 	}
 
 	/**

@@ -123,6 +123,13 @@ class Wormiss_Page_Import {
 	private static $images = 0;
 
 	/**
+	 * Whether the page layout template has been read and logged yet this run (once is enough).
+	 *
+	 * @var bool
+	 */
+	private static $layout_logged = false;
+
+	/**
 	 * Hook in.
 	 *
 	 * @return void
@@ -640,16 +647,54 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: its iMIS page content is missing or not published; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
-		$content = Wormiss_News_Import::parse( self::document_data( $document ) );
+		$xml     = self::document_data( $document );
+		$content = Wormiss_News_Import::parse( $xml );
 		if ( null === $content ) {
 			/* translators: %s: page title. */
 			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
 			return null;
 		}
+		self::log_layout_template( $client, $xml, $report );
 		return [
 			'html'    => self::build_body( $title, $content ),
 			'members' => (bool) $content['members'],
 		];
+	}
+
+	/**
+	 * Read the page's layout template (the document its LayoutDocumentVersionKey points to) once per
+	 * import, and record a preview of it in the report, so the exact grid format iMIS stores can be
+	 * seen. The template arranges each content block's layout zone into rows and columns; a later
+	 * pass will parse it to rebuild those rows and widths exactly. This changes no page output.
+	 *
+	 * @param Wormiss_Rest_Client $client Client.
+	 * @param string              $xml    The content document's decoded XML.
+	 * @param array               $report Report, for the note.
+	 * @return void
+	 */
+	private static function log_layout_template( Wormiss_Rest_Client $client, string $xml, array &$report ): void {
+		if ( self::$layout_logged ) {
+			return;
+		}
+		if ( ! preg_match( '#<LayoutDocumentVersionKey[^>]*>([^<]+)</LayoutDocumentVersionKey>#', $xml, $match ) ) {
+			return;
+		}
+		$key = trim( $match[1] );
+		if ( '' === $key ) {
+			return;
+		}
+		self::$layout_logged = true;
+		try {
+			$document = $client->find_document( $key );
+		} catch ( Wormiss_Exception $e ) {
+			/* translators: 1: template key, 2: reason. */
+			self::note( $report, sprintf( __( 'Page layout template %1$s could not be read (%2$s).', 'wormiss' ), $key, $e->getMessage() ) );
+			return;
+		}
+		$data    = null !== $document ? self::document_data( $document ) : '';
+		$preview = substr( (string) preg_replace( '/\s+/', ' ', $data ), 0, 2000 );
+		/* translators: 1: template key, 2: size in bytes, 3: a preview of the template. */
+		self::note( $report, sprintf( __( 'Page layout template %1$s read (%2$d bytes), for reconstructing the column grid in a later version. Preview: %3$s', 'wormiss' ), $key, strlen( $data ), $preview ) );
 	}
 
 	/**
