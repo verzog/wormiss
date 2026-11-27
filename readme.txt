@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.71.0
+Stable tag: 0.72.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.72.0 =
+* Imported pages no longer show blocks of raw CSS (or script) as text. An iMIS page can carry its own styles in an embedded style block; the import kept the style's contents while removing its tag, so the CSS appeared on the page as a wall of text. Style and script blocks are now removed whole — tag and contents — on every import (pages, news, blog and events). Re-run the page import after upgrading to tidy pages already brought across.
 
 = 0.71.0 =
 * The navigation menu built from the imported pages now works on block themes. A block theme has no classic menu locations, so the old menu (still built for classic themes) never appeared. The import now detects a block theme and builds a block Navigation instead — a managed Navigation menu, named as in the settings, with the imported pages nested and ordered as in iMIS. Turn on "Build a navigation menu" in Wormiss > Settings, run the import, then point your theme's Navigation block at the menu once in the Site Editor; after that it stays in step on its own. (The menu, of either kind, is built when an import run finishes — when the report shows no items remaining — so let the import complete after turning it on.)

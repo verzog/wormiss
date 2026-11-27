@@ -235,13 +235,18 @@ class Test_Wormiss_News_Import extends Wormiss_Test_Case {
 	 */
 	public function test_clean(): void {
 		$html = Wormiss_News_Import::clean(
-			'<h1 class="x">Head</h1><p style="color:red"><font size="4">One<br /><br />Two</font></p>'
+			'<h1 class="x">Head</h1><style>.profile { color: red; } div[id*="Listing"] .rgGrid { display: none; }</style>'
+			. '<p style="color:red"><font size="4">One<br /><br />Two</font></p>'
 			. '<script>alert(1)</script><p><a href="/web/About" style="x">us</a> <a href="https://abc.net.au/x">abc</a></p>'
 		);
 		$this->assertStringContainsString( '<h2>Head</h2>', $html );
 		$this->assertStringContainsString( 'One</p><p>Two', $html );
 		$this->assertStringNotContainsString( 'script', $html );
 		$this->assertStringNotContainsString( 'style', $html );
+		// The style and script blocks are removed whole: their CSS and code must not leak as page text.
+		$this->assertStringNotContainsString( '.profile', $html, 'The embedded CSS is not left on the page as text.' );
+		$this->assertStringNotContainsString( 'rgGrid', $html );
+		$this->assertStringNotContainsString( 'alert(1)', $html, 'The script code is not left on the page as text.' );
 		$this->assertStringContainsString( 'href="https://imis.example.org/web/About"', $html );
 		$this->assertStringContainsString( 'href="https://abc.net.au/x" target="_blank" rel="noopener noreferrer"', $html );
 		$this->assertSame( 2, substr_count( $html, 'target="_blank"' ), 'Every link opens in a new tab, once.' );

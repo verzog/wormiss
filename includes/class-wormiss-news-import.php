@@ -794,6 +794,10 @@ class Wormiss_News_Import {
 	 * @return string
 	 */
 	public static function clean( string $html ): string {
+		// Remove style and script blocks whole — tag and contents. wp_kses() below strips only the
+		// tags, which would leave an iMIS page's embedded CSS (or a script's code) on the page as
+		// visible text.
+		$html = (string) preg_replace( '#<(style|script)\b[^>]*>.*?</\1>#is', '', $html );
 		$html = (string) preg_replace( '#<(/?)h1\b[^>]*>#i', '<$1h2>', $html );
 		$html = wp_kses( $html, self::ALLOWED );
 		// Emphasis around nothing but line breaks or spaces is decoration: gone.
