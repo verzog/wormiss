@@ -1263,6 +1263,75 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An event or course page (recognised by its iMIS path) is skipped, so it is left to the dynamic
+	 * event pages rather than imported as a static page.
+	 *
+	 * @return void
+	 */
+	public function test_skips_event_and_course_pages(): void {
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Introduction to Skin Cancer',
+						],
+					]
+				)
+			)
+			->reply(
+				'/api/Document/_Execute',
+				200,
+				$this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Introduction to Skin Cancer', '@/web/Education/Courses/Introduction-to-Skin-Cancer' )
+			);
+
+		$report = Wormiss_Page_Import::run();
+
+		$this->assertSame( 0, $report['created'], 'An event or course page is not imported as a static page.' );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertSame( 0, Wormiss_Page_Import::post_for( self::ABOUT_H ), 'Nothing was stamped for the skipped event page.' );
+	}
+
+	/**
+	 * With the wormiss_page_import_skip_events filter off, an event or course page is imported as a
+	 * static page as before.
+	 *
+	 * @return void
+	 */
+	public function test_event_page_skip_can_be_disabled(): void {
+		add_filter( 'wormiss_page_import_skip_events', '__return_false' );
+		$this->imis->token()
+			->reply(
+				'/api/iqa',
+				200,
+				Wormiss_Fake_Imis::page(
+					[
+						[
+							'HierarchyKey'       => strtoupper( self::ABOUT_H ),
+							'DocumentVersionKey' => self::ABOUT_NAV,
+							'AlternateName'      => 'Introduction to Skin Cancer',
+						],
+					]
+				)
+			)
+			->reply(
+				'/api/Document/_Execute',
+				200,
+				$this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'Introduction to Skin Cancer', '@/web/Education/Courses/Introduction-to-Skin-Cancer' )
+			)
+			->reply( '/api/Document/_Execute', 200, $this->content_doc( '<p>Course body.</p>' ) );
+
+		$report = Wormiss_Page_Import::run();
+		remove_filter( 'wormiss_page_import_skip_events', '__return_false' );
+
+		$this->assertSame( 1, $report['created'], 'With the filter off, the event page is imported as a page.' );
+	}
+
+	/**
 	 * A system page whose slug differs from its title (so the slug-based skip does not catch it) is
 	 * still never adopted by title: adoption excludes system pages, so a fresh page is made instead of
 	 * overwriting the protected one.

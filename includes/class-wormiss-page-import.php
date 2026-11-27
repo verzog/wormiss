@@ -418,6 +418,13 @@ class Wormiss_Page_Import {
 			self::note( $report, sprintf( __( '%s: this matches one of the site\'s own pages (such as the cart or the front page), so it was not imported.', 'wormiss' ), self::label( $node ) ) );
 			return 'skipped';
 		}
+		// Leave event and course pages to the dynamic event pages (the wormiss_event post type), rather
+		// than importing them as static pages that would duplicate the event and need maintaining.
+		if ( self::should_skip_events() && self::is_event_page( $path, $title ) ) {
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: this looks like an event or course page, which is shown by the dynamic event pages, so it was not imported as a static page.', 'wormiss' ), self::label( $node ) ) );
+			return 'skipped';
+		}
 		// Take over a page that already exists for this iMIS page but was made before the import (so is
 		// not yet stamped as an imported page), instead of creating a duplicate of it.
 		if ( ! $post_id ) {
@@ -912,6 +919,45 @@ class Wormiss_Page_Import {
 		);
 		// phpcs:enable
 		return $found ? (int) $found[0] : 0;
+	}
+
+	/**
+	 * Whether the page import skips event and course pages, leaving them to the dynamic event pages
+	 * (the wormiss_event post type) rather than importing them as static pages that would need
+	 * maintaining and would duplicate the event. On by default; turn it off (import them as pages, as
+	 * before) with the 'wormiss_page_import_skip_events' filter.
+	 *
+	 * @return bool
+	 */
+	private static function should_skip_events(): bool {
+		return (bool) apply_filters( 'wormiss_page_import_skip_events', true );
+	}
+
+	/**
+	 * Whether a navigation item is an event or course page, recognised by its iMIS path. A page whose
+	 * path contains one of the event path fragments (by default "/courses/", "/course/", "/events/" or
+	 * "/event/") is treated as one. Change the fragments with the 'wormiss_page_import_event_paths'
+	 * filter (it also receives the path and title, for a site that needs a different rule).
+	 *
+	 * @param string $path  The page's iMIS path.
+	 * @param string $title The page title.
+	 * @return bool
+	 */
+	private static function is_event_page( string $path, string $title ): bool {
+		$fragments = apply_filters(
+			'wormiss_page_import_event_paths',
+			[ '/courses/', '/course/', '/events/', '/event/' ],
+			$path,
+			$title
+		);
+		$haystack  = strtolower( $path );
+		foreach ( (array) $fragments as $fragment ) {
+			$fragment = strtolower( trim( (string) $fragment ) );
+			if ( '' !== $fragment && false !== strpos( $haystack, $fragment ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

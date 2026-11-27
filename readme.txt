@@ -210,6 +210,7 @@ the Media Library can still be opened directly by anyone with their address.
 == Changelog ==
 
 = 0.74.0 =
+* Page import now leaves event and course pages alone. Those pages are better shown by the dynamic event pages (the ones built from iMIS event records), which always have the event's real details, than imported as a static marketing page that links off to registration and has to be kept up to date. A navigation item whose iMIS path marks it as an event or course page (its path contains "/courses/", "/course/", "/events/" or "/event/") is now skipped, with a note in the report. Turn this off (import them as pages, as before) with the "wormiss_page_import_skip_events" filter, or change which paths count as event pages with "wormiss_page_import_event_paths".
 * Page import now records each page's content-panel names and layout zones in the import report and audit log. An iMIS page is built from named content items ("content panels"), each placed in a numbered layout zone; the import now lists, per page, each panel's name and zone. This changes nothing on the imported pages — it is a diagnostic that makes the panel names visible, as the groundwork for later work that could recognise a known panel (a "Relevant documents" tile, for example) and style it to match the theme.
 
 = 0.73.0 =
