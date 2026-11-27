@@ -433,6 +433,8 @@ class Wormiss_Admin {
 		self::field( 'page_import_dry_run', __( 'Page import dry run (report only)', 'wormiss' ), 'wormiss_page_import' );
 		self::field( 'page_import_publish', __( 'Publish imported pages', 'wormiss' ), 'wormiss_page_import' );
 		self::field( 'page_import_query', __( 'Page query', 'wormiss' ), 'wormiss_page_import' );
+		self::field( 'page_import_menu', __( 'Build a navigation menu', 'wormiss' ), 'wormiss_page_import' );
+		self::field( 'page_import_menu_name', __( 'Navigation menu name', 'wormiss' ), 'wormiss_page_import' );
 
 		$title = __( 'Members\' blog', 'wormiss' );
 		self::section( 'wormiss_blog', $title, [ __CLASS__, 'blog_intro' ] );
@@ -1140,6 +1142,17 @@ class Wormiss_Admin {
 					. ' ' . esc_html__( 'item, with Hierarchy Key and Document Version Key, and ideally Alternate Name. No prompts.', 'wormiss' )
 					. '</p>';
 				return;
+			case 'page_import_menu_name':
+				printf(
+					'<input type="text" class="regular-text" id="%1$s" name="%2$s" value="%3$s" />',
+					esc_attr( $id ),
+					esc_attr( $name ),
+					esc_attr( (string) $value )
+				);
+				echo '<p class="description">'
+					. esc_html__( 'The WordPress menu built from the imported pages (made if missing). Default: "iMIS site".', 'wormiss' )
+					. '</p>';
+				return;
 			case 'user_sync_query':
 				printf(
 					'<input type="text" class="regular-text code" id="%1$s" name="%2$s" value="%3$s" />',
@@ -1238,6 +1251,7 @@ class Wormiss_Admin {
 			case 'page_import_enabled':
 			case 'page_import_dry_run':
 			case 'page_import_publish':
+			case 'page_import_menu':
 			case 'blog_import_enabled':
 			case 'blog_import_dry_run':
 			case 'user_sync_enabled':
@@ -1309,6 +1323,13 @@ class Wormiss_Admin {
 					echo ' <span class="description">'
 						. esc_html__( 'Once a day, each navigation item the query lists becomes a page, nested under its parent', 'wormiss' )
 						. ' ' . esc_html__( 'as in iMIS. Pages whose iMIS content is made of iParts are imported empty, in place.', 'wormiss' )
+						. '</span>';
+				}
+				if ( 'page_import_menu' === $key ) {
+					echo ' <span class="description">'
+						. esc_html__( 'After each import, make or update a WordPress navigation menu (named below) mirroring the', 'wormiss' )
+						. ' ' . esc_html__( 'iMIS tree: one item per imported, published page, nested and ordered as in iMIS. Assign it to', 'wormiss' )
+						. ' ' . esc_html__( 'a theme location once under Appearance > Menus. The import manages this menu, so avoid editing it by hand.', 'wormiss' )
 						. '</span>';
 				}
 				if ( 'member_push_enabled' === $key ) {
