@@ -377,7 +377,12 @@ class Wormiss_Page_Import {
 		$path    = (string) ( $nav->Path ?? '' );
 		// phpcs:enable
 		$built = self::content( $client, $content, $title, $report, self::label( $node ) );
-		$hash  = md5( (string) wp_json_encode( [ $title, $built['html'], $built['members'], $parent, $path ] ) );
+		if ( null === $built ) {
+			// The content could not be read this time (content() noted why): leave the page as it is,
+			// so a temporary iMIS problem does not blank an existing page. Tried again next import.
+			return 'skipped';
+		}
+		$hash = md5( (string) wp_json_encode( [ $title, $built['html'], $built['members'], $parent, $path ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash
 			&& get_post_meta( $post_id, self::META_PARENT, true ) === $parent ) {
 			return 'skipped';
@@ -428,38 +433,45 @@ class Wormiss_Page_Import {
 
 	/**
 	 * The content page a navigation item shows, tidied: its HTML and whether it is members-only.
-	 * A navigation item with no content page, or one made of iMIS iParts (no portable HTML), gives
-	 * an empty page.
+	 *
+	 * A navigation item with no content page (an iParts-only or container page) gives a legitimately
+	 * empty page. A read that fails, or a content document that is missing, not published or
+	 * unreadable, returns null: the caller leaves the page unchanged rather than blanking it, so a
+	 * temporary iMIS problem cannot erase a published page's content or change its access.
 	 *
 	 * @param Wormiss_Rest_Client $client  Client.
 	 * @param string              $version The content document's version key ('' for none).
 	 * @param string              $title   The page title (so a title-only heading block is left out).
 	 * @param array               $report  Report, for notes.
 	 * @param string              $label   The page's name, for notes.
-	 * @return array html, members.
+	 * @return array|null html, members; or null when the content could not be read.
 	 */
-	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label ): array {
-		$empty = [
-			'html'    => '',
-			'members' => false,
-		];
+	private static function content( Wormiss_Rest_Client $client, string $version, string $title, array &$report, string $label ): ?array {
 		if ( '' === $version ) {
-			return $empty;
+			// No content page: a legitimately empty page (a menu folder or an iParts-only page).
+			return [
+				'html'    => '',
+				'members' => false,
+			];
 		}
 		try {
 			$document = $client->find_document( $version );
 		} catch ( Wormiss_Exception $e ) {
 			/* translators: 1: page title, 2: reason. */
-			self::note( $report, sprintf( __( '%1$s: its page content was not read (%2$s); imported as an empty page.', 'wormiss' ), $label, $e->getMessage() ) );
-			return $empty;
+			self::note( $report, sprintf( __( '%1$s: its page content was not read (%2$s); the page was left unchanged.', 'wormiss' ), $label, $e->getMessage() ) );
+			return null;
 		}
 		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- iMIS field.
 		if ( null === $document || 'Published' !== (string) ( $document->Status ?? '' ) ) {
-			return $empty;
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: its iMIS page content is missing or not published; the page was left unchanged.', 'wormiss' ), $label ) );
+			return null;
 		}
 		$content = Wormiss_News_Import::parse( self::document_data( $document ) );
 		if ( null === $content ) {
-			return $empty;
+			/* translators: %s: page title. */
+			self::note( $report, sprintf( __( '%s: its iMIS page content could not be read; the page was left unchanged.', 'wormiss' ), $label ) );
+			return null;
 		}
 		return [
 			'html'    => self::build_body( $title, $content ),
@@ -580,6 +592,11 @@ class Wormiss_Page_Import {
 			}
 		}
 		foreach ( array_map( 'intval', $pages ) as $id ) {
+			// A detached page keeps the parent an editor gave it (as one() leaves its content alone);
+			// it stays in $by_key above, so other imported pages can still nest beneath it.
+			if ( get_post_meta( $id, self::META_DETACHED, true ) ) {
+				continue;
+			}
 			$parent_key = (string) get_post_meta( $id, self::META_PARENT, true );
 			$parent     = ( '' !== $parent_key && isset( $by_key[ $parent_key ] ) && $by_key[ $parent_key ] !== $id ) ? $by_key[ $parent_key ] : 0;
 			if ( (int) get_post_field( 'post_parent', $id ) !== $parent ) {

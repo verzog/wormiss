@@ -301,6 +301,64 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A content read that fails (a temporary iMIS problem) leaves an existing page unchanged, rather
+	 * than blanking its body.
+	 *
+	 * @return void
+	 */
+	public function test_content_read_failure_keeps_page(): void {
+		$this->queue_tree();
+		Wormiss_Page_Import::run();
+		$about = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$this->assertStringContainsString( 'About us text.', get_post_field( 'post_content', $about ) );
+
+		// The navigation document reads, but the content document request fails.
+		$rows = [
+			[
+				'HierarchyKey'       => self::ABOUT_H,
+				'DocumentVersionKey' => self::ABOUT_NAV,
+				'AlternateName'      => 'About Us',
+			],
+		];
+		$this->imis->token()
+			->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( $rows ) )
+			->reply( '/api/Document/_Execute', 200, $this->nav_doc( self::ABOUT_CON, self::ROOT_H, 'About Us', '@/web/About-Us' ) )
+			->fail( '/api/Document/_Execute' );
+
+		$report = Wormiss_Page_Import::run();
+		$this->assertSame( 0, $report['created'] + $report['updated'] );
+		$this->assertSame( 1, $report['skipped'] );
+		$this->assertStringContainsString( 'About us text.', get_post_field( 'post_content', $about ), 'Existing content is not blanked by a failed read.' );
+	}
+
+	/**
+	 * A page an editor has detached and moved keeps its WordPress parent: the hierarchy rebuild
+	 * leaves detached pages where they are.
+	 *
+	 * @return void
+	 */
+	public function test_detached_page_keeps_parent(): void {
+		$this->queue_tree();
+		Wormiss_Page_Import::run();
+		$about = Wormiss_Page_Import::post_for( self::ABOUT_H );
+		$team  = Wormiss_Page_Import::post_for( self::TEAM_H );
+		$this->assertSame( $about, (int) get_post_field( 'post_parent', $team ) );
+
+		// The editor detaches the child and moves it to the top level.
+		update_post_meta( $team, Wormiss_Page_Import::META_DETACHED, 1 );
+		wp_update_post(
+			[
+				'ID'          => $team,
+				'post_parent' => 0,
+			]
+		);
+
+		$this->queue_tree();
+		Wormiss_Page_Import::run();
+		$this->assertSame( 0, (int) get_post_field( 'post_parent', $team ), 'The detached page keeps the editor\'s parent.' );
+	}
+
+	/**
 	 * A navigation item with no content page (an iParts-only or container page) is imported as an
 	 * empty page, in the right place, and counted.
 	 *
