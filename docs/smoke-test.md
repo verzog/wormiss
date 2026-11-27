@@ -36,6 +36,24 @@ wormiss has two separate category taxonomies that do different jobs:
 
 ---
 
+## How membership is determined (members vs non-members)
+
+A user counts as a **member** when, at the moment access is checked:
+
+1. Their WordPress account has a linked **iMIS ID** (from the "member ID" user field,
+   e.g. `imis_id`, set by single sign-on *and* written by the member sync), and
+2. If a **membership query** is configured (Settings → Wormiss → Members →
+   "Members-only content"), their iMIS record's **status is one of the Current
+   statuses** (e.g. `A`). Without a membership query, any account with an iMIS ID
+   counts as a member.
+
+So, in practice: **member = linked iMIS ID + current status.** Everyone else — no
+iMIS ID, a lapsed/non-current status, or not synced — is a **non-member** and gets
+the teaser. Access also requires being logged in (a logged-out visitor is prompted to
+sign in). A rule's optional membership *types*/*statuses* narrow it further (blank =
+any current member). The daily member sync keeps the linkage and status up to date;
+its last run is shown on the Members tab.
+
 ## 0. Installed cleanly
 
 - [ ] Plugins screen shows wormiss at the expected version, active, no error notice.
