@@ -206,12 +206,13 @@ class Wormiss_Media_Migrate {
 		update_option(
 			self::JOB_OPTION,
 			[
-				'queue'   => $ids,
-				'total'   => count( $ids ),
-				'done'    => 0,
-				'moved'   => 0,
-				'failed'  => 0,
-				'started' => time(),
+				'queue'      => $ids,
+				'total'      => count( $ids ),
+				'done'       => 0,
+				'moved'      => 0,
+				'failed'     => 0,
+				'failed_ids' => [],
+				'started'    => time(),
 			],
 			false
 		);
@@ -255,6 +256,11 @@ class Wormiss_Media_Migrate {
 					++$job['moved'];
 				} else {
 					++$job['failed'];
+					// Keep the IDs that could not be moved (their originals are still public) so the
+					// admin can find them. Cap the list so the option cannot grow without bound.
+					if ( count( (array) $job['failed_ids'] ) < 200 ) {
+						$job['failed_ids'][] = $id;
+					}
 				}
 			}
 			++$job['done'];
@@ -284,10 +290,11 @@ class Wormiss_Media_Migrate {
 		update_option(
 			self::REPORT_OPTION,
 			[
-				'total'  => (int) $job['total'],
-				'moved'  => (int) $job['moved'],
-				'failed' => (int) $job['failed'],
-				'time'   => time(),
+				'total'      => (int) $job['total'],
+				'moved'      => (int) $job['moved'],
+				'failed'     => (int) $job['failed'],
+				'failed_ids' => array_values( array_map( 'intval', (array) ( $job['failed_ids'] ?? [] ) ) ),
+				'time'       => time(),
 			],
 			false
 		);

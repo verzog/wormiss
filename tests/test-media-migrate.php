@@ -237,6 +237,34 @@ class Test_Wormiss_Media_Migrate extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * A move that fails (unwritable store) records the attachment ID in the report, so the admin can
+	 * find the images whose originals are still public.
+	 *
+	 * @return void
+	 */
+	public function test_failed_move_recorded(): void {
+		$cat = $this->protected_category();
+		$img = $this->attachment( [ $cat ] );
+		// Point the store at a path whose parent is a file, so it cannot be created.
+		$blocker = get_temp_dir() . 'wormiss-blocker-' . wp_rand();
+		file_put_contents( $blocker, 'x' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		$bad = static fn() => $blocker . '/store/';
+		add_filter( 'wormiss_protected_dir', $bad, 99 );
+
+		$this->assertTrue( Wormiss_Media_Migrate::start() );
+		Wormiss_Media_Migrate::run();
+
+		remove_filter( 'wormiss_protected_dir', $bad, 99 );
+		wp_delete_file( $blocker );
+
+		$report = get_option( Wormiss_Media_Migrate::REPORT_OPTION );
+		$this->assertSame( 0, (int) $report['moved'] );
+		$this->assertSame( 1, (int) $report['failed'] );
+		$this->assertSame( [ $img ], array_map( 'intval', (array) $report['failed_ids'] ), 'Failed attachment recorded.' );
+		$this->assertFalse( Wormiss_Media_Delivery::is_stored( $img ) );
+	}
+
+	/**
 	 * A pending job whose cron continuation was lost is rescheduled by maybe_resume().
 	 *
 	 * @return void

@@ -1591,7 +1591,12 @@ class Wormiss_Admin {
 			);
 			if ( (int) $report['failed'] > 0 ) {
 				/* translators: %d: number of images that could not be moved. */
-				$line .= ' ' . sprintf( __( '%d could not be moved (see the audit log).', 'wormiss' ), (int) $report['failed'] );
+				$line .= ' ' . sprintf( __( '%d could not be moved and their originals are still public.', 'wormiss' ), (int) $report['failed'] );
+				$ids   = array_map( 'intval', (array) ( $report['failed_ids'] ?? [] ) );
+				if ( $ids ) {
+					/* translators: %s: comma-separated list of attachment IDs. */
+					$line .= ' ' . sprintf( __( 'Attachment IDs: %s.', 'wormiss' ), implode( ', ', $ids ) );
+				}
 			}
 			echo '<p class="description">' . esc_html( $line ) . '</p>';
 		}
