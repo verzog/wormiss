@@ -109,6 +109,13 @@ class Wormiss_Page_Import {
 	const EMPTY_KEY = '00000000-0000-0000-0000-000000000000';
 
 	/**
+	 * Bumped when a change means every page should be reprocessed on the next import even if its iMIS
+	 * content has not changed. It is part of each page's source fingerprint, so raising it makes the
+	 * stored fingerprints no longer match. (2: copy page images into the Media Library.)
+	 */
+	const SOURCE_VERSION = 2;
+
+	/**
 	 * Images copied so far in this run.
 	 *
 	 * @var int
@@ -396,7 +403,7 @@ class Wormiss_Page_Import {
 			// so a temporary iMIS problem does not blank an existing page. Tried again next import.
 			return 'skipped';
 		}
-		$hash = md5( (string) wp_json_encode( [ $title, $built['html'], $built['members'], $parent, $path ] ) );
+		$hash = md5( (string) wp_json_encode( [ self::SOURCE_VERSION, $title, $built['html'], $built['members'], $parent, $path ] ) );
 		if ( $post_id && get_post_meta( $post_id, self::META_SOURCE, true ) === $hash
 			&& get_post_meta( $post_id, self::META_PARENT, true ) === $parent ) {
 			return 'skipped';
@@ -473,19 +480,29 @@ class Wormiss_Page_Import {
 			return true;
 		}
 		$base = Wormiss_Settings::base_url();
-		if ( '' === $base || ! preg_match_all( '/<img\b[^>]*\bsrc="([^"]+)"/i', $html, $matches ) ) {
+		// Match a double- or single-quoted src (clean() double-quotes attributes, but accept either so
+		// a change to how the body is built cannot silently skip an image).
+		if ( '' === $base || ! preg_match_all( '/<img\b[^>]*?\bsrc=(["\'])(.*?)\1/i', $html, $matches, PREG_SET_ORDER ) ) {
 			return true;
 		}
 		$complete = true;
 		$original = $html;
-		foreach ( array_unique( $matches[1] ) as $src ) {
-			$url = html_entity_decode( $src, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$seen     = [];
+		foreach ( $matches as $match ) {
+			$quote = $match[1];
+			$raw   = $match[2];
+			if ( isset( $seen[ $quote . $raw ] ) ) {
+				continue; // The same address already handled in this body.
+			}
+			$seen[ $quote . $raw ] = true;
+			$url                   = html_entity_decode( $raw, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			if ( 0 !== strpos( $url, $base . '/' ) ) {
 				continue; // Images on other sites stay where they are.
 			}
 			$attachment = self::copy( $post_id, $url, $label, $report, $complete );
 			if ( $attachment ) {
-				$html = str_replace( 'src="' . $src . '"', 'src="' . esc_attr( (string) wp_get_attachment_url( $attachment ) ) . '"', $html );
+				$local = esc_attr( (string) wp_get_attachment_url( $attachment ) );
+				$html  = str_replace( 'src=' . $quote . $raw . $quote, 'src="' . $local . '"', $html );
 			}
 		}
 		if ( $html !== $original ) {
