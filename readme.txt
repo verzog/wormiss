@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.67.2
+Stable tag: 0.67.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.67.3 =
+* Internal: the same robust image-copying behaviour added for the page import in 0.67.2 (naming each downloaded image from its real type so extension-less and WebP/AVIF images are accepted, and skipping types WordPress does not allow) now applies to the blog, news and event imports as well. The logic lives in one shared helper instead of a copy in each importer, so all four behave the same. No settings or visible behaviour change unless one of those imports previously met an iMIS image with an unusable address, which will now copy correctly.
 
 = 0.67.2 =
 * Page import fix: page images hosted on iMIS now copy into the Media Library even when their address has no file extension. iMIS often serves images from an extension-less address (for example a "GetImage" handler), which WordPress refused with "you are not allowed to upload this file type", leaving the page pointing back at iMIS and re-tried on every import. The importer now detects each image's real type from its contents and names the file with an extension WordPress accepts for that type, so every image format WordPress allows (JPEG, PNG, GIF, WebP, AVIF, BMP) is copied. An image of a type WordPress does not accept (for example an SVG) is left on the iMIS site and no longer blocks the page from finishing.

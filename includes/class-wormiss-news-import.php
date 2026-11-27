@@ -983,10 +983,20 @@ class Wormiss_News_Import {
 			self::note( $report, sprintf( __( '%1$s: an image could not be copied (%2$s).', 'wormiss' ), self::label( $article ), $tmp->get_error_message() ) );
 			return 0;
 		}
-		$name       = sanitize_file_name( rawurldecode( wp_basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) ) );
+		// iMIS image URLs often have no usable extension (a "GetImage" handler) or a misleading one, so
+		// name the file from its real type (see Wormiss_Media::sideload_name()).
+		$name = Wormiss_Media::sideload_name( $tmp, $url, 'news-image' );
+		if ( null === $name ) {
+			// Not an image type WordPress accepts (e.g. SVG): leave the article pointing at the iMIS
+			// image rather than failing it and retrying every import.
+			wp_delete_file( $tmp );
+			/* translators: %s: article title. */
+			self::note( $report, sprintf( __( '%s: an image is not a supported type, so it was left on the iMIS site.', 'wormiss' ), self::label( $article ) ) );
+			return 0;
+		}
 		$attachment = media_handle_sideload(
 			[
-				'name'     => '' !== $name ? $name : 'news-image.jpg',
+				'name'     => $name,
 				'tmp_name' => $tmp,
 			],
 			$post_id,
