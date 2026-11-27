@@ -569,6 +569,62 @@ class Test_Wormiss_Page_Import extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An image whose URL has no usable file extension (as iMIS serves them) is still copied: the
+	 * file is named from its real type, sniffed from the downloaded bytes, so WordPress accepts it.
+	 *
+	 * @return void
+	 */
+	public function test_copies_image_without_extension(): void {
+		if ( ! function_exists( 'imagejpeg' ) ) {
+			$this->markTestSkipped( 'GD is not available.' );
+		}
+		$source = 'https://imis.example.org/iCore/GetImage?id=7';
+		$serve  = static function ( $pre, $args, $url ) {
+			if ( false !== strpos( $url, 'GetImage' ) && ! empty( $args['filename'] ) ) {
+				imagejpeg( imagecreatetruecolor( 4, 4 ), $args['filename'] );
+				return [
+					'headers'  => [],
+					'body'     => '',
+					'response' => [
+						'code'    => 200,
+						'message' => 'OK',
+					],
+					'cookies'  => [],
+					'filename' => $args['filename'],
+				];
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $serve, 20, 3 );
+
+		$page = (int) self::factory()->post->create( [ 'post_type' => 'page' ] );
+		( new ReflectionProperty( Wormiss_Page_Import::class, 'images' ) )->setValue( null, 0 );
+		$method   = new ReflectionMethod( Wormiss_Page_Import::class, 'images' );
+		$report   = [ 'notes' => [] ];
+		$html     = '<p><img src="' . $source . '" alt="Logo"></p>';
+		$complete = (bool) $method->invokeArgs( null, [ $page, $html, 'About Us', &$report ] );
+
+		remove_filter( 'pre_http_request', $serve, 20 );
+
+		$this->assertTrue( $complete, 'The extension-less image was copied without blocking the page.' );
+		// phpcs:disable WordPress.DB.SlowDBQuery -- Test assertion.
+		$found = get_posts(
+			[
+				'post_type'        => 'attachment',
+				'post_status'      => 'inherit',
+				'meta_key'         => Wormiss_Page_Import::META_FROM,
+				'meta_value'       => $source,
+				'fields'           => 'ids',
+				'numberposts'      => -1,
+				'suppress_filters' => true,
+			]
+		);
+		// phpcs:enable
+		$this->assertCount( 1, $found, 'The extension-less image was copied once.' );
+		$this->assertStringEndsWith( '.jpg', (string) get_attached_file( (int) $found[0] ), 'The file was named from its real type.' );
+	}
+
+	/**
 	 * A dry run saves nothing.
 	 *
 	 * @return void
