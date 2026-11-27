@@ -162,11 +162,15 @@ class Wormiss_Media {
 	 * @return bool True when a sanitised SVG was written back, false otherwise.
 	 */
 	public static function sanitize_svg_file( string $tmp_file ): bool {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Reading the download's own local temporary file, not a URL.
-		$raw = (string) file_get_contents( $tmp_file );
-		if ( strlen( $raw ) > self::MAX_SVG_BYTES ) {
+		// Reject by size before reading: all four importers now pass unsupported downloads through
+		// here, so a huge non-image file must not be read whole (it could exhaust memory and abort
+		// the batch).
+		$size = filesize( $tmp_file );
+		if ( false === $size || $size > self::MAX_SVG_BYTES ) {
 			return false;
 		}
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents -- Reading the download's own local temporary file, not a URL.
+		$raw = (string) file_get_contents( $tmp_file );
 		$raw = (string) preg_replace( '/^\xEF\xBB\xBF/', '', $raw );
 		if ( '' === trim( $raw ) || false === stripos( $raw, '<svg' ) ) {
 			return false;
@@ -194,12 +198,14 @@ class Wormiss_Media {
 	}
 
 	/**
-	 * Recursively remove disallowed elements and attributes from an SVG DOM node.
+	 * Recursively remove disallowed elements and attributes from an SVG DOM node, including this
+	 * node's own attributes (so the root <svg> is scrubbed too, not only its children).
 	 *
-	 * @param DOMElement $node Node to scrub (its children are scrubbed too).
+	 * @param DOMElement $node Node to scrub.
 	 * @return void
 	 */
 	private static function scrub_svg_node( DOMElement $node ): void {
+		self::scrub_svg_attributes( $node );
 		// Walk a static list of children: the live list shifts as nodes are removed.
 		$children = [];
 		foreach ( $node->childNodes as $child ) {
@@ -217,7 +223,6 @@ class Wormiss_Media {
 				$node->removeChild( $child );
 				continue;
 			}
-			self::scrub_svg_attributes( $child );
 			self::scrub_svg_node( $child );
 		}
 	}

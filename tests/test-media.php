@@ -198,6 +198,35 @@ class Test_Wormiss_Media extends Wormiss_Test_Case {
 	}
 
 	/**
+	 * An on* handler on the root <svg> element itself is removed (the root is sanitised too, not
+	 * only its children).
+	 *
+	 * @return void
+	 */
+	public function test_strips_root_event_handler_from_svg(): void {
+		$tmp  = $this->svg_file( '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(document.domain)"><path d="M0 0h4v4H0z"/></svg>' );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		$out  = $this->read( $tmp );
+		wp_delete_file( $tmp );
+		$this->assertSame( 'x.svg', $name );
+		$this->assertStringNotContainsString( 'onload', $out );
+		$this->assertStringNotContainsString( 'alert', $out );
+	}
+
+	/**
+	 * An oversized file is rejected without being read whole (it must not exhaust memory).
+	 *
+	 * @return void
+	 */
+	public function test_rejects_oversized_svg(): void {
+		$big  = '<svg xmlns="http://www.w3.org/2000/svg"><!--' . str_repeat( 'x', 600000 ) . '--><path d="M0 0h4v4H0z"/></svg>';
+		$tmp  = $this->svg_file( $big );
+		$name = Wormiss_Media::svg_name( $tmp, 'https://imis.example.org/x.svg', 'page-image' );
+		wp_delete_file( $tmp );
+		$this->assertNull( $name );
+	}
+
+	/**
 	 * An external or javascript href is dropped; only internal (#id) references survive.
 	 *
 	 * @return void
