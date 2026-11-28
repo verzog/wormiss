@@ -1,9 +1,9 @@
-# Phase 3 — iMIS/RiSE retirement: discovery (first pass)
+# Phase 3 — iMIS/RiSE retirement: discovery
 
-**Status:** discovery, first pass (home-page derived) · **Scope:** catalogue every
-public surface still served by iMIS, map each to its WordPress target, so the public
-site can be cut over from the Causeis **Launchpad** theme to the sccadian + wormiss
-WordPress build.
+**Status:** complete inventory (from RiSE content export, 2026-11-28) · **Scope:**
+catalogue every public surface still served by iMIS, map each to its WordPress target,
+so the public site can be cut over from the Causeis **Launchpad** theme to the
+sccadian + wormiss WordPress build.
 
 ---
 
@@ -11,107 +11,112 @@ WordPress build.
 
 The live public site at **`www.skincancercollege.org` is still served entirely by
 iMIS RiSE through the Causeis "Launchpad" theme** — ASP.NET WebForms, `/web/Shared_Content/…`
-paths, `__doPostBack`, `ci*` web-part controls (`ciHomepageCarousel`, `ciHomepageEvents`),
-and a "Powered by Launchpad" footer linking to causeis.com. It is **not** WordPress:
-`sitemap.xml`, `sitemap_index.xml` and `wp-sitemap.xml` all 404, and nothing on the
-home page links to a WordPress site.
+paths, `ci*` web-part controls, "Powered by Launchpad" (causeis.com). It is **not**
+WordPress today. So Phase 3 is a **cutover of the whole public head** from Launchpad to
+the sccadian/wormiss WordPress build (which must live on a separate host/staging not
+linked from the live site), leaving only the transactional flows pointing back into iMIS.
 
-So Phase 3 is **not** "retire a few leftover RiSE pages left behind by a migration."
-The whole public head is still iMIS/Launchpad, and the sccadian/wormiss WordPress build
-(the thing wormiss's page/news/event importers feed) must live on a **separate host or
-staging URL not linked from the live site**. Phase 3 is therefore a **cutover**: stand
-the WordPress site up with the content below, then switch `www` from Launchpad to it,
-leaving only the transactional flows pointing back into iMIS.
+## Source
 
-## Method & limits
+A RiSE content export (`AsiDocumentExport`) provided by the owner on 2026-11-28:
+**157 unique content pages (CON) + 393 navigation nodes (NAV)**, almost all Published.
+Classified below by stripping the base64 blobs and bucketing by `Path`. This is the
+authoritative tree (the live site has no crawlable WordPress sitemap). The raw classified
+list is in the session's `scratchpad/p3/inventory.txt`.
 
-Read: the home page (HTTP 200) and the three usual WordPress sitemap URLs (all 404,
-as expected for a non-WordPress site). This catalogue is therefore the **home-page
-information architecture** — header/utility nav, footer "Quick Links", and hero/card
-links. It is **not exhaustive**: deep sections, second-level pages and anything not
-linked from the home page are not yet captured. A complete list needs the iMIS
-RiSE/Launchpad **content tree** (admin export) or a crawl of the Launchpad site's own
-navigation (§E).
+The one split that matters: of the 157 content pages, **~56 are public** (the head to
+migrate) and **~96 are iMIS back-office** (`/iCore/…` admin screens and staff
+dashboards) that **stay in iMIS** and are out of scope for the public cutover.
 
 ---
 
-## A. Public content surfaces → migrate to WordPress
+## A. Public pages → migrate to WordPress
 
-| Surface | Current iMIS/Launchpad URL | Headless target (wormiss capability) |
-|---|---|---|
-| Home | `/` | sccadian theme home page |
-| About Us | `/web/about-us/about-us.aspx` | WP page (wormiss **page-import**) |
-| Courses / Education | `/web/education/education.aspx` | WP page + wormiss **events** |
-| Events (list) | `/events` | wormiss **events** (sync) |
-| Event detail / register | `/EventDetail?EventKey=…` | wormiss **events + registration**; payment stays iMIS (§C) |
-| SkinPro CPD | `/web/skinpro-cpd/skinpro-cpd-join.aspx` | wormiss **event-cpd** + members-only gating; join/pay stays iMIS |
-| Membership | `/web/membership/join-now.aspx` | WP content page; **join/renew/pay stays iMIS** (§C) |
-| Latest News | `/web/Latest-News/Latest-News.aspx` | wormiss **news-import** → WP posts |
-| Accreditation | `/web/accreditation/accredited-skin-cancer-doctors.aspx` | WP page |
-| **Locate a Doctor** | `/maps`, `/web/Shared_Content/Smart-Suite/Smart-Maps/Public/locate-a-doctor-au.aspx` | **lad plugin + wormiss doctor-sync — already built (Phases 1 & 2)** |
-| SCCA New Zealand | `/web/SCCA-New-Zealand` | WP page(s) + lad `region="NZ"` |
-| Conference / Congress 2027 | `/conference` | WP page / microsite |
-| Positions Vacant | `/jobs` | WP (page or simple CPT) |
-| Policies / Resources | `/ResourcesSearch?…`, `/Resource?resource=NN` | WP media/documents library |
-| Contact / Feedback | `/contactus`, `/feedback` | WP pages + a form plugin |
-| Scan Your Skin | `/ScanYourSkin` (and the `scanyourskin.org` microsite) | WP page / separate microsite — confirm scope (§D) |
+### A1. General content (`@/web/…`, 23 pages + home) → WP pages via wormiss **page-import**
+- Home — `@/web/default` (+ `~/Home`, `~/Home-Mobile`) → sccadian home page
+- About Us — `about-us`, `meet-our-ambassador`, `our-board` (`SYS-iframe-test` is a test page, drop)
+- Accreditation — `accredited-skin-cancer-doctors` → page + the Locate-a-Doctor map (A4)
+- Education — `education`, 8 course pages (`certificate-of-dermoscopy`, `certificate-of-skin-cancer-medicine`, `introduction-to-skin-cancer`, `understanding-skin-cancer`, `advanced-clinical-certificate-of-dermoscopy`, `advanced-clinical-certificate-of-skin-cancer-medicine-and-surgery`, `advanced-skin-surgery-workshop`, `skin-surgery-masterclass`), `fellowship`, `further-learning-scholarships`, `micro-learning`, `rpl`, `Nursing-Education-Pathway` → WP pages; course **delivery** is Moodle (see C integration), course **events** via wormiss events
+- Membership — `join-now` → WP content page; the actual **join/renew/pay stays iMIS** (§C)
+- SkinPro CPD (public) — `skinpro-cpd-join`, `understand-cpd-requirements`, `cpd-participation-and-compliance`, `frequently-asked-questions` → WP content; **join/subscribe stays iMIS**
 
-Locate a Doctor is the **pilot already delivered**: the live `/maps` Smart-Maps page is
-exactly what `lad` + the wormiss doctor-sync replace.
+### A2. Member-gated content (`@/web/member…`, 11 pages) → WP + wormiss members-only gating
+- `member-access/cpd-in-australia`, `member-access/cpd-in-new-zealand`
+- `skinpro-cpd/member/`: `cpd-framework`, `cpr-training`, `culturally-safe-practice`,
+  `ethical-practice`, `health-inequities`, `professionalism`, `PDP`,
+  `program-level-requirements`, `understand-cpd-requirements`
+- → WordPress pages gated by `Wormiss_Access` (iMIS membership type/status), per the headless plan.
 
-## B. Authenticated / self-service → migrate via wormiss SSO
+### A3. Microsites (14 pages) → WP pages / sections
+- **Congress 2027** — `@/Conference/`: `Congress-2027`, `default`, `program`, `speakers`,
+  `sponsors`, `venue`, `registration` → WP microsite; **registration/payment stays iMIS** (§C)
+- **Scan Your Skin** (public awareness) — `@/ScanYourSkin/`: `Default`, `check-your-skin`,
+  `understanding-skin-cancer`, `skin-cancer-types`, `myths`, `what-to-expect-during-a-skin-check`,
+  `Risk-Prediction-Tool` → WP public microsite (the Risk-Prediction-Tool may be an embedded app)
 
-| Surface | Current URL | Headless target |
-|---|---|---|
-| Login / portal | `/web/Shared_Content/ContactManagement/IndividualAccountPage.aspx`, `/Shared_Content/ContactManagement/IndividualAccountPage.aspx`, `/MyAccount` | wormiss **sign-in / SSO** |
-| My Profile / My membership | `/MyAccount` | wormiss **member-display** + "My membership" block (read-only profile) |
+### A4. Public Smart-Suite surfaces (6) → existing plugins
+- **Locate a Doctor** — `Smart-Maps/Public/locate-a-doctor-au`, `…-nz`, **and**
+  `…/scan-locate-a-doctor-au`, `…/scan-locate-a-doctor-nz` (the public "Scan Your Skin"
+  doctor finder) → **lad + wormiss doctor-sync (already built, Phases 1 & 2)**; the two
+  `scan-` variants are the same directory embedded in the Scan Your Skin microsite (lad
+  shortcode/block with `region` + a scan context)
+- **Members' blog** — `Smart-Blogs/Public/Smart-Blogs` → wormiss **blog** (import + gate)
+- **SkinPro CPD search** — `Smart-Library/Public/SkinPro-CPD-Search` → a WP CPD resource
+  search (wormiss IQA display, or a WP search over imported library items)
 
-## C. Transactional → stays in iMIS by design (deep-link, do not rebuild)
+### A5. Sign-in (1) → wormiss SSO
+- `Shared_Content/ContactManagement/IndividualAccountPage` (+ nav `~/Login`, `~/My-Profile`,
+  `~/Membership/Member-Portal`) → wormiss **sign-in / SSO** + **member-display** / "My membership"
 
-Per the headless plan (§0/§4), payments and the membership lifecycle stay in iMIS;
-WordPress deep-links out cleanly.
+## B. Stays in iMIS — back-office (96 pages, not public, out of scope)
 
-- Shop / Cart — `/web/Shared_Content/Shop/Store-Layouts/Cart_Home.aspx`
-- Membership **join / renew** — `/web/membership/join-now.aspx`
-- SkinPro CPD **join** — `/web/skinpro-cpd/skinpro-cpd-join.aspx`
-- Event **registration & payment** — from `/EventDetail?EventKey=…`
+All `@/iCore/…` admin screens (Commerce, Finance, Pay-Central, Membership AutoPay, Events
+management, Store, Forms, Groups, System Settings, Tasks, Tools) and all Smart-Suite / RiSE
+**staff dashboards** (`…/Staff/…`, `/Shared_Content/Staff/Dashboards/…`: Accreditation, CPD,
+Case Management, Contact-Us, Courses, Finance, Membership, Images, Higher Logic, …). These
+are the iMIS application itself — staff keep using them; nothing to migrate.
 
-## D. Separate surfaces → decide (likely out of scope)
+## C. Stays in iMIS — transactional & integrations (deep-link, don't rebuild)
 
-- **Higher Logic community** — `scca.connectedcommunity.org`. A Higher Logic product,
-  not RiSE; keep as-is or migrate is a separate decision (likely keep).
-- **`scanyourskin.org`** — public-awareness microsite; confirm whether it is in scope
-  for this project at all.
+Per the headless plan (§0/§4): payments and the membership lifecycle stay in iMIS.
+- **Cart / Shop / checkout**, **membership join/renew**, **SkinPro CPD join/subscribe**,
+  **event registration & payment**, **Pay-Central** → WordPress deep-links out to iMIS.
+- **Course / webinar delivery** — `Shared_Content/Events/Moodle-Events`, `Moodle-Reports`,
+  `Zoom-Events` → Moodle/Zoom integration stays; events surface in WordPress via wormiss
+  events, delivery happens in Moodle (wormiss already bridges WordPress ↔ Moodle).
+
+## D. Separate surfaces → keep (out of scope)
+
+- **Higher Logic community** — `scca.connectedcommunity.org` (its staff side appears as the
+  `…/Staff/Dashboards/HigherLogic` dashboard). A Higher Logic product, not RiSE; keep as-is.
 
 ---
 
-## E. Gaps — needed for a complete, page-by-page catalogue
+## E. Remaining gaps (the RiSE tree is now resolved)
 
-1. The iMIS RiSE/**Launchpad content tree** — an admin can export or screenshot the page
-   list and navigation. (Public pages are not in a crawlable WordPress sitemap, so this
-   is the authoritative source.)
-2. The **WordPress site host** (staging URL?) and how much content wormiss has already
-   imported into it (pages / news / events).
-3. A confirmed **cutover plan** — how `www` is switched from Launchpad to WordPress
-   (DNS / reverse-proxy / host), and exactly which paths must deep-link back to iMIS
-   afterwards.
+1. **WordPress site host** — where is the sccadian/wormiss build today (staging URL), and how
+   much of §A has wormiss already imported (pages / news / events / blog)?
+2. **Cutover plan** — how `www` is switched from Launchpad to WordPress (DNS / reverse-proxy),
+   and the exact paths that must deep-link back to iMIS afterwards (§C).
+3. Confirm the two `scan-locate-a-doctor` maps are the same data as `locate-a-doctor` (just
+   embedded in Scan Your Skin), so lad serves both with no extra feed.
 
 ## F. Open questions for the owner
 
-1. **Where is the WordPress site today** (host / URL), and how much has wormiss already
-   imported into it?
-2. Can you **export the iMIS/Launchpad page tree** (RiSE content pages + navigation) so
-   this first pass can be completed?
-3. **Higher Logic** (`scca.connectedcommunity.org`) and **`scanyourskin.org`** — in or
-   out of scope for retirement?
-4. Is the plan a **full cutover** (replace Launchpad with the WordPress site), or run
-   WordPress alongside Launchpad for specific sections first?
-5. Confirm which flows **stay iMIS-served** after cutover (join/renew, shop/cart, event
-   payment — §C), so the WordPress pages deep-link rather than reimplement them.
+1. Where is the WordPress site (host/URL), and what has wormiss imported into it so far?
+2. Is the plan a full cutover, or WordPress alongside Launchpad section-by-section first?
+3. Scan Your Skin and Congress — migrate as WordPress sections of the main site, or keep as
+   their own microsites?
+4. Confirm the §C list is the complete set that stays iMIS-served after cutover.
 
-## Next step
+## G. Next step — section-by-section cutover checklist
 
-With the RiSE page-tree export (§E.1) this first pass becomes a complete, page-by-page
-**cutover checklist** — migrate / deep-link / retire, each mapped to the wormiss importer
-or sync that carries it. A deeper crawl of the Launchpad site (following `/web/…` links)
-can expand the inventory meanwhile, but the admin export is the authoritative list.
+With §A as the migration backlog, the natural order (each a slice of the bridge that mostly
+exists):
+1. **Locate a Doctor** (A4) — done; point `/maps` + the accreditation + Scan Your Skin finders
+   at the WordPress map.
+2. **Content pages** (A1) + **microsites** (A3) — wormiss page-import → sccadian pages.
+3. **News / blog** (A4 blog) — wormiss news/blog import.
+4. **Members-only content** (A2) + **sign-in** (A5) — wormiss SSO + access gating.
+5. **Events / courses** — wormiss events; delivery stays in Moodle; payment stays iMIS.
+6. **Cutover** — switch `www`, leave §C deep-linking to iMIS; retire the Launchpad pages.
