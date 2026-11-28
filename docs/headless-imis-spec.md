@@ -1,6 +1,7 @@
 # Making iMIS headless with WordPress
 
-**Status:** scoping · **Scope:** iMIS stays the system of record (data, payments,
+**Status:** scoped — owner decisions recorded in §7; Phase 1 ready to build ·
+**Scope:** iMIS stays the system of record (data, payments,
 membership lifecycle); WordPress (the **sccadian** block theme + the **wormiss**
 bridge) becomes the only public and member-facing "head". No visitor ever lands
 on an iMIS/RiSE page.
@@ -50,13 +51,20 @@ is served by WordPress, with iMIS reached only server-side.
 - **Membership & profile**: `member`, `member-display`, `member-push`,
   `membership` — each member's iMIS type/status/join/expiry synced onto their WP
   account.
-- **Members-only content**: `access`, `access-rules`, `members-only` — per-post
-  gating by iMIS type/status, fails closed, cache-safe teaser, "Members only"
-  block + editor panel.
+- **Members-only content**: `access`, `access-rules`, `members-only` — **both
+  per-post and site-wide rule-based** gating by iMIS type/status (a category, tag,
+  post type or page tree via `Wormiss_Access_Rules` + its editor in
+  `Wormiss_Admin`), fails closed, cache-safe teaser, "Members only" block + editor
+  panel. Tested (`test-access-rules.php`).
 - **Sign-in / SSO / identity**: `sign-in`, `sign-in-check`, `user-sync`, `roles`.
 - **Content**: `blog*`, `news-import`, `page-import`, `page-blocks`,
   `page-layout`, `page-menu`.
-- **Media governance**: `media*` (see `media-access-spec.md`).
+- **Media governance**: `media*` — categories, role × category gate, **and
+  byte-level protected delivery** (`Wormiss_Media_Delivery`: gated
+  `/wormiss-media/<id>` endpoint, `X-Accel-Redirect` / `X-Sendfile` / readfile
+  fallback, protected store, content-URL rewriting; registered in
+  `Wormiss_Plugin::init()`; tested `test-media-delivery.php`). See
+  `media-access-spec.md`.
 - **Other**: `woocommerce`, `mail-divert` (staging safety), `batch`, `logger`,
   `activity`, `completion`, `settings`, `admin`.
 
@@ -134,11 +142,11 @@ From the **iMIS IQA API security advisory** work and ASI's public guidance:
 | Directory (Locate a Doctor) | WordPress, **CSV-fed** | Partly | Automate the iMIS feed (section 5) |
 | Events / CPD listings | WordPress (wormiss) | **Yes** | Audit any residual RiSE event pages |
 | Membership / profile | WordPress (synced) | **Yes** | — |
-| Members-only content | WordPress (wormiss) | **Yes** | Optional rule-based gating (future) |
+| Members-only content | WordPress (wormiss) | **Yes** | — (per-post + site-wide rules both built) |
 | Sign-in / SSO | WordPress (wormiss) | **Yes** | Confirm no RiSE login is linked |
 | Join / renew / pay | **iMIS (by design)** | N/A | Deep-link out to iMIS cleanly |
 | News / blog / pages | WordPress (imported) | **Yes** | — |
-| Media | WordPress (wormiss) | In progress | Finish protected delivery phase |
+| Media | WordPress (wormiss) | **Yes** | — (protected delivery built; nginx config only) |
 
 ---
 
@@ -166,60 +174,81 @@ paid for, to bake into the sync:
   **iMIS ID + location** (`Location` / workplace `AddressNumber` → `_lad_location_id`).
 - **Do not join two "one row per location" views at once** — that is a cartesian
   product (2 workplaces × 2 locations = 4 phantom pins). Use one per-location view.
-- **OptOut drafts every location** for that iMIS ID; non-practice addresses never
-  publish — enforced in the sync, not just the query.
+- **Withdrawals must be reconciled, not just filtered.** The IQA filters
+  `OptOut <> 1`, so an opted-out doctor (or a now-excluded practice address)
+  **disappears from the feed entirely** — a row-by-row upsert never sees an
+  `OptOut` value and would leave their existing pins published. The sync must
+  therefore **draft any published `lad_doctor` whose (iMIS ID + location) is absent
+  from a refresh — but only after a confirmed-complete, successful fetch**, so a
+  partial, empty or failed pull can never mass-unpublish the directory. (Belt-and-
+  braces alternative: a second "withdrawal" IQA returning opted-out iMIS IDs.)
+  Non-practice addresses likewise never publish.
 
-**Design decision (recommended):** **wormiss owns the iMIS pull** and writes
-`lad_doctor` posts; lad consumes them and stays installable standalone on CSV.
-Rationale: reuse wormiss's OAuth, token cache, 401-retry, logging and
-cache/last-good infra rather than duplicating an iMIS client inside lad. (The
-alternative — a lad-native iMIS client — duplicates that hardened code and a
-second service-account integration. Only choose it if lad must ship to third
-parties with no wormiss dependency.)
+**Design decision (confirmed with owner):** **wormiss owns the iMIS pull** and
+writes `lad_doctor` posts; lad consumes them and **stays installable standalone on
+CSV** (so it keeps working with no wormiss present). Rationale: reuse wormiss's
+OAuth, token cache, 401-retry, logging and cache/last-good infra rather than
+duplicating an iMIS client inside lad.
 
 ---
 
 ## 6. Phasing (one concern per PR, wormiss/lad conventions)
 
 **Phase 0 — Confirm the channel (dependency, not code).**
-Confirm with Causeis/ASI that IQA REST access is restored; stand up a
-least-privilege service account with the **RemoteService** role; tick **"Available
-via the REST API"** on the doctor IQA (and on `PlacesTaken` / registrations if
-still used); smoke-test one read through wormiss. **Nothing downstream can ship
-until this is green.**
+Assume REST access will be available (**status TBA** — confirm with Causeis/ASI);
+build Phase 1 against that assumption in parallel, but **gate go-live** on it being
+green. Stand up a least-privilege service account with the **RemoteService** role;
+tick **"Available via the REST API"** on the doctor IQA (and on `PlacesTaken` /
+registrations if still used); smoke-test one read through wormiss. If access is
+not restored, Phase 1 falls back to the existing manual CSV path unchanged.
 
-**Phase 1 — Doctor directory sync (manual trigger).**
+**Phase 1 — Doctor directory sync (on-demand).**
 New `includes/class-wormiss-doctor-sync.php`: `run_iqa()` → normalise →
 `lad_doctor` upsert keyed on iMIS ID + location; OptOut/practice/multi-location
-enforced; batched like the existing importer; cached with last-good fallback. CSV
-importer untouched. Test-heavy (reuse lad's duplicate/opt-out test cases).
+enforced, **plus withdrawal reconciliation (§5) after a confirmed-complete fetch**;
+batched like the existing importer; cached with last-good fallback; a **"Sync now"
+button** in the wormiss admin. CSV importer untouched. Test-heavy (reuse lad's
+duplicate/opt-out test cases, and add a reconciliation-on-complete-only test).
 
-**Phase 2 — Schedule + geocode + resilience.**
-wp-cron (or adhoc task), throttled and resumable, **kill-switch setting**, hide
-controls while a run is queued; geocode only new/changed addresses; clear
+**Phase 2 — Nightly schedule + geocode + resilience.**
+Add a **nightly** run (wp-cron or adhoc task) alongside the Phase 1 on-demand
+button — both paths, per the owner. Throttled and resumable, **kill-switch
+setting**, hide controls while a run is queued; geocode only new/changed addresses
+via the **planned Google Maps key** (fast/bulk) with Nominatim as fallback; clear
 `_lad_geocode_failed` on refresh; surface failures in the wormiss logger.
 
-**Phase 3 — Retire the last RiSE head.**
-Audit every public URL still served by iMIS/RiSE; migrate or retire each; add
-redirects; confirm sign-in/join/renew deep-link cleanly to iMIS and nothing else
-does. Deactivate/delete MemberPress (after the `[mepr-` / `MeprXxx` safety grep).
+**Phase 3 — Retire the last RiSE head (discovery-led).**
+No list of remaining RiSE pages exists yet, so this **starts with a discovery
+pass**: enumerate every public URL still served by iMIS/RiSE, then migrate or
+retire each, add redirects, and confirm sign-in/join/renew deep-link cleanly to
+iMIS and nothing else does. Deactivate/delete MemberPress (after the `[mepr-` /
+`MeprXxx` safety grep).
 
-**Phase 4 — Optional hardening.**
-Rule-based members-only gating (`memberpress-replacement-spec.md` §"Optional");
-finish media **protected delivery** (`media-access-spec.md` §4).
+**Phase 4 — Configure the already-built hardening (no new code).**
+Both items the older scoping docs filed as "future" are already implemented at this
+commit: **site-wide rule-based gating** (`Wormiss_Access_Rules` +
+`Wormiss_Access::post_rules()` + the rules editor in `Wormiss_Admin`; tested) and
+**protected media delivery** (`Wormiss_Media_Delivery`, registered in
+`Wormiss_Plugin::init()`; tested). Remaining is **deployment/configuration, not a
+build**: define the desired site-wide members-only rules, and add the nginx
+internal `location` that `X-Accel-Redirect` points into so flagged categories serve
+from the protected store. `memberpress-replacement-spec.md` and
+`media-access-spec.md` predate these shipping — treat them as history.
 
 ---
 
-## 7. Open questions for the owner
+## 7. Decisions (confirmed with owner)
 
-1. **Sync home:** wormiss-owned pull writing `lad_doctor` (recommended), or a
-   lad-native iMIS client? Must lad stay installable with **no** wormiss present?
-2. **Cadence:** nightly refresh, on-demand button, or both?
-3. **iMIS API status:** is REST access restored post-advisory, and who can enable
-   the per-IQA flag and the RemoteService role? (Phase 0 blocker.)
-4. **Geocoding at scale:** a full refresh is many lookups — stay on Nominatim
-   fair-use (~1s each), or add a Google key for bulk?
-5. **Remaining RiSE pages:** is there a list, or does Phase 3 start with discovery?
+1. **Sync home:** wormiss owns the pull and writes `lad_doctor`; lad stays
+   installable standalone on CSV (no hard wormiss dependency).
+2. **Cadence:** both — a nightly schedule *and* an on-demand "Sync now" button.
+3. **iMIS API status:** assume REST access will be available (**TBA** — to be
+   confirmed with Causeis/ASI); go-live is gated on it, with the manual CSV path as
+   the fallback until then.
+4. **Geocoding at scale:** use the **planned Google Maps key** for bulk geocoding,
+   with Nominatim as fallback.
+5. **Remaining RiSE pages:** no list exists — **Phase 3 starts with a discovery
+   pass**.
 
 ---
 
@@ -254,4 +283,6 @@ WHERE ([vBoSmart_Maps].[OptOut] <> 1)
 
 **Warning:** joining both `init` (per-workplace) and `multi` (per-location) at once
 produces a cartesian product. The sync should read **one** per-location source and
-key on iMIS ID + `Location`; `OptOut` (either view) drafts all of a doctor's pins.
+key on iMIS ID + `Location`. Because the query filters `OptOut <> 1`, withdrawn
+doctors are *absent* from the feed rather than flagged — so they must be caught by
+reconciliation (§5), not by reading an `OptOut` value per row.
