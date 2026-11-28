@@ -1,6 +1,7 @@
 # Making iMIS headless with WordPress
 
-**Status:** scoped — owner decisions recorded in §7; Phase 1 ready to build ·
+**Status:** in progress — Phases 1 & 2 shipped (wormiss v0.76.0; doctor-sync +
+nightly schedule + geocoding); owner decisions in §7; Phase 3 (RiSE retirement) pending ·
 **Scope:** iMIS stays the system of record (data, payments,
 membership lifecycle); WordPress (the **sccadian** block theme + the **wormiss**
 bridge) becomes the only public and member-facing "head". No visitor ever lands
@@ -72,8 +73,17 @@ is served by WordPress, with iMIS reached only server-side.
 
 **lad (Locate a Doctor)** — a **standalone** WordPress plugin: `lad_doctor` CPT,
 public read-only REST (`GET /wp-json/lad/v1/doctors`, publish-only), Leaflet map,
-and an importer fed by **manual CSV exports** from iMIS Causeis Smart Maps. **This
-is the one domain not yet wired into the bridge.**
+and an importer that accepts **manual CSV exports** from iMIS Causeis Smart Maps.
+Now wired into the bridge by the wormiss doctor-sync (Phases 1 & 2, below); the CSV
+importer stays as the standalone / fallback path.
+
+> **Update — lad v1.9.0.** Since this plan was first written, lad has gained a
+> native `_lad_location_id` meta (per-practice location, e.g. the SCCA workplace
+> address number), an opt-in CSV-import reconcile (`lad_enable_reconcile`), and
+> geocode diagnostics with a retry-failed control. So the multi-location key and
+> the geocoder the sync relies on are first-class in lad, not bridge-only — and
+> lad's own reconcile is an alternative to the IQA sync's, so enable one feed, not
+> both (§5).
 
 **MemberPress** — installed but never configured; removable with no cutover risk.
 
@@ -171,7 +181,8 @@ suburb, state, postcode, region, phone, email, website, lat, lng) + hidden
 paid for, to bake into the sync:
 
 - **iMIS ID alone is not unique** once a doctor has multiple practices. Key on
-  **iMIS ID + location** (`Location` / workplace `AddressNumber` → `_lad_location_id`).
+  **iMIS ID + location** (`Location` / workplace `AddressNumber` → `_lad_location_id`,
+  a native lad field as of v1.9.0).
 - **Do not join two "one row per location" views at once** — that is a cartesian
   product (2 workplaces × 2 locations = 4 phantom pins). Use one per-location view.
 - **Withdrawals must be reconciled, not just filtered.** The IQA filters
