@@ -30,6 +30,62 @@ dashboards) that **stay in iMIS** and are out of scope for the public cutover.
 
 ---
 
+## Migration status — staging snapshot (2026-11-28)
+
+WordPress staging is live at **`https://website.scca.nohost.me`** (YunoHost; not
+reachable from outside its network, so this is from its page sitemap). The **sccadian
+theme + wormiss + lad are installed** — the sitemap exposes `page`, `post`,
+`wormiss_event` and `lad_doctor` post types. Most of §A is already imported; the gaps
+and cleanup below are what remains. WooCommerce is also present (`/shop/`, `/cart/`,
+`/my-account/`) — see Notes.
+
+**Data loaded:** the sub-sitemaps show the directory, events and news already populated —
+roughly **260 `lad_doctor` pins** (`/doctor/…`), **~39 `wormiss_event` entries**
+(`/event/…`) and **7 news posts**. A few events are test/legacy to prune
+(`advanced-certificate-of-awesomeness27`, `tutorial-sandpit-enrolment`, `cscm-legacy-26`,
+and `certificate-of-dermoscopy-2…6` duplicates).
+
+**Done (on staging):** Home; About Us (+ `ambassadors`, `our-board` with per-member
+pages); Accreditation; the full Education tree (essential / advanced / capstone /
+introductory groupings + all eight course pages, fellowship, scholarships,
+micro-learning, recognition-of-prior-learning, nursing-education, access-learning-hub);
+Membership + join-now; CPD (participation/compliance, requirements, get-started with
+activity-assessment / PDP / cpd-requirements) and **all member program-level pages**
+(culturally-safe-practice, ethical-practice, addressing-health-inequities,
+professionalism, CPR) + member CPD AU/NZ; FAQs; **Locate a Doctor** AU/NZ (lad);
+members' blog; News; Events + Events-calendar; Sign-in + My Account; Positions Vacant,
+Resources, SkinTalk, Noticeboard, Webinar/Video library; Risk-Prediction-Tool; promo-pack
+/ brochure order pages; Congress 2027 — **landing page only**.
+
+**Still to migrate (missing on staging):**
+- **Scan Your Skin** consumer microsite — `check-your-skin`, `myths`, `skin-cancer-types`,
+  `understanding-skin-cancer`, `what-to-expect-during-a-skin-check`, the landing, and the
+  `scan-locate-a-doctor` AU/NZ finders. (Only the risk tool + brochure-order page exist.)
+  This is the main content gap.
+- **Congress 2027 sub-pages** — program, speakers, sponsors, venue, registration (only the
+  landing exists).
+- **SkinPro CPD library search** (`SkinPro-CPD-Search`) — confirm; the video/webinar
+  libraries exist but the CPD search specifically may not.
+
+**Cleanup before cutover (duplicate slugs from repeated page-imports — the "not full
+setup yet"):** `join-now` ×4, `cpd-requirements` ×3, `cpd-participation-compliance` ×2,
+`education-3`, `accreditation-3-2`, `locate-a-doctor-2`, `my-account-2`, `membership`
+vs `membership-2`, `australia-2` / `new-zealand-2`, and the default `sample-page`. A
+dedup / import-reconcile pass is needed (the same reconcile discipline lad and the
+doctor-sync already apply).
+
+**Notes / to confirm:**
+- **WooCommerce** is installed. The plan keeps payments in iMIS (§C) — is WooCommerce
+  intended for a WordPress store (non-membership items) or placeholder to remove? Confirm
+  so Cart/Shop resolves to one path.
+- **Site topology (recommendation):** a **single** WordPress site with Scan Your Skin and
+  Congress as sections — **not** WordPress Multisite. YunoHost packages WP single-site;
+  Multisite complicates upgrades/SSO and wouldn't share the lad doctor data across subsites.
+  If `scanyourskin.org` needs its own brand/domain, use a domain alias or a separate
+  YunoHost WP instance rather than Multisite.
+
+---
+
 ## A. Public pages → migrate to WordPress
 
 ### A1. General content (`@/web/…`, 23 pages + home) → WP pages via wormiss **page-import**
