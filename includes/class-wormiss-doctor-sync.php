@@ -173,11 +173,12 @@ class Wormiss_Doctor_Sync {
 			return $report;
 		}
 
-		$config = self::config();
+		$config   = self::config();
+		$complete = false;
 		Wormiss_Batch::start( 120 );
 
 		try {
-			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $config['query'], [], null, self::MAX_ROWS );
+			$rows = ( new Wormiss_Rest_Client() )->run_iqa( $config['query'], [], null, self::MAX_ROWS, $complete );
 		} catch ( Wormiss_Exception $e ) {
 			// A failed or partial fetch: do NOT reconcile (never mass-unpublish on an outage).
 			$report['message'] = $e->getMessage();
@@ -190,20 +191,27 @@ class Wormiss_Doctor_Sync {
 		$run_token         = (string) time();
 		$seen              = [];
 
+		// Normalise once, then find every contact with an affirmative opt-out on ANY of its location
+		// rows, so one opt-out withdraws all of that doctor's pins (spec §3), whatever the row order.
+		$normalised = [];
+		$opted_out  = [];
 		foreach ( $rows as $raw ) {
-			$fields = self::normalize( (array) $raw );
-			if ( '' === $fields['name'] ) {
+			$fields       = self::normalize( (array) $raw );
+			$normalised[] = $fields;
+			if ( '' !== $fields['imis_id'] && self::is_truthy( $fields['optout'] ) ) {
+				$opted_out[ $fields['imis_id'] ] = true;
+			}
+		}
+
+		foreach ( $normalised as $fields ) {
+			if ( '' === $fields['name'] || '' === $fields['imis_id'] ) {
+				// No name, or no stable iMIS ID to match on a later sync: skip.
 				++$report['skipped'];
 				continue;
 			}
-			if ( '' === $fields['imis_id'] ) {
-				// Without a stable iMIS ID the pin cannot be matched on a later sync, so skip it
-				// rather than create a fresh duplicate every run.
-				++$report['skipped'];
-				continue;
-			}
-			if ( self::is_truthy( $fields['optout'] ) ) {
-				// Opted out: leave it out of the seen set so reconciliation drafts any existing pin.
+			if ( isset( $opted_out[ $fields['imis_id'] ] ) ) {
+				// Opted out (on this or another location row): leave every location out of the seen
+				// set so reconciliation drafts all of this doctor's existing pins.
 				++$report['skipped_optout'];
 				continue;
 			}
@@ -224,12 +232,19 @@ class Wormiss_Doctor_Sync {
 			$seen[ self::key( $fields['imis_id'], $fields['location_id'] ) ] = true;
 		}
 
-		// The fetch completed, so withdrawals (rows now absent) can be safely drafted.
-		$report['complete'] = true;
-		$report['drafted']  = self::reconcile( $seen );
+		if ( $complete ) {
+			// The whole feed was read, so withdrawals (rows now absent) can be safely drafted.
+			$report['complete'] = true;
+			$report['drafted']  = self::reconcile( $seen );
+			Wormiss_Logger::record_call( 'doctor-sync', Wormiss_Logger::STATUS_SUCCESS );
+		} else {
+			// A truncated read upserts what arrived but must never draft: it cannot tell a withdrawn
+			// doctor from one simply not reached.
+			$report['message'] = __( 'iMIS did not return the whole directory this run, so withdrawals were not reconciled.', 'wormiss' );
+			Wormiss_Logger::record_call( 'doctor-sync', Wormiss_Logger::STATUS_ERROR, 'Incomplete feed; reconciliation skipped' );
+		}
 		self::maybe_schedule_geocode();
 
-		Wormiss_Logger::record_call( 'doctor-sync', Wormiss_Logger::STATUS_SUCCESS );
 		self::remember( $report );
 		return $report;
 	}
@@ -267,9 +282,9 @@ class Wormiss_Doctor_Sync {
 		}
 		$post_id = (int) $post_id;
 
-		$old_address = ( 'updated' === $result ) ? (string) get_post_meta( $post_id, self::LAD_PREFIX . 'address', true ) : '';
+		$old_location = ( 'updated' === $result ) ? self::stored_location_signature( $post_id ) : '';
 		self::write_fields( $post_id, $fields );
-		self::write_coords( $post_id, $fields, $old_address );
+		self::write_coords( $post_id, $fields, $old_location );
 		update_post_meta( $post_id, self::IMIS_META, sanitize_text_field( $fields['imis_id'] ) );
 		update_post_meta( $post_id, self::LOCATION_META, sanitize_text_field( $fields['location_id'] ) );
 		update_post_meta( $post_id, self::MANAGED_META, $run_token );
@@ -309,24 +324,53 @@ class Wormiss_Doctor_Sync {
 
 	/**
 	 * Write coordinates. Feed coordinates are used when present. When the feed carries none,
-	 * stored coordinates are cleared only if the address changed (so the geocode pass recomputes
-	 * them) and are otherwise kept — a coordinate-less feed never wipes geocoded pins.
+	 * stored coordinates are cleared only if any part of the location (street, suburb, state,
+	 * postcode or region) changed — so the geocode pass recomputes them — and are otherwise kept,
+	 * so a coordinate-less feed never wipes geocoded pins.
 	 *
-	 * @param int                   $post_id     Pin post ID.
-	 * @param array<string, string> $fields      Normalised fields.
-	 * @param string                $old_address The address stored before this update ('' when new).
+	 * @param int                   $post_id      Pin post ID.
+	 * @param array<string, string> $fields       Normalised fields.
+	 * @param string                $old_location The location signature before this update ('' when new).
 	 * @return void
 	 */
-	private static function write_coords( int $post_id, array $fields, string $old_address ): void {
+	private static function write_coords( int $post_id, array $fields, string $old_location ): void {
 		if ( '' !== $fields['latitude'] && '' !== $fields['longitude'] ) {
 			update_post_meta( $post_id, self::LAD_PREFIX . 'latitude', sanitize_text_field( $fields['latitude'] ) );
 			update_post_meta( $post_id, self::LAD_PREFIX . 'longitude', sanitize_text_field( $fields['longitude'] ) );
 			return;
 		}
-		if ( $old_address !== $fields['address'] ) {
+		if ( self::location_signature( $fields ) !== $old_location ) {
 			delete_post_meta( $post_id, self::LAD_PREFIX . 'latitude' );
 			delete_post_meta( $post_id, self::LAD_PREFIX . 'longitude' );
 		}
+	}
+
+	/**
+	 * A signature of the full geocodable address, so a change in any component (not just the street
+	 * line) forces a re-geocode.
+	 *
+	 * @param array<string, string> $fields Normalised fields.
+	 * @return string
+	 */
+	private static function location_signature( array $fields ): string {
+		return implode(
+			'|',
+			[ $fields['address'], $fields['suburb'], $fields['state'], $fields['postcode'], $fields['region'] ]
+		);
+	}
+
+	/**
+	 * The stored location signature for a pin, read before its fields are overwritten.
+	 *
+	 * @param int $post_id Pin post ID.
+	 * @return string
+	 */
+	private static function stored_location_signature( int $post_id ): string {
+		$parts = [];
+		foreach ( [ 'address', 'suburb', 'state', 'postcode', 'region' ] as $key ) {
+			$parts[] = (string) get_post_meta( $post_id, self::LAD_PREFIX . $key, true );
+		}
+		return implode( '|', $parts );
 	}
 
 	/**
@@ -506,6 +550,16 @@ class Wormiss_Doctor_Sync {
 			$address = trim( $line1 . $joiner . $line2 );
 		}
 
+		// Opt-out: treat the row as opted out if ANY recognised opt-out column is affirmative, so a
+		// contact-level "Smart_Maps OptOut" of 1 is honoured even when another column holds "0".
+		$optout = '';
+		foreach ( [ 'optout', 'smartmapsoptout', 'donotpublish', 'donotshow' ] as $flag ) {
+			if ( isset( $lookup[ $flag ] ) && self::is_truthy( $lookup[ $flag ] ) ) {
+				$optout = '1';
+				break;
+			}
+		}
+
 		return [
 			'name'          => $name,
 			'clinic'        => $get( 'clinic', 'company', 'workplace' ),
@@ -525,7 +579,7 @@ class Wormiss_Doctor_Sync {
 			'imis_id'       => $get( 'imisid', 'id' ),
 			'location_id'   => $get( 'location', 'locationid', 'addressnumber' ),
 			'address_type'  => $get( 'addresstype', 'addresspurpose', 'purpose' ),
-			'optout'        => $get( 'optout', 'smartmapsoptout', 'donotpublish', 'donotshow' ),
+			'optout'        => $optout,
 		];
 	}
 
@@ -650,7 +704,10 @@ class Wormiss_Doctor_Sync {
 				wp_schedule_event( self::next_night(), 'daily', self::DAILY_HOOK );
 			}
 		} else {
+			// Disabled: stop both the nightly run and any pending background geocoding, so a backlog
+			// does not keep sending (possibly paid) geocode requests after the feature is turned off.
 			wp_clear_scheduled_hook( self::DAILY_HOOK );
+			wp_clear_scheduled_hook( self::MORE_HOOK );
 		}
 	}
 
@@ -697,6 +754,11 @@ class Wormiss_Doctor_Sync {
 	 * @return void
 	 */
 	public static function geocode_step(): void {
+		if ( ! self::is_ready() ) {
+			// The feature was turned off (or lad deactivated): stop geocoding and drop the queue.
+			wp_clear_scheduled_hook( self::MORE_HOOK );
+			return;
+		}
 		if ( ! class_exists( 'LAD_Geocode' ) ) {
 			return;
 		}

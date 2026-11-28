@@ -345,4 +345,95 @@ class Test_Wormiss_Doctor_Sync extends Wormiss_Test_Case {
 		Wormiss_Doctor_Sync::ensure_schedule();
 		$this->assertFalse( wp_next_scheduled( Wormiss_Doctor_Sync::DAILY_HOOK ) );
 	}
+
+	/**
+	 * An opt-out on one location row withdraws every location of that doctor.
+	 *
+	 * @return void
+	 */
+	public function test_optout_applies_to_all_locations(): void {
+		$this->sync(
+			[
+				$this->row( [ 'Location' => 'A' ] ),
+				$this->row(
+					[
+						'Location' => 'B',
+						'Suburb'   => 'Deniliquin',
+					]
+				),
+			]
+		);
+		$this->assertCount( 2, $this->pins( '101' ) );
+
+		$report = $this->sync(
+			[
+				$this->row(
+					[
+						'Location' => 'A',
+						'OptOut'   => '1',
+					]
+				),
+				$this->row(
+					[
+						'Location' => 'B',
+						'Suburb'   => 'Deniliquin',
+					]
+				),
+			]
+		);
+
+		$this->assertSame( 2, $report['skipped_optout'] );
+		$this->assertSame( 2, $report['drafted'] );
+		foreach ( $this->pins( '101' ) as $pin ) {
+			$this->assertSame( 'draft', get_post_status( (int) $pin ) );
+		}
+	}
+
+	/**
+	 * Any affirmative opt-out column withdraws the doctor, even when another column holds "0".
+	 *
+	 * @return void
+	 */
+	public function test_contact_level_optout_field_honoured(): void {
+		$report = $this->sync(
+			[
+				$this->row(
+					[
+						'OptOut'            => '0',
+						'Smart_Maps OptOut' => '1',
+					]
+				),
+			]
+		);
+
+		$this->assertSame( 0, $report['created'] );
+		$this->assertSame( 1, $report['skipped_optout'] );
+		$this->assertCount( 0, $this->pins( '101' ) );
+	}
+
+	/**
+	 * A truncated/partial feed upserts what arrived but never reconciles (no drafting).
+	 *
+	 * @return void
+	 */
+	public function test_incomplete_feed_skips_reconcile(): void {
+		$this->sync( [ $this->row() ] );
+
+		// An empty page that still advertises more rows: run_iqa reports the read as incomplete.
+		$this->imis->token()->reply( '/api/iqa', 200, Wormiss_Fake_Imis::page( [], true, 500 ) );
+		$report = Wormiss_Doctor_Sync::run();
+
+		$this->assertFalse( $report['complete'] );
+		$this->assertSame( 0, $report['drafted'] );
+		$this->assertSame( 'publish', get_post_status( (int) $this->pins( '101' )[0] ) );
+	}
+
+	/**
+	 * The Doctors settings tab is registered in the tab allowlist (so its screen is reachable).
+	 *
+	 * @return void
+	 */
+	public function test_doctors_tab_registered(): void {
+		$this->assertArrayHasKey( 'doctors', Wormiss_Admin::TABS );
+	}
 }

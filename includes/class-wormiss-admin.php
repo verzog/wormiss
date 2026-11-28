@@ -56,6 +56,7 @@ class Wormiss_Admin {
 		'events'     => [ 'wormiss_events', 'wormiss_event_sync', 'wormiss_event_import' ],
 		'news'       => [ 'wormiss_news_import' ],
 		'pages'      => [ 'wormiss_page_import' ],
+		'doctors'    => [],
 		'blog'       => [ 'wormiss_blog' ],
 		'media'      => [ 'wormiss_media' ],
 		'activity'   => [ 'wormiss_activity', 'wormiss_mail_divert', 'wormiss_log' ],
