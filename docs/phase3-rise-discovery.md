@@ -40,7 +40,8 @@ and cleanup below are what remains. WooCommerce is also present (`/shop/`, `/car
 `/my-account/`) — see Notes.
 
 **Data loaded:** the sub-sitemaps show the directory, events and news already populated —
-roughly **260 `lad_doctor` pins** (`/doctor/…`), **~39 `wormiss_event` entries**
+**317 `lad_doctor` pins** (`/doctor/…`), imported **and geocoded** (coordinates populated,
+so pins render), **~39 `wormiss_event` entries**
 (`/event/…`) and **7 news posts**. A few events are test/legacy to prune
 (`advanced-certificate-of-awesomeness27`, `tutorial-sandpit-enrolment`, `cscm-legacy-26`,
 and `certificate-of-dermoscopy-2…6` duplicates).
