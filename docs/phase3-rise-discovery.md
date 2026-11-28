@@ -92,6 +92,27 @@ doctor-sync already apply).
   Multisite complicates upgrades/SSO and wouldn't share the lad doctor data across subsites.
   If `scanyourskin.org` needs its own brand/domain, use a domain alias or a separate
   YunoHost WP instance rather than Multisite.
+- **Staging access (behind YunoHost SSO):** staging is being placed behind the YunoHost
+  login (SSOwat) to protect member PII (doctor addresses/emails, the 5,232-post members'
+  blog) while it is built — a sound temporary measure. SSOwat gates every request to the
+  app, so handle:
+  - **wp-cron** — `/wp-cron.php` is gated, so the nightly doctor sync, geocode
+    continuation and imports stop firing if WordPress uses the default HTTP wp-cron. Run
+    cron out-of-band: `define( 'DISABLE_WP_CRON', true )` + a system crontab calling
+    WP-CLI (`wp cron event run --due-now`).
+  - **Public REST / map** — `/wp-json/lad/v1/doctors` returns the login portal, not JSON,
+    for any request without the SSO cookie, so the map is empty for anonymous/external
+    consumers (it still works in a YunoHost-logged-in browser). Whitelist `/wp-json/` for
+    the `visitors` permission if the public map must be testable.
+  - **Anonymous QA** — the members-only gate, the publish-only REST and the public map
+    can't be verified as an anonymous visitor while fully gated; do that QA in a private
+    window before locking down, or temporarily whitelist.
+  - **Inbound callbacks** — wormiss → iMIS is outbound (unaffected), but any
+    iMIS/Moodle/Zoom webhook or payment-return URL *into* WordPress is blocked; whitelist
+    those specific paths.
+  - **Cutover** — temporary only. At go-live the site is public again with **wormiss**
+    doing the gating, not YunoHost SSO; restore the `visitors` permission and keep only
+    the deliberately-gated paths.
 
 ---
 
