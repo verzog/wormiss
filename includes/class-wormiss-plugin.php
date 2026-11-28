@@ -79,6 +79,7 @@ class Wormiss_Plugin {
 		Wormiss_Blog_Filters::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();
+		Wormiss_Doctor_Sync::init();
 		if ( is_admin() ) {
 			Wormiss_Event_Type_Bulk::init();
 			Wormiss_Admin::init();

@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.74.0
+Stable tag: 0.75.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.75.0 =
+* New: a doctor directory sync that fills the "Locate a Doctor" map from an approved iMIS IQA, so the manual CSV import is no longer the only way to feed it. Each row becomes one map pin, keyed on iMIS ID plus location so a doctor with several practices keeps a separate, stable pin per location. Opt-out and non-practice (home) rows are never published. Because the source query filters opt-outs out of the feed, a withdrawn doctor simply stops appearing; so after a complete, successful sync the directory is reconciled — any pin the feed no longer lists is set to draft. A failed or partial fetch never reconciles, so iMIS being unavailable can never mass-unpublish the map. Turn it on and point it at an IQA under Wormiss → Settings → Doctors, then use "Sync now"; the Locate a Doctor plugin must be active. (First phase: on-demand. A nightly schedule and bulk geocoding follow.)
 
 = 0.74.0 =
 * Page import now leaves event and course pages alone. Those pages are better shown by the dynamic event pages (the ones built from iMIS event records), which always have the event's real details, than imported as a static marketing page that links off to registration and has to be kept up to date. A navigation item whose iMIS path marks it as an event or course page (its path contains "/courses/", "/course/", "/events/" or "/event/") is now skipped, with a note in the report. Turn this off (import them as pages, as before) with the "wormiss_page_import_skip_events" filter, or change which paths count as event pages with "wormiss_page_import_event_paths".

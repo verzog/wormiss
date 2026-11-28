@@ -525,6 +525,7 @@ class Wormiss_Admin {
 			'events'     => __( 'Events', 'wormiss' ),
 			'news'       => __( 'News', 'wormiss' ),
 			'pages'      => __( 'Pages', 'wormiss' ),
+			'doctors'    => __( 'Doctors', 'wormiss' ),
 			'blog'       => __( 'Members\' blog', 'wormiss' ),
 			'media'      => __( 'Media', 'wormiss' ),
 			'activity'   => __( 'Activity & logs', 'wormiss' ),
@@ -1467,6 +1468,9 @@ class Wormiss_Admin {
 					__( 'Run the member sync now', 'wormiss' )
 				);
 				self::render_access_rules();
+				break;
+			case 'doctors':
+				Wormiss_Doctor_Sync::render_admin_section();
 				break;
 			case 'sign-in':
 				Wormiss_Sign_In_Check::render();
