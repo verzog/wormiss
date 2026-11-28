@@ -46,11 +46,12 @@ roughly **260 `lad_doctor` pins** (`/doctor/…`), **~39 `wormiss_event` entries
 and `certificate-of-dermoscopy-2…6` duplicates).
 
 Plus a members-only blog post type **`wormiss_blog`** (SkinTalk / Smart-Blogs), correctly
-gated so it is excluded from the public sitemap, reported at **~5,232 entries**. That is a
-large archive: **confirm the count is genuine, not an import artifact** (the duplicate-import
-pattern above makes this worth checking against the iMIS Smart-Blogs total). If genuine, its
-import/sync must be **batched** and the members-only gate must hold across all ~5k posts —
-this is the privacy-load-bearing path, so it wants a test at that scale.
+gated so it is excluded from the public sitemap, at **5,232 entries** — **confirmed genuine**
+(imported via the wormiss importer, batched/sequenced, which took several days). Two
+implications: (1) the members-only gate must hold across all 5,232 posts — the
+privacy-load-bearing path — so verify there is no public leak at that scale (REST, feeds,
+search); (2) a from-scratch re-import is a multi-day job, so the blog is already migrated and
+**cutover should rely on incremental sync, not a re-import**.
 
 **Done (on staging):** Home; About Us (+ `ambassadors`, `our-board` with per-member
 pages); Accreditation; the full Education tree (essential / advanced / capstone /
