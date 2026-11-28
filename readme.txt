@@ -4,7 +4,7 @@ Tags: imis, membership, association, events, members
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.75.0
+Stable tag: 0.76.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -208,6 +208,9 @@ No: the tracked link records the download and then opens the file, but files in
 the Media Library can still be opened directly by anyone with their address.
 
 == Changelog ==
+
+= 0.76.0 =
+* Doctor directory sync, phase two: a nightly automatic run and background geocoding. The sync now runs itself once a night (about 2:15 am in the site's timezone) while it is enabled, as well as on demand from the "Sync now" button; turning it off removes the schedule. After each sync, pins that still have no coordinates are geocoded in small background batches that pick up where they left off, so a large directory never stalls a single request; geocoding uses Google when a key is set in Locate a Doctor, otherwise the free OpenStreetMap service. A row that arrives without coordinates no longer overwrites a pin's existing coordinates, and a pin whose address changed is re-geocoded. The Doctors settings screen shows the next automatic run and how many pins still need coordinates, and the "Sync now" button is disabled while a run is already queued.
 
 = 0.75.0 =
 * New: a doctor directory sync that fills the "Locate a Doctor" map from an approved iMIS IQA, so the manual CSV import is no longer the only way to feed it. Each row becomes one map pin, keyed on iMIS ID plus location so a doctor with several practices keeps a separate, stable pin per location. Opt-out and non-practice (home) rows are never published. Because the source query filters opt-outs out of the feed, a withdrawn doctor simply stops appearing; so after a complete, successful sync the directory is reconciled — any pin the feed no longer lists is set to draft. A failed or partial fetch never reconciles, so iMIS being unavailable can never mass-unpublish the map. Turn it on and point it at an IQA under Wormiss → Settings → Doctors, then use "Sync now"; the Locate a Doctor plugin must be active. (First phase: on-demand. A nightly schedule and bulk geocoding follow.)

@@ -292,4 +292,57 @@ class Test_Wormiss_Doctor_Sync extends Wormiss_Test_Case {
 		$this->assertSame( 0, $report['created'] );
 		$this->assertSame( 1, $report['skipped'] );
 	}
+
+	/**
+	 * A later feed without coordinates does not overwrite a pin's stored coordinates.
+	 *
+	 * @return void
+	 */
+	public function test_feed_without_coords_keeps_existing(): void {
+		$this->sync( [ $this->row() ] );
+
+		$coordless = $this->row();
+		unset( $coordless['Latitude'], $coordless['Longitude'] );
+		$this->sync( [ $coordless ] );
+
+		$pin = (int) $this->pins( '101' )[0];
+		$this->assertSame( '-37.80', get_post_meta( $pin, '_lad_latitude', true ) );
+	}
+
+	/**
+	 * A changed address with no feed coordinates clears the stale coordinates for re-geocoding.
+	 *
+	 * @return void
+	 */
+	public function test_address_change_clears_coords(): void {
+		$this->sync( [ $this->row( [ 'FullAddress' => '1 First St' ] ) ] );
+
+		$moved = $this->row( [ 'FullAddress' => '2 Second St' ] );
+		unset( $moved['Latitude'], $moved['Longitude'] );
+		$this->sync( [ $moved ] );
+
+		$pin = (int) $this->pins( '101' )[0];
+		$this->assertSame( '', (string) get_post_meta( $pin, '_lad_latitude', true ) );
+	}
+
+	/**
+	 * The nightly schedule is created while enabled and removed when disabled.
+	 *
+	 * @return void
+	 */
+	public function test_schedule_created_and_cleared(): void {
+		Wormiss_Doctor_Sync::ensure_schedule();
+		$this->assertNotFalse( wp_next_scheduled( Wormiss_Doctor_Sync::DAILY_HOOK ) );
+
+		update_option(
+			Wormiss_Doctor_Sync::OPTION,
+			[
+				'enabled' => false,
+				'query'   => self::QUERY,
+			],
+			false
+		);
+		Wormiss_Doctor_Sync::ensure_schedule();
+		$this->assertFalse( wp_next_scheduled( Wormiss_Doctor_Sync::DAILY_HOOK ) );
+	}
 }

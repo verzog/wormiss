@@ -89,12 +89,30 @@ class Wormiss_Doctor_Sync {
 	const MAX_ROWS = 20000;
 
 	/**
+	 * The nightly schedule hook.
+	 */
+	const DAILY_HOOK = 'wormiss_doctor_sync_daily';
+
+	/**
+	 * The hook that continues geocoding in the background (resumable).
+	 */
+	const MORE_HOOK = 'wormiss_doctor_sync_geocode';
+
+	/**
+	 * Pins geocoded per background pass (kept small; Nominatim is about 1s each).
+	 */
+	const GEOCODE_CHUNK = 15;
+
+	/**
 	 * Hook registration.
 	 *
 	 * @return void
 	 */
 	public static function init(): void {
 		add_action( self::HOOK, [ __CLASS__, 'run' ] );
+		add_action( self::DAILY_HOOK, [ __CLASS__, 'run' ] );
+		add_action( self::MORE_HOOK, [ __CLASS__, 'geocode_step' ] );
+		add_action( 'admin_init', [ __CLASS__, 'ensure_schedule' ] );
 		add_action( 'admin_post_wormiss_save_doctor_sync', [ __CLASS__, 'save_settings' ] );
 		add_action( 'admin_post_wormiss_sync_doctors', [ __CLASS__, 'sync_now' ] );
 	}
@@ -209,6 +227,7 @@ class Wormiss_Doctor_Sync {
 		// The fetch completed, so withdrawals (rows now absent) can be safely drafted.
 		$report['complete'] = true;
 		$report['drafted']  = self::reconcile( $seen );
+		self::maybe_schedule_geocode();
 
 		Wormiss_Logger::record_call( 'doctor-sync', Wormiss_Logger::STATUS_SUCCESS );
 		self::remember( $report );
@@ -248,7 +267,9 @@ class Wormiss_Doctor_Sync {
 		}
 		$post_id = (int) $post_id;
 
+		$old_address = ( 'updated' === $result ) ? (string) get_post_meta( $post_id, self::LAD_PREFIX . 'address', true ) : '';
 		self::write_fields( $post_id, $fields );
+		self::write_coords( $post_id, $fields, $old_address );
 		update_post_meta( $post_id, self::IMIS_META, sanitize_text_field( $fields['imis_id'] ) );
 		update_post_meta( $post_id, self::LOCATION_META, sanitize_text_field( $fields['location_id'] ) );
 		update_post_meta( $post_id, self::MANAGED_META, $run_token );
@@ -278,12 +299,34 @@ class Wormiss_Doctor_Sync {
 	 * @return void
 	 */
 	private static function write_fields( int $post_id, array $fields ): void {
-		$text = [ 'clinic', 'address', 'suburb', 'state', 'postcode', 'region', 'phone', 'latitude', 'longitude' ];
+		$text = [ 'clinic', 'address', 'suburb', 'state', 'postcode', 'region', 'phone' ];
 		foreach ( $text as $key ) {
 			update_post_meta( $post_id, self::LAD_PREFIX . $key, sanitize_text_field( $fields[ $key ] ) );
 		}
 		update_post_meta( $post_id, self::LAD_PREFIX . 'email', sanitize_email( $fields['email'] ) );
 		update_post_meta( $post_id, self::LAD_PREFIX . 'website', esc_url_raw( $fields['website'] ) );
+	}
+
+	/**
+	 * Write coordinates. Feed coordinates are used when present. When the feed carries none,
+	 * stored coordinates are cleared only if the address changed (so the geocode pass recomputes
+	 * them) and are otherwise kept — a coordinate-less feed never wipes geocoded pins.
+	 *
+	 * @param int                   $post_id     Pin post ID.
+	 * @param array<string, string> $fields      Normalised fields.
+	 * @param string                $old_address The address stored before this update ('' when new).
+	 * @return void
+	 */
+	private static function write_coords( int $post_id, array $fields, string $old_address ): void {
+		if ( '' !== $fields['latitude'] && '' !== $fields['longitude'] ) {
+			update_post_meta( $post_id, self::LAD_PREFIX . 'latitude', sanitize_text_field( $fields['latitude'] ) );
+			update_post_meta( $post_id, self::LAD_PREFIX . 'longitude', sanitize_text_field( $fields['longitude'] ) );
+			return;
+		}
+		if ( $old_address !== $fields['address'] ) {
+			delete_post_meta( $post_id, self::LAD_PREFIX . 'latitude' );
+			delete_post_meta( $post_id, self::LAD_PREFIX . 'longitude' );
+		}
 	}
 
 	/**
@@ -588,9 +631,140 @@ class Wormiss_Doctor_Sync {
 			: '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 		update_option( self::OPTION, $existing, false );
+		self::ensure_schedule();
 
 		wp_safe_redirect( self::return_url( 'wormiss_doctor_sync_saved' ) );
 		exit;
+	}
+
+	/**
+	 * Create or clear the nightly schedule to match the enabled setting. Self-heals on admin
+	 * page loads and is refreshed when the settings are saved.
+	 *
+	 * @return void
+	 */
+	public static function ensure_schedule(): void {
+		$config = self::config();
+		if ( $config['enabled'] && '' !== $config['query'] ) {
+			if ( false === wp_next_scheduled( self::DAILY_HOOK ) ) {
+				wp_schedule_event( self::next_night(), 'daily', self::DAILY_HOOK );
+			}
+		} else {
+			wp_clear_scheduled_hook( self::DAILY_HOOK );
+		}
+	}
+
+	/**
+	 * The timestamp of the next early-morning run in the site's timezone (off-peak, DST-safe).
+	 *
+	 * @return int
+	 */
+	private static function next_night(): int {
+		$zone = wp_timezone();
+		$now  = new DateTimeImmutable( 'now', $zone );
+		$next = $now->setTime( 2, 15 );
+		if ( $next <= $now ) {
+			$next = $next->modify( '+1 day' );
+		}
+		return $next->getTimestamp();
+	}
+
+	/**
+	 * The next scheduled automatic run, or 0 if none.
+	 *
+	 * @return int
+	 */
+	public static function next_run(): int {
+		$when = wp_next_scheduled( self::DAILY_HOOK );
+		return false === $when ? 0 : (int) $when;
+	}
+
+	/**
+	 * Queue a background geocoding pass if any pins still need coordinates.
+	 *
+	 * @return void
+	 */
+	private static function maybe_schedule_geocode(): void {
+		if ( self::count_pending_geocode() > 0 && false === wp_next_scheduled( self::MORE_HOOK ) ) {
+			wp_schedule_single_event( time() + 5, self::MORE_HOOK );
+		}
+	}
+
+	/**
+	 * Geocode a batch of pins missing coordinates, rescheduling itself while more remain. Reuses
+	 * the Locate a Doctor geocoder (Google when a key is set in lad, otherwise Nominatim).
+	 *
+	 * @return void
+	 */
+	public static function geocode_step(): void {
+		if ( ! class_exists( 'LAD_Geocode' ) ) {
+			return;
+		}
+		$ids = self::pending_geocode_ids( self::GEOCODE_CHUNK );
+		Wormiss_Batch::start( 60 );
+		foreach ( $ids as $post_id ) {
+			if ( Wormiss_Batch::out_of_time() ) {
+				break;
+			}
+			if ( ! LAD_Geocode::geocode_post( $post_id ) ) {
+				// Mark failed so it is not retried every pass; a later sync clears this to retry.
+				update_post_meta( $post_id, self::LAD_PREFIX . 'geocode_failed', '1' );
+				Wormiss_Logger::record_call( 'doctor-geocode', Wormiss_Logger::STATUS_ERROR, 'No coordinates for post ' . $post_id );
+			}
+		}
+		if ( self::count_pending_geocode() > 0 && false === wp_next_scheduled( self::MORE_HOOK ) ) {
+			wp_schedule_single_event( time() + 5, self::MORE_HOOK );
+		}
+	}
+
+	/**
+	 * Pins that still need coordinates: published, no latitude yet, not already marked failed.
+	 *
+	 * @param int $limit Most pins to return.
+	 * @return int[]
+	 */
+	private static function pending_geocode_ids( int $limit ): array {
+		return array_map(
+			'intval',
+			get_posts(
+				[
+					'post_type'        => self::POST_TYPE,
+					'post_status'      => 'publish',
+					'posts_per_page'   => $limit,
+					'fields'           => 'ids',
+					'suppress_filters' => false,
+					'no_found_rows'    => true,
+					'meta_query'       => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Keyed lookup over a small directory.
+						'relation' => 'AND',
+						[
+							'relation' => 'OR',
+							[
+								'key'     => self::LAD_PREFIX . 'latitude',
+								'compare' => 'NOT EXISTS',
+							],
+							[
+								'key'     => self::LAD_PREFIX . 'latitude',
+								'value'   => '',
+								'compare' => '=',
+							],
+						],
+						[
+							'key'     => self::LAD_PREFIX . 'geocode_failed',
+							'compare' => 'NOT EXISTS',
+						],
+					],
+				]
+			)
+		);
+	}
+
+	/**
+	 * How many pins still need coordinates.
+	 *
+	 * @return int
+	 */
+	private static function count_pending_geocode(): int {
+		return count( self::pending_geocode_ids( self::MAX_ROWS ) );
 	}
 
 	/**
@@ -618,9 +792,10 @@ class Wormiss_Doctor_Sync {
 		}
 		check_admin_referer( 'wormiss_sync_doctors' );
 
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_single_event( time(), self::HOOK );
-		}
+		// Run in the background shortly. WordPress de-duplicates an identical single event within
+		// ten minutes, so a double click will not start two syncs. The nightly run uses a separate
+		// hook, so this still queues when a nightly run is pending.
+		wp_schedule_single_event( time() + 5, self::HOOK );
 
 		wp_safe_redirect( self::return_url( 'wormiss_doctor_sync_queued' ) );
 		exit;
@@ -632,27 +807,41 @@ class Wormiss_Doctor_Sync {
 	 * @return string
 	 */
 	public static function summary(): string {
-		$config = self::config();
 		$stored = get_option( self::OPTION, [] );
 		$last   = is_array( $stored ) && isset( $stored['last'] ) && is_array( $stored['last'] ) ? $stored['last'] : null;
+
 		if ( null === $last ) {
-			return __( 'Not run yet.', 'wormiss' );
-		}
-		if ( empty( $last['complete'] ) ) {
-			return sprintf(
+			$base = __( 'Not run yet.', 'wormiss' );
+		} elseif ( empty( $last['complete'] ) ) {
+			$base = sprintf(
 				/* translators: %s: error message from iMIS. */
 				__( 'Last run did not complete (directory left unchanged): %s', 'wormiss' ),
 				'' !== (string) ( $last['message'] ?? '' ) ? (string) $last['message'] : __( 'unknown error', 'wormiss' )
 			);
+		} else {
+			$base = sprintf(
+				/* translators: 1: created count, 2: updated count, 3: drafted count, 4: skipped opt-out count. */
+				__( '%1$d created, %2$d updated, %3$d drafted (withdrawn), %4$d opted out.', 'wormiss' ),
+				(int) ( $last['created'] ?? 0 ),
+				(int) ( $last['updated'] ?? 0 ),
+				(int) ( $last['drafted'] ?? 0 ),
+				(int) ( $last['skipped_optout'] ?? 0 )
+			);
 		}
-		return sprintf(
-			/* translators: 1: created count, 2: updated count, 3: drafted count, 4: skipped opt-out count. */
-			__( '%1$d created, %2$d updated, %3$d drafted (withdrawn), %4$d opted out.', 'wormiss' ),
-			(int) ( $last['created'] ?? 0 ),
-			(int) ( $last['updated'] ?? 0 ),
-			(int) ( $last['drafted'] ?? 0 ),
-			(int) ( $last['skipped_optout'] ?? 0 )
-		);
+
+		$pending = self::count_pending_geocode();
+		if ( $pending > 0 ) {
+			/* translators: %d: number of pins still needing coordinates. */
+			$base .= ' ' . sprintf( _n( '%d pin still needs geocoding.', '%d pins still need geocoding.', $pending, 'wormiss' ), $pending );
+		}
+
+		$next = self::next_run();
+		if ( $next > 0 ) {
+			/* translators: %s: date and time of the next automatic run. */
+			$base .= ' ' . sprintf( __( 'Next automatic sync: %s.', 'wormiss' ), wp_date( 'j M Y, g:i a', $next ) );
+		}
+
+		return $base;
 	}
 
 	/**
@@ -699,9 +888,13 @@ class Wormiss_Doctor_Sync {
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin-top:8px">';
 		wp_nonce_field( 'wormiss_sync_doctors' );
 		echo '<input type="hidden" name="action" value="wormiss_sync_doctors" />';
+		$queued = false !== wp_next_scheduled( self::HOOK );
 		echo '<button type="submit" class="button button-primary"';
-		disabled( self::is_ready(), false );
+		disabled( self::is_ready() && ! $queued, false );
 		echo '>' . esc_html__( 'Sync now', 'wormiss' ) . '</button> ';
+		if ( $queued ) {
+			echo '<span class="description">' . esc_html__( 'A sync is queued and runs shortly…', 'wormiss' ) . '</span> ';
+		}
 		echo '<span class="description">' . esc_html( self::summary() ) . '</span>';
 		echo '</form>';
 	}
