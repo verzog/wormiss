@@ -255,11 +255,16 @@ class Wormiss_Rest_Client {
 	 * @param array       $parameters Prompt values in prompt order.
 	 * @param string|null $imis_id    The member the query is about, for the audit log.
 	 * @param int         $max_rows   Most rows read (default MAX_ROWS).
+	 * @param bool        $complete   Set by reference to whether pagination was exhausted: false when
+	 *                                the read stopped at max_rows with more to come, or on an empty
+	 *                                page that still advertised more. A caller that acts on the whole
+	 *                                result set (e.g. to delete rows no longer present) must check it.
 	 * @return array[] Rows, each property name => unwrapped value.
 	 * @throws Wormiss_Exception On any failed or unreadable page.
 	 */
-	public function run_iqa( string $query, array $parameters = [], ?string $imis_id = null, int $max_rows = self::MAX_ROWS ): array {
-		$base = '/api/iqa?QueryName=' . rawurlencode( $query );
+	public function run_iqa( string $query, array $parameters = [], ?string $imis_id = null, int $max_rows = self::MAX_ROWS, &$complete = null ): array {
+		$complete = false;
+		$base     = '/api/iqa?QueryName=' . rawurlencode( $query );
 		foreach ( $parameters as $value ) {
 			$base .= '&Parameter=' . rawurlencode( (string) $value );
 		}
@@ -284,6 +289,10 @@ class Wormiss_Rest_Client {
 			[ $has_next, $offset ] = self::next_page( $result->body, $offset, $page_count );
 			// An empty page ends the read even if iMIS says there is more, so a bad offset cannot loop.
 		} while ( $has_next && $page_count > 0 && $row_count < $max_rows );
+
+		// Complete only when iMIS said there was no more to read. Stopping at max_rows, or on an
+		// empty page that still advertised more, leaves $has_next true and means a partial read.
+		$complete = ! $has_next;
 
 		return array_slice( $rows, 0, $max_rows );
 	}

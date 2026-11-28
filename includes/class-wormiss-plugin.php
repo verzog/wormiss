@@ -79,6 +79,7 @@ class Wormiss_Plugin {
 		Wormiss_Blog_Filters::init();
 		Wormiss_Blog_Import::init();
 		Wormiss_Event_Push::init();
+		Wormiss_Doctor_Sync::init();
 		if ( is_admin() ) {
 			Wormiss_Event_Type_Bulk::init();
 			Wormiss_Admin::init();
@@ -244,6 +245,9 @@ class Wormiss_Plugin {
 		wp_clear_scheduled_hook( Wormiss_Blog_Import::MORE_HOOK );
 		wp_clear_scheduled_hook( Wormiss_Media_Bulk::HOOK );
 		wp_clear_scheduled_hook( Wormiss_Media_Migrate::HOOK );
+		wp_clear_scheduled_hook( Wormiss_Doctor_Sync::HOOK );
+		wp_clear_scheduled_hook( Wormiss_Doctor_Sync::DAILY_HOOK );
+		wp_clear_scheduled_hook( Wormiss_Doctor_Sync::MORE_HOOK );
 		// The Events post type goes away with the plugin: rebuild permalinks next time.
 		delete_option( 'wormiss_rewrite_version' );
 		flush_rewrite_rules( false );
