@@ -63,7 +63,8 @@ class Wormiss_Doctor_Sync {
 	const IMIS_META = '_lad_imis_id';
 
 	/**
-	 * Meta holding the per-practice location key (forward-compatible with lad multi-location).
+	 * Meta holding the per-practice location key, matching lad's own `_lad_location_id`
+	 * (a native lad field since lad v1.9.0).
 	 */
 	const LOCATION_META = '_lad_location_id';
 
